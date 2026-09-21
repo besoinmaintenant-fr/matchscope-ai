@@ -1,240 +1,321 @@
-const { analyzeFixture } = require('./lib/engine');
+const API = 'https://api.sportmonks.com/v3/football';
 
-const API='https://api.sportmonks.com/v3/football';
-const token=process.env.SPORTMONKS_API_TOKEN;
-const leagueIds=(process.env.SPORTMONKS_LEAGUE_IDS||'').split(',').map(x=>x.trim()).filter(Boolean);
+const leagueMap = {
+  '301': 'L1',
+  '8': 'PL',
+  '564': 'LL',
+  '82': 'BL',
+  '384': 'SA'
+};
 
-function iso(d){return d.toISOString().slice(0,10)}
-function loc(participants,where){ return participants?.find(p=>p?.meta?.location===where) || null; }
+function iso(date) {
+  return date.toISOString().slice(0, 10);
+}
 
-exports.handler=async()=>{
-  if(!token || !leagueIds.length) return {statusCode:204,body:''};
-
-  const start=new Date();
-  const end=new Date(Date.now()+7*86400000);
-
-  const url=new URL(`${API}/fixtures/between/${iso(start)}/${iso(end)}`);
-
-  url.searchParams.set('api_token',token);
-  url.searchParams.set('filters',`fixtureLeagues:${leagueIds.join(',')}`);
-  url.searchParams.set(
-    'include',
-    'league;participants;venue;metadata;predictions;lineups;expectedLineups;sidelined;formations;weatherReport;xGFixture'
+function findTeam(participants = [], location) {
+  return participants.find(
+    p => p?.meta?.location === location
   );
-  url.searchParams.set('per_page','50');
+}
 
-  const res=await fetch(url);
+exports.handler = async () => {
+  const token = process.env.SPORTMONKS_API_TOKEN;
 
-  if(!res.ok){
+  const leagueIds = (
+    process.env.SPORTMONKS_LEAGUE_IDS || ''
+  )
+    .split(',')
+    .map(x => x.trim())
+    .filter(Boolean);
+
+  if (!token) {
     return {
-      statusCode:res.status,
-      body:JSON.stringify({error:'Sportmonks error'})
+      statusCode: 500,
+      headers: {
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        error: 'SPORTMONKS_API_TOKEN absent'
+      })
     };
   }
 
-  const json=await res.json();
+  if (!leagueIds.length) {
+    return {
+      statusCode: 500,
+      headers: {
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        error: 'SPORTMONKS_LEAGUE_IDS absent'
+      })
+    };
+  }
 
-  const matches=(json.data||[]).map(f=>{
-    const a=analyzeFixture(f);
+  const start = new Date();
 
-    const home=
-      loc(f.participants,'home') ||
-      f.participants?.[0] ||
-      {};
+  // On prend les 21 prochains jours.
+  const end = new Date(
+    Date.now() + 21 * 24 * 60 * 60 * 1000
+  );
 
-    const away=
-      loc(f.participants,'away') ||
-      f.participants?.[1] ||
-      {};
+  const baseUrl =
+    `${API}/fixtures/between/${iso(start)}/${iso(end)}`;
 
-    const date=new Date(
-      (f.starting_at||'').replace(' ','T')+'Z'
-    );
+  try {
+    let page = 1;
+    let hasMore = true;
+    let fixtures = [];
 
-    const lineups=f.lineups||[];
+    while (hasMore && page <= 10) {
+      const url = new URL(baseUrl);
 
-    const starters=(teamId)=>
-      lineups
-        .filter(
-          p =>
-            Number(p.type_id)===11 &&
-            p.team_id===teamId
-        )
-        .map(p=>p.player_name);
+      url.searchParams.set(
+        'api_token',
+        token
+      );
 
-    const forms=f.formations||[];
+      url.searchParams.set(
+        'filters',
+        `fixtureLeagues:${leagueIds.join(',')}`
+      );
 
-    const form=(teamId)=>
-      forms.find(
-        x =>
-          x.participant_id===teamId ||
-          x.team_id===teamId
-      )?.formation || '—';
+      // On commence volontairement avec les données
+      // de base pour vérifier la connexion.
+      url.searchParams.set(
+        'include',
+        'league;participants;venue'
+      );
 
-    const m=a.markets;
+      url.searchParams.set(
+        'per_page',
+        '50'
+      );
+
+      url.searchParams.set(
+        'page',
+        String(page)
+      );
+
+      const response = await fetch(url);
+
+      const raw =
+        await response.text();
+
+      if (!response.ok) {
+        return {
+          statusCode: response.status,
+
+          headers: {
+            'content-type':
+              'application/json'
+          },
+
+          body: JSON.stringify({
+            error:
+              'Erreur Sportmonks',
+
+            status:
+              response.status,
+
+            details:
+              raw.slice(0, 1500)
+          })
+        };
+      }
+
+      const json =
+        JSON.parse(raw);
+
+      fixtures.push(
+        ...(json.data || [])
+      );
+
+      hasMore =
+        Boolean(
+          json.pagination?.has_more
+        );
+
+      page += 1;
+    }
+
+    const matches =
+      fixtures.map(f => {
+        const home =
+          findTeam(
+            f.participants,
+            'home'
+          ) ||
+          f.participants?.[0] ||
+          {};
+
+        const away =
+          findTeam(
+            f.participants,
+            'away'
+          ) ||
+          f.participants?.[1] ||
+          {};
+
+        const kickoff =
+          new Date(
+            String(
+              f.starting_at || ''
+            )
+              .replace(
+                ' ',
+                'T'
+              ) + 'Z'
+          );
+
+        return {
+          id:
+            String(f.id),
+
+          competition:
+            leagueMap[
+              String(f.league_id)
+            ] ||
+            String(f.league_id),
+
+          competitionName:
+            f.league?.name ||
+            'Compétition',
+
+          date:
+            kickoff.toLocaleDateString(
+              'fr-FR',
+              {
+                day: '2-digit',
+                month: 'short',
+                timeZone:
+                  'Europe/Paris'
+              }
+            ),
+
+          time:
+            kickoff.toLocaleTimeString(
+              'fr-FR',
+              {
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone:
+                  'Europe/Paris'
+              }
+            ),
+
+          home:
+            home.name ||
+            'Équipe domicile',
+
+          away:
+            away.name ||
+            'Équipe extérieure',
+
+          venue:
+            f.venue?.name ||
+            'Stade à confirmer',
+
+          surface:
+            f.venue?.surface ||
+            'À confirmer',
+
+          weather:
+            'À connecter',
+
+          // On ne prétend plus avoir
+          // les compositions si nous
+          // ne les avons pas.
+          official:
+            false,
+
+          quality:
+            50,
+
+          // Aucun faux pronostic.
+          probs: {
+            home: null,
+            draw: null,
+            away: null
+          },
+
+          confidence:
+            null,
+
+          formationHome:
+            '—',
+
+          formationAway:
+            '—',
+
+          homeXI: [
+            'Composition en attente'
+          ],
+
+          awayXI: [
+            'Composition en attente'
+          ],
+
+          absences:
+            'Blessures, suspensions et compositions à connecter.',
+
+          factors: [
+            [
+              'Calendrier live',
+              'Match récupéré directement depuis Sportmonks.',
+              'LIVE',
+              'pos'
+            ]
+          ],
+
+          markets: [],
+
+          sources: [
+            [
+              'Sportmonks Football API',
+              'Calendrier, équipes et stade.',
+              'Live'
+            ]
+          ]
+        };
+      });
 
     return {
-      id:String(f.id),
+      statusCode: 200,
 
-      competition:String(f.league_id),
+      headers: {
+        'content-type':
+          'application/json',
 
-      competitionName:
-        f.league?.name ||
-        'Compétition',
-
-      date:
-        date.toLocaleDateString(
-          'fr-FR',
-          {
-            day:'2-digit',
-            month:'short'
-          }
-        ),
-
-      time:
-        date.toLocaleTimeString(
-          'fr-FR',
-          {
-            hour:'2-digit',
-            minute:'2-digit'
-          }
-        ),
-
-      home:
-        home.name ||
-        'Domicile',
-
-      away:
-        away.name ||
-        'Extérieur',
-
-      venue:
-        f.venue?.name ||
-        'Stade à confirmer',
-
-      surface:
-        f.venue?.surface ||
-        'À confirmer',
-
-      weather:
-        f.weatherreport?.description ||
-        f.weatherReport?.description ||
-        'À confirmer',
-
-      official:a.official,
-
-      quality:a.quality,
-
-      confidence:a.confidence,
-
-      probs:{
-        home:a.probs.home*100,
-        draw:a.probs.draw*100,
-        away:a.probs.away*100
+        'cache-control':
+          'no-store'
       },
 
-      formationHome:form(home.id),
-
-      formationAway:form(away.id),
-
-      homeXI:
-        starters(home.id).length
-          ? starters(home.id)
-          : ['XI probable — en attente'],
-
-      awayXI:
-        starters(away.id).length
-          ? starters(away.id)
-          : ['XI probable — en attente'],
-
-      absences:
-        (f.sidelined||[]).length
-          ? `${f.sidelined.length} absence(s) / suspension(s) signalée(s) par le fournisseur.`
-          : 'Aucune absence structurée remontée ou donnée indisponible.',
-
-      factors:[
-        [
-          'Qualité des données',
-          `Couverture consolidée : ${a.quality}%.`,
-          a.quality>=85 ? '+8' : '+3',
-          a.quality>=85 ? 'pos' : 'mid'
-        ],
-
-        [
-          'Compositions',
-          a.official
-            ? 'XI officiels détectés.'
-            : 'XI officiels non encore détectés.',
-          a.official ? '+7' : '−5',
-          a.official ? 'pos' : 'neg'
-        ],
-
-        [
-          'Prédiction fournisseur',
-          'Probabilités de base normalisées puis contrôlées par le moteur.',
-          'Actif',
-          'mid'
-        ],
-
-        [
-          'Absences',
-          `${(f.sidelined||[]).length} événement(s) sidelined remonté(s).`,
-          (f.sidelined||[]).length
-            ? 'À vérifier'
-            : 'Neutre',
-          'mid'
-        ]
-      ],
-
-      markets:[
-        [
-          '1X2 — domicile',
-          `${Math.round(a.probs.home*100)}%`,
-          'modèle'
-        ],
-        [
-          '1X',
-          `${Math.round(m.doubleHome*100)}%`,
-          'modèle'
-        ],
-        [
-          'X2',
-          `${Math.round(m.doubleAway*100)}%`,
-          'modèle'
-        ],
-        [
-          '+1,5 buts',
-          `${Math.round(m.over15*100)}%`,
-          'estimation'
-        ],
-        [
-          '+2,5 buts',
-          `${Math.round(m.over25*100)}%`,
-          'estimation'
-        ],
-        [
-          'BTTS — Oui',
-          `${Math.round(m.btts*100)}%`,
-          'estimation'
-        ]
-      ],
-
-      sources:[
-        [
-          'Sportmonks Football API',
-          'Fixture, participants, lineups, absences, xG, prédictions, stade et météo lorsqu’ils sont couverts.',
-          'Principal'
-        ]
-      ]
+      body:
+        JSON.stringify({
+          live: true,
+          count: matches.length,
+          matches
+        })
     };
-  });
 
-  return {
-    statusCode:200,
-    headers:{
-      'content-type':'application/json',
-      'cache-control':'public,max-age=60'
-    },
-    body:JSON.stringify({matches})
-  };
+  } catch (error) {
+    return {
+      statusCode: 500,
+
+      headers: {
+        'content-type':
+          'application/json'
+      },
+
+      body:
+        JSON.stringify({
+          error:
+            'Erreur interne MatchScope',
+
+          details:
+            error.message
+        })
+    };
+  }
 };
