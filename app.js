@@ -1,136 +1,1190 @@
 const competitions = [
-  {id:'all',name:'Tous'},
-  {id:'L1',name:'🇫🇷 Ligue 1'},
-  {id:'PL',name:'🇬🇧 Premier League'},
-  {id:'LL',name:'🇪🇸 La Liga'},
-  {id:'BL',name:'🇩🇪 Bundesliga'},
-  {id:'SA',name:'🇮🇹 Serie A'},
-  {id:'UCL',name:'★ Champions League'},
-  {id:'UEL',name:'◆ Europa League'}
+  {
+    id: 'all',
+    name: 'Tous'
+  },
+  {
+    id: 'L1',
+    name: '🇫🇷 Ligue 1'
+  },
+  {
+    id: 'PL',
+    name: '🏴 Premier League'
+  },
+  {
+    id: 'LL',
+    name: '🇪🇸 La Liga'
+  },
+  {
+    id: 'BL',
+    name: '🇩🇪 Bundesliga'
+  },
+  {
+    id: 'SA',
+    name: '🇮🇹 Serie A'
+  }
 ];
 
-const demoMatches = [
-  {
-    id:'demo-1',competition:'L1',competitionName:'Ligue 1',date:'10 oct.',time:'20:45',
-    home:'Lorient',away:'Paris FC',venue:'Stade du Moustoir',surface:'Hybride',weather:'14°C • vent 18 km/h • faible risque de pluie',
-    official:false,quality:78,probs:{home:31,draw:29,away:40},confidence:74,
-    formationHome:'3-4-2-1',formationAway:'4-2-3-1',
-    homeXI:['Gardien probable','Piston droit probable','DC droit probable','DC probable','DC gauche probable','Piston gauche probable','Milieu probable','Milieu probable','10 probable','10 probable','Avant-centre probable'],
-    awayXI:['Trapp','Camara','Coppola','Mbow','Traoré','Maxime Lopez','Lees-Melou','Kebbal','Pagis','Koleosho','Sinayoko'],
-    absences:'Mode démo : les blessures/suspensions seront récupérées en direct avec la donnée « sidelined ». Les XI probables sont remplacés automatiquement par les XI officiels lorsqu’ils sortent.',
-    factors:[
-      ['Forme récente','Paris FC arrive avec une dynamique plus régulière sur les derniers matchs pondérés.','+8','pos'],
-      ['Domicile / extérieur','Lorient récupère un bonus domicile, mais Paris voyage mieux qu’en début de saison.','+2 Lorient','mid'],
-      ['xG ajustés','La production d’occasions parisienne est supérieure à sa moyenne de saison récente.','+6','pos'],
-      ['Compositions','XI officiel non publié : confiance volontairement plafonnée.','−6','neg'],
-      ['Fatigue & calendrier','Pas de surcharge européenne immédiate détectée dans ce scénario.','Neutre','mid']
-    ],
-    markets:[['1X2 — Paris FC','40%','modéré'],['Paris ou nul (X2)','69%','fort'],['+1,5 buts','76%','fort'],['+2,5 buts','52%','moyen'],['BTTS — Oui','55%','moyen']],
-    sources:[['Sportmonks Football API','Fixtures, stats, xG, lineups, absents, prédictions et cotes.','Principal'],['Open‑Meteo','Prévisions et historique météo au stade.','Contexte'],['Catalogue stades','Surface, altitude et dimensions lorsque disponibles.','Faible poids']]
-  },
-  {
-    id:'demo-2',competition:'PL',competitionName:'Premier League',date:'11 oct.',time:'17:30',
-    home:'Arsenal',away:'Liverpool',venue:'Emirates Stadium',surface:'Hybride',weather:'12°C • sec',official:true,quality:94,
-    probs:{home:43,draw:27,away:30},confidence:82,
-    formationHome:'4-3-3',formationAway:'4-2-3-1',
-    homeXI:['Raya','Défenseur 2','Défenseur 3','Défenseur 4','Défenseur 5','Milieu 6','Milieu 8','Milieu 10','Ailier D','Avant-centre','Ailier G'],
-    awayXI:['Gardien','Défenseur 2','Défenseur 3','Défenseur 4','Défenseur 5','Milieu 6','Milieu 8','Ailier D','10','Ailier G','Avant-centre'],
-    absences:'Démo de structure : en mode réel, cette zone liste blessés, suspendus, retours et impact individuel estimé.',
-    factors:[['Compositions officielles','Les XI sont confirmés : le modèle retire l’incertitude de sélection.','+7','pos'],['Force xG','Arsenal crée légèrement plus de danger à domicile.','+4','pos'],['Transitions','Liverpool reste dangereux dès récupération haute.','−2','neg'],['Repos','Écart de repos faible.','Neutre','mid'],['Marché','Les probabilités internes restent proches du consensus des cotes.','Stable','mid']],
-    markets:[['1X2 — Arsenal','43%','moyen'],['Arsenal ou nul (1X)','70%','fort'],['+2,5 buts','61%','fort'],['BTTS — Oui','64%','fort']],
-    sources:[['Sportmonks Football API','Compos, xG, statistiques, absences, tendances et cotes.','Principal'],['Open‑Meteo','Météo de match.','Contexte']]
-  },
-  {
-    id:'demo-3',competition:'LL',competitionName:'La Liga',date:'11 oct.',time:'21:00',home:'Atlético',away:'Villarreal',venue:'Metropolitano',surface:'Hybride',weather:'18°C • sec',official:false,quality:81,probs:{home:52,draw:27,away:21},confidence:76,formationHome:'4-4-2',formationAway:'4-3-3',homeXI:Array(11).fill('Titulaire probable'),awayXI:Array(11).fill('Titulaire probable'),absences:'XI non officiels : la probabilité sera recalculée à publication des compositions.',factors:[['Avantage domicile','Historique récent domicile favorable.','+6','pos'],['xGA','Atlético concède peu d’occasions franches.','+5','pos'],['Compositions','Encore probables.','−5','neg']],markets:[['1X2 — Atlético','52%','moyen'],['1X','79%','fort'],['-3,5 buts','72%','fort']],sources:[['Sportmonks Football API','Données match et modèles.','Principal']]},
-  {
-    id:'demo-4',competition:'BL',competitionName:'Bundesliga',date:'12 oct.',time:'15:30',home:'Leverkusen',away:'Dortmund',venue:'BayArena',surface:'Hybride',weather:'13°C • nuageux',official:true,quality:91,probs:{home:46,draw:25,away:29},confidence:79,formationHome:'3-4-2-1',formationAway:'4-2-3-1',homeXI:Array(11).fill('Titulaire officiel'),awayXI:Array(11).fill('Titulaire officiel'),absences:'Compositions officielles intégrées dans cette démo.',factors:[['XI officiel','Incertaines de sélection supprimées.','+7','pos'],['Rythme','Match à haute intensité attendu.','BTTS +','pos'],['Transition adverse','Dortmund dangereux en espace.','−3','neg']],markets:[['1X','71%','fort'],['+2,5 buts','66%','fort'],['BTTS Oui','68%','fort']],sources:[['Sportmonks Football API','Données complètes.','Principal']]},
-  {
-    id:'demo-5',competition:'SA',competitionName:'Serie A',date:'12 oct.',time:'20:45',home:'Inter',away:'Roma',venue:'San Siro',surface:'Hybride',weather:'15°C • sec',official:false,quality:84,probs:{home:55,draw:26,away:19},confidence:77,formationHome:'3-5-2',formationAway:'3-4-2-1',homeXI:Array(11).fill('Probable'),awayXI:Array(11).fill('Probable'),absences:'Mode démo.',factors:[['Domicile','Bonus net à l’Inter.','+6','pos'],['xG différentiel','Différentiel favorable.','+7','pos'],['XI','Non confirmé.','−5','neg']],markets:[['1X','81%','fort'],['Inter DNB','74%','fort'],['-4,5 buts','86%','fort']],sources:[['Sportmonks Football API','Données principales.','Principal']]},
-  {
-    id:'demo-6',competition:'UCL',competitionName:'Champions League',date:'14 oct.',time:'21:00',home:'PSG',away:'Bayern',venue:'Parc des Princes',surface:'Hybride',weather:'14°C • sec',official:true,quality:96,probs:{home:39,draw:27,away:34},confidence:84,formationHome:'4-3-3',formationAway:'4-2-3-1',homeXI:Array(11).fill('Titulaire officiel'),awayXI:Array(11).fill('Titulaire officiel'),absences:'Compositions confirmées — confiance données élevée.',factors:[['Niveau équipes','Écart faible.','Équilibré','mid'],['Compos','Officielles.','+7','pos'],['xG offensif','Deux attaques de haut niveau.','Buts +','pos']],markets:[['1X','66%','moyen'],['+2,5 buts','65%','fort'],['BTTS Oui','67%','fort']],sources:[['Sportmonks Football API','Données UCL, xG, lineups, odds.','Principal']]},
-  {
-    id:'demo-7',competition:'UEL',competitionName:'Europa League',date:'15 oct.',time:'18:45',home:'Roma',away:'Porto',venue:'Stadio Olimpico',surface:'Hybride',weather:'17°C • sec',official:false,quality:79,probs:{home:44,draw:30,away:26},confidence:72,formationHome:'3-4-2-1',formationAway:'4-3-3',homeXI:Array(11).fill('Probable'),awayXI:Array(11).fill('Probable'),absences:'XI encore probables.',factors:[['Domicile','Roma bénéficie du contexte.','+4','pos'],['Historique européen','Poids limité pour éviter le sur-apprentissage.','+1','mid'],['XI','Non confirmés.','−6','neg']],markets:[['1X','74%','fort'],['-3,5 buts','70%','fort'],['BTTS Oui','51%','moyen']],sources:[['Sportmonks Football API','Données Europa League.','Principal']]}
-];
+
+// =====================================================
+// POIDS PRÉVUS DU FUTUR MOTEUR D'ANALYSE
+// =====================================================
 
 const weights = [
-  ['Forme pondérée',18],['xG / xGA',20],['Domicile / extérieur',12],['Compositions & absences',18],['Repos / fatigue',8],['Matchup tactique',9],['Cotes / consensus marché',7],['Météo / pelouse / stade',4],['H2H récent',4]
+  ['Forme pondérée', 18],
+  ['xG / xGA', 20],
+  ['Domicile / extérieur', 12],
+  ['Compositions & absences', 18],
+  ['Repos / fatigue', 8],
+  ['Matchup tactique', 9],
+  ['Cotes / consensus marché', 7],
+  ['Météo / pelouse / stade', 4],
+  ['H2H récent', 4]
 ];
 
-let selectedLeague='all';
-let selectedFilter='all';
-let matches=[...demoMatches];
 
-const $=s=>document.querySelector(s);
-const tabs=$('#leagueTabs'), grid=$('#matchGrid'), template=$('#matchTemplate'), panel=$('#analysisPanel');
+// =====================================================
+// ÉTAT DE L'APPLICATION
+// =====================================================
 
-function initials(name){return name.split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase()}
-function pct(v){return `${Math.round(v)}%`}
-function confidenceText(v){return v>=80?'Très forte':v>=70?'Forte':v>=60?'Moyenne':'Faible'}
+let selectedLeague = 'all';
 
-function renderTabs(){
-  tabs.innerHTML='';
-  competitions.forEach(c=>{
-    const b=document.createElement('button'); b.className='league-tab'+(c.id===selectedLeague?' active':''); b.textContent=c.name;
-    b.onclick=()=>{selectedLeague=c.id; renderTabs(); renderMatches(); $('#sectionTitle').textContent=c.id==='all'?'Tous les matchs':c.name.replace(/^..\s/,'');};
-    tabs.appendChild(b);
+let selectedFilter = 'all';
+
+// IMPORTANT : aucune donnée fictive.
+let matches = [];
+
+let loading = false;
+
+let lastError = null;
+
+
+// =====================================================
+// RACCOURCIS DOM
+// =====================================================
+
+const $ = selector =>
+  document.querySelector(selector);
+
+const tabs =
+  $('#leagueTabs');
+
+const grid =
+  $('#matchGrid');
+
+const template =
+  $('#matchTemplate');
+
+const panel =
+  $('#analysisPanel');
+
+
+// =====================================================
+// OUTILS
+// =====================================================
+
+function initials(name = '?') {
+
+  return String(name)
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(word => word[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+
+function pct(value) {
+
+  if (
+    value === null ||
+    value === undefined ||
+    value === '' ||
+    Number.isNaN(Number(value))
+  ) {
+    return '—';
+  }
+
+  return `${Math.round(Number(value))}%`;
+}
+
+
+function confidenceText(value) {
+
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return 'En attente';
+  }
+
+  const number =
+    Number(value);
+
+  if (number >= 80) {
+    return 'Très forte';
+  }
+
+  if (number >= 70) {
+    return 'Forte';
+  }
+
+  if (number >= 60) {
+    return 'Moyenne';
+  }
+
+  return 'Faible';
+}
+
+
+function escapeHtml(value = '') {
+
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+
+function safeArray(value) {
+
+  return Array.isArray(value)
+    ? value
+    : [];
+}
+
+
+// =====================================================
+// ONGLETS CHAMPIONNATS
+// =====================================================
+
+function renderTabs() {
+
+  tabs.innerHTML = '';
+
+  competitions.forEach(
+    competition => {
+
+      const button =
+        document.createElement('button');
+
+      button.className =
+        'league-tab' +
+        (
+          competition.id === selectedLeague
+            ? ' active'
+            : ''
+        );
+
+      button.textContent =
+        competition.name;
+
+      button.onclick = () => {
+
+        selectedLeague =
+          competition.id;
+
+        renderTabs();
+
+        renderMatches();
+
+        const title =
+          $('#sectionTitle');
+
+        if (title) {
+
+          title.textContent =
+            competition.id === 'all'
+              ? 'Tous les matchs'
+              : competition.name
+                  .replace(
+                    /^[^\wÀ-ÿ]+/,
+                    ''
+                  );
+        }
+      };
+
+      tabs.appendChild(button);
+    }
+  );
+}
+
+
+// =====================================================
+// FILTRAGE
+// =====================================================
+
+function visibleMatches() {
+
+  return matches
+
+    .filter(
+      match =>
+        selectedLeague === 'all' ||
+        match.competition === selectedLeague
+    )
+
+    .filter(
+      match => {
+
+        if (
+          selectedFilter === 'lineups'
+        ) {
+          return match.official === true;
+        }
+
+        if (
+          selectedFilter === 'high'
+        ) {
+
+          return (
+            match.confidence !== null &&
+            match.confidence !== undefined &&
+            Number(match.confidence) >= 70
+          );
+        }
+
+        return true;
+      }
+    );
+}
+
+
+// =====================================================
+// LISTE DES MATCHS
+// =====================================================
+
+function renderMatches() {
+
+  panel.classList.add('hidden');
+
+  grid.classList.remove('hidden');
+
+  grid.innerHTML = '';
+
+  if (loading) {
+
+    grid.innerHTML = `
+      <div class="panel-card">
+        <strong>
+          Chargement des matchs…
+        </strong>
+
+        <p>
+          Connexion à Sportmonks.
+        </p>
+      </div>
+    `;
+
+    return;
+  }
+
+
+  if (lastError) {
+
+    grid.innerHTML = `
+      <div class="panel-card">
+
+        <strong>
+          Données live indisponibles
+        </strong>
+
+        <p>
+          ${escapeHtml(lastError)}
+        </p>
+
+      </div>
+    `;
+
+    return;
+  }
+
+
+  const data =
+    visibleMatches();
+
+
+  if (!data.length) {
+
+    grid.innerHTML = `
+      <div class="panel-card">
+
+        <strong>
+          Aucun match trouvé
+        </strong>
+
+        <p>
+          Aucun match ne correspond
+          actuellement à ce filtre.
+        </p>
+
+      </div>
+    `;
+
+    return;
+  }
+
+
+  data.forEach(
+    match => {
+
+      const node =
+        template.content
+          .cloneNode(true);
+
+      const card =
+        node.querySelector(
+          '.match-card'
+        );
+
+
+      node.querySelector(
+        '.competition'
+      ).textContent =
+        String(
+          match.competitionName ||
+          'Compétition'
+        ).toUpperCase();
+
+
+      const lineupState =
+        node.querySelector(
+          '.lineup-state'
+        );
+
+
+      if (match.official) {
+
+        lineupState.textContent =
+          '● COMPOS OFFICIELLES';
+
+        lineupState.style.color =
+          'var(--success)';
+
+      } else {
+
+        lineupState.textContent =
+          '○ COMPOS EN ATTENTE';
+
+        lineupState.style.color =
+          'var(--warn)';
+      }
+
+
+      node.querySelector(
+        '.home-team'
+      ).textContent =
+        match.home ||
+        'Domicile';
+
+
+      node.querySelector(
+        '.away-team'
+      ).textContent =
+        match.away ||
+        'Extérieur';
+
+
+      node.querySelector(
+        '.home-logo'
+      ).textContent =
+        initials(match.home);
+
+
+      node.querySelector(
+        '.away-logo'
+      ).textContent =
+        initials(match.away);
+
+
+      node.querySelector(
+        '.fixture-time'
+      ).textContent =
+        match.time || '—';
+
+
+      node.querySelector(
+        '.fixture-date'
+      ).textContent =
+        match.date || '—';
+
+
+      node.querySelector(
+        '.mh'
+      ).textContent =
+        pct(
+          match.probs?.home
+        );
+
+
+      node.querySelector(
+        '.md'
+      ).textContent =
+        pct(
+          match.probs?.draw
+        );
+
+
+      node.querySelector(
+        '.ma'
+      ).textContent =
+        pct(
+          match.probs?.away
+        );
+
+
+      const confidence =
+        node.querySelector(
+          '.confidence-chip'
+        );
+
+
+      confidence.textContent =
+        match.confidence === null ||
+        match.confidence === undefined
+
+          ? 'CONF. —'
+
+          : `CONF. ${Math.round(
+              Number(
+                match.confidence
+              )
+            )}%`;
+
+
+      const signal =
+        node.querySelector(
+          '.signal'
+        );
+
+
+      if (
+        match.confidence === null ||
+        match.confidence === undefined
+      ) {
+
+        signal.textContent =
+          'Analyse statistique en attente';
+
+      } else if (
+        Number(match.confidence) >= 80
+      ) {
+
+        signal.textContent =
+          'Signal modèle solide';
+
+      } else if (
+        Number(match.confidence) >= 70
+      ) {
+
+        signal.textContent =
+          'Signal exploitable';
+
+      } else {
+
+        signal.textContent =
+          'À confirmer';
+      }
+
+
+      const analyseButton =
+        node.querySelector(
+          '.analyse-btn'
+        );
+
+
+      analyseButton.onclick =
+        event => {
+
+          event.stopPropagation();
+
+          openAnalysis(
+            match.id
+          );
+        };
+
+
+      card.onclick = () => {
+
+        openAnalysis(
+          match.id
+        );
+      };
+
+
+      grid.appendChild(node);
+    }
+  );
+}
+
+
+// =====================================================
+// FICHE D'ANALYSE
+// =====================================================
+
+function openAnalysis(id) {
+
+  const match =
+    matches.find(
+      item =>
+        String(item.id) ===
+        String(id)
+    );
+
+
+  if (!match) {
+    return;
+  }
+
+
+  grid.classList.add(
+    'hidden'
+  );
+
+  panel.classList.remove(
+    'hidden'
+  );
+
+
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
   });
+
+
+  const officialBadge =
+    $('#officialBadge');
+
+
+  officialBadge.textContent =
+    match.official
+      ? 'COMPOS OFFICIELLES'
+      : 'COMPOS EN ATTENTE';
+
+
+  officialBadge.className =
+    'pill ' +
+    (
+      match.official
+        ? 'success'
+        : 'warn'
+    );
+
+
+  $('#qualityBadge').textContent =
+    match.quality !== null &&
+    match.quality !== undefined
+
+      ? `QUALITÉ DONNÉES ${match.quality}%`
+
+      : 'QUALITÉ DONNÉES —';
+
+
+  $('#homeName').textContent =
+    match.home || 'Domicile';
+
+
+  $('#awayName').textContent =
+    match.away || 'Extérieur';
+
+
+  $('#homeLogo').textContent =
+    initials(match.home);
+
+
+  $('#awayLogo').textContent =
+    initials(match.away);
+
+
+  $('#kickoff').textContent =
+    match.time || '—';
+
+
+  $('#venue').textContent =
+    `${match.date || '—'} • ${
+      match.venue ||
+      'Stade à confirmer'
+    }`;
+
+
+  $('#pHome').textContent =
+    pct(
+      match.probs?.home
+    );
+
+
+  $('#pDraw').textContent =
+    pct(
+      match.probs?.draw
+    );
+
+
+  $('#pAway').textContent =
+    pct(
+      match.probs?.away
+    );
+
+
+  $('#confidence').textContent =
+    pct(
+      match.confidence
+    );
+
+
+  $('#homeFormation').textContent =
+    `${match.home || 'Domicile'} • ${
+      match.formationHome ||
+      '—'
+    }`;
+
+
+  $('#awayFormation').textContent =
+    `${match.away || 'Extérieur'} • ${
+      match.formationAway ||
+      '—'
+    }`;
+
+
+  const homeXI =
+    safeArray(
+      match.homeXI
+    );
+
+
+  const awayXI =
+    safeArray(
+      match.awayXI
+    );
+
+
+  $('#homeLineup').innerHTML =
+    (
+      homeXI.length
+        ? homeXI
+        : [
+            'Composition en attente'
+          ]
+    )
+      .map(
+        player =>
+          `<div class="player">${escapeHtml(player)}</div>`
+      )
+      .join('');
+
+
+  $('#awayLineup').innerHTML =
+    (
+      awayXI.length
+        ? awayXI
+        : [
+            'Composition en attente'
+          ]
+    )
+      .map(
+        player =>
+          `<div class="player">${escapeHtml(player)}</div>`
+      )
+      .join('');
+
+
+  $('#absences').textContent =
+    match.absences ||
+    'Données blessures et suspensions en attente.';
+
+
+  const factors =
+    safeArray(
+      match.factors
+    );
+
+
+  if (factors.length) {
+
+    $('#factorList').innerHTML =
+      factors
+        .map(
+          (
+            [
+              title,
+              description,
+              impact,
+              color
+            ]
+          ) => `
+
+            <div class="factor">
+
+              <div>
+
+                <strong>
+                  ${escapeHtml(title)}
+                </strong>
+
+                <p>
+                  ${escapeHtml(description)}
+                </p>
+
+              </div>
+
+              <div class="impact ${escapeHtml(color || 'mid')}">
+
+                ${escapeHtml(impact)}
+
+              </div>
+
+            </div>
+          `
+        )
+        .join('');
+
+  } else {
+
+    $('#factorList').innerHTML = `
+      <div class="note-box">
+        L'analyse avancée sera calculée
+        lorsque les données statistiques
+        seront disponibles.
+      </div>
+    `;
+  }
+
+
+  const markets =
+    safeArray(
+      match.markets
+    );
+
+
+  if (markets.length) {
+
+    $('#marketList').innerHTML =
+      markets
+        .map(
+          (
+            [
+              name,
+              probability,
+              level
+            ]
+          ) => `
+
+            <div class="market">
+
+              <div>
+
+                <strong>
+                  ${escapeHtml(name)}
+                </strong>
+
+                <p>
+                  Niveau :
+                  ${escapeHtml(level)}
+                </p>
+
+              </div>
+
+              <div class="market-prob">
+
+                <b>
+                  ${escapeHtml(probability)}
+                </b>
+
+                <span>
+                  probabilité
+                </span>
+
+              </div>
+
+            </div>
+          `
+        )
+        .join('');
+
+  } else {
+
+    $('#marketList').innerHTML = `
+      <div class="note-box">
+        Probabilités en attente.
+        Aucun pronostic fictif
+        n'est généré.
+      </div>
+    `;
+  }
+
+
+  const confidenceLabel =
+    match.confidence === null ||
+    match.confidence === undefined
+
+      ? 'En attente'
+
+      : `${Math.round(
+          Number(
+            match.confidence
+          )
+        )}% — ${confidenceText(
+          match.confidence
+        )}`;
+
+
+  const context = [
+    [
+      'Stade',
+      match.venue ||
+      'À confirmer'
+    ],
+
+    [
+      'Surface',
+      match.surface ||
+      'À confirmer'
+    ],
+
+    [
+      'Météo',
+      match.weather ||
+      'À connecter'
+    ],
+
+    [
+      'Confiance',
+      confidenceLabel
+    ],
+
+    [
+      'Statut XI',
+      match.official
+        ? 'Officiel'
+        : 'En attente'
+    ]
+  ];
+
+
+  $('#contextList').innerHTML =
+    context
+      .map(
+        ([name, value]) => `
+
+          <div class="context-item">
+
+            <strong>
+              ${escapeHtml(name)}
+            </strong>
+
+            <p>
+              ${escapeHtml(value)}
+            </p>
+
+          </div>
+        `
+      )
+      .join('');
+
+
+  $('#weightBars').innerHTML =
+    weights
+      .map(
+        ([name, weight]) => `
+
+          <div class="weight-row">
+
+            <span>
+              ${escapeHtml(name)}
+            </span>
+
+            <div class="weight-track">
+
+              <div
+                class="weight-fill"
+                style="width:${weight * 4}%"
+              ></div>
+
+            </div>
+
+            <em>
+              ${weight}%
+            </em>
+
+          </div>
+        `
+      )
+      .join('');
+
+
+  const sources =
+    safeArray(
+      match.sources
+    );
+
+
+  if (sources.length) {
+
+    $('#sourceList').innerHTML =
+      sources
+        .map(
+          (
+            [
+              name,
+              description,
+              role
+            ]
+          ) => `
+
+            <div class="source-item">
+
+              <strong>
+
+                ${escapeHtml(name)}
+
+                <span class="tiny">
+                  • ${escapeHtml(role)}
+                </span>
+
+              </strong>
+
+              <p>
+                ${escapeHtml(description)}
+              </p>
+
+            </div>
+          `
+        )
+        .join('');
+
+  } else {
+
+    $('#sourceList').innerHTML = `
+      <div class="source-item">
+
+        <strong>
+          Données live
+        </strong>
+
+        <p>
+          Sources supplémentaires
+          à connecter.
+        </p>
+
+      </div>
+    `;
+  }
+
+
+  const modelVersion =
+    $('#modelVersion');
+
+  if (modelVersion) {
+
+    modelVersion.textContent =
+      'Moteur live v0.2';
+  }
 }
 
-function visibleMatches(){
-  return matches.filter(m=>selectedLeague==='all'||m.competition===selectedLeague).filter(m=>{
-    if(selectedFilter==='lineups') return m.official;
-    if(selectedFilter==='high') return m.confidence>=70;
-    return true;
-  });
+
+// =====================================================
+// RÉCUPÉRATION DES VRAIS MATCHS
+// =====================================================
+
+async function tryLive() {
+
+  loading = true;
+
+  lastError = null;
+
+  matches = [];
+
+
+  const dataMode =
+    $('#dataMode');
+
+
+  if (dataMode) {
+
+    dataMode.textContent =
+      'CHARGEMENT LIVE…';
+
+    dataMode.className =
+      'pill neutral';
+  }
+
+
+  renderMatches();
+
+
+  try {
+
+    const response =
+      await fetch(
+        '/.netlify/functions/fixtures',
+        {
+          cache: 'no-store'
+        }
+      );
+
+
+    let data = {};
+
+
+    try {
+
+      data =
+        await response.json();
+
+    } catch (_error) {
+
+      data = {};
+    }
+
+
+    if (!response.ok) {
+
+      throw new Error(
+        data.details ||
+        data.error ||
+        `Erreur API ${response.status}`
+      );
+    }
+
+
+    matches =
+      Array.isArray(
+        data.matches
+      )
+        ? data.matches
+        : [];
+
+
+    loading = false;
+
+    lastError = null;
+
+
+    if (dataMode) {
+
+      dataMode.textContent =
+        'DONNÉES LIVE';
+
+      dataMode.className =
+        'pill success';
+    }
+
+
+    renderMatches();
+
+
+  } catch (error) {
+
+    loading = false;
+
+    matches = [];
+
+    lastError =
+      String(
+        error?.message ||
+        error
+      );
+
+
+    if (dataMode) {
+
+      dataMode.textContent =
+        'LIVE INDISPONIBLE';
+
+      dataMode.className =
+        'pill warn';
+    }
+
+
+    renderMatches();
+  }
 }
 
-function renderMatches(){
-  grid.innerHTML=''; panel.classList.add('hidden'); grid.classList.remove('hidden');
-  const data=visibleMatches();
-  if(!data.length){grid.innerHTML='<div class="panel-card">Aucun match pour ce filtre.</div>';return}
-  data.forEach(m=>{
-    const node=template.content.cloneNode(true); const card=node.querySelector('.match-card');
-    node.querySelector('.competition').textContent=m.competitionName.toUpperCase();
-    const ls=node.querySelector('.lineup-state'); ls.textContent=m.official?'● COMPOS OFFICIELLES':'○ COMPOS PROBABLES'; ls.style.color=m.official?'var(--success)':'var(--warn)';
-    node.querySelector('.home-team').textContent=m.home; node.querySelector('.away-team').textContent=m.away;
-    node.querySelector('.home-logo').textContent=initials(m.home); node.querySelector('.away-logo').textContent=initials(m.away);
-    node.querySelector('.fixture-time').textContent=m.time; node.querySelector('.fixture-date').textContent=m.date;
-    node.querySelector('.mh').textContent=pct(m.probs.home); node.querySelector('.md').textContent=pct(m.probs.draw); node.querySelector('.ma').textContent=pct(m.probs.away);
-    node.querySelector('.confidence-chip').textContent=`CONF. ${m.confidence}%`;
-    node.querySelector('.signal').textContent=m.confidence>=80?'Signal modèle solide':m.confidence>=70?'Signal exploitable':'À confirmer';
-    node.querySelector('.analyse-btn').onclick=()=>openAnalysis(m.id);
-    card.onclick=e=>{if(!e.target.closest('button')) openAnalysis(m.id)};
-    grid.appendChild(node);
-  });
+
+// =====================================================
+// FILTRES
+// =====================================================
+
+document
+  .querySelectorAll('.seg')
+  .forEach(
+    button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          document
+            .querySelectorAll('.seg')
+            .forEach(
+              item =>
+                item.classList.remove(
+                  'active'
+                )
+            );
+
+
+          button.classList.add(
+            'active'
+          );
+
+
+          selectedFilter =
+            button.dataset.filter;
+
+
+          renderMatches();
+        }
+      );
+    }
+  );
+
+
+// =====================================================
+// BOUTONS
+// =====================================================
+
+const backButton =
+  $('#backBtn');
+
+
+if (backButton) {
+
+  backButton.onclick =
+    () =>
+      renderMatches();
 }
 
-function openAnalysis(id){
-  const m=matches.find(x=>x.id===id); if(!m)return;
-  grid.classList.add('hidden'); panel.classList.remove('hidden'); window.scrollTo({top:0,behavior:'smooth'});
-  $('#officialBadge').textContent=m.official?'COMPOS OFFICIELLES':'COMPOS PROBABLES'; $('#officialBadge').className='pill '+(m.official?'success':'warn');
-  $('#qualityBadge').textContent=`QUALITÉ DONNÉES ${m.quality}%`;
-  $('#homeName').textContent=m.home; $('#awayName').textContent=m.away; $('#homeLogo').textContent=initials(m.home); $('#awayLogo').textContent=initials(m.away);
-  $('#kickoff').textContent=m.time; $('#venue').textContent=`${m.date} • ${m.venue}`;
-  $('#pHome').textContent=pct(m.probs.home); $('#pDraw').textContent=pct(m.probs.draw); $('#pAway').textContent=pct(m.probs.away); $('#confidence').textContent=pct(m.confidence);
-  $('#homeFormation').textContent=`${m.home} • ${m.formationHome}`; $('#awayFormation').textContent=`${m.away} • ${m.formationAway}`;
-  $('#homeLineup').innerHTML=m.homeXI.map(x=>`<div class="player">${x}</div>`).join(''); $('#awayLineup').innerHTML=m.awayXI.map(x=>`<div class="player">${x}</div>`).join(''); $('#absences').textContent=m.absences;
-  $('#factorList').innerHTML=m.factors.map(([t,d,i,c])=>`<div class="factor"><div><strong>${t}</strong><p>${d}</p></div><div class="impact ${c}">${i}</div></div>`).join('');
-  $('#marketList').innerHTML=m.markets.map(([n,p,s])=>`<div class="market"><div><strong>${n}</strong><p>Niveau : ${s}</p></div><div class="market-prob"><b>${p}</b><span>probabilité</span></div></div>`).join('');
-  const context=[['Stade',m.venue],['Surface',m.surface],['Météo',m.weather],['Confiance',`${m.confidence}% — ${confidenceText(m.confidence)}`],['Statut XI',m.official?'Officiel':'Probable — recalcul prévu']];
-  $('#contextList').innerHTML=context.map(([a,b])=>`<div class="context-item"><strong>${a}</strong><p>${b}</p></div>`).join('');
-  $('#weightBars').innerHTML=weights.map(([n,w])=>`<div class="weight-row"><span>${n}</span><div class="weight-track"><div class="weight-fill" style="width:${w*4}%"></div></div><em>${w}%</em></div>`).join('');
-  $('#sourceList').innerHTML=m.sources.map(([n,d,r])=>`<div class="source-item"><strong>${n} <span class="tiny">• ${r}</span></strong><p>${d}</p></div>`).join('');
+
+const refreshButton =
+  $('#refreshBtn');
+
+
+if (refreshButton) {
+
+  refreshButton.onclick =
+    () =>
+      tryLive();
 }
 
-async function tryLive(){
-  try{
-    const r=await fetch('/.netlify/functions/fixtures');
-    if(!r.ok) return;
-    const j=await r.json();
-    if(Array.isArray(j.matches)&&j.matches.length){matches=j.matches; $('#dataMode').textContent='DONNÉES LIVE'; $('#dataMode').className='pill success'; renderMatches();}
-  }catch(_e){/* demo fallback */}
+
+// =====================================================
+// INITIALISATION
+// =====================================================
+
+const coverageValue =
+  $('#coverageValue');
+
+
+if (coverageValue) {
+
+  coverageValue.textContent =
+    '5';
 }
 
-[...document.querySelectorAll('.seg')].forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.seg').forEach(x=>x.classList.remove('active'));b.classList.add('active');selectedFilter=b.dataset.filter;renderMatches()}));
-$('#backBtn').onclick=renderMatches; $('#refreshBtn').onclick=()=>{renderMatches();tryLive()};
-renderTabs(); renderMatches(); tryLive();
+
+renderTabs();
+
+tryLive();
