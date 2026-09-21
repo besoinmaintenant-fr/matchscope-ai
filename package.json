@@ -1,0 +1,11 @@
+{
+  "name": "matchscope-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Application web d'analyse probabiliste de matchs de football",
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "engines": {"node": ">=18"},
+  "devDependencies": {"netlify-cli": "^23.5.0"}
+}

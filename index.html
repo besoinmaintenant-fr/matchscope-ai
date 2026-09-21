@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#090b10" />
+  <title>MatchScope AI — Analyse football</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">MATCH INTELLIGENCE</div>
+        <h1>MatchScope <span>AI</span></h1>
+      </div>
+      <div class="status-wrap">
+        <span id="dataMode" class="pill neutral">MODE DÉMO</span>
+        <button id="refreshBtn" class="icon-btn" aria-label="Actualiser">↻</button>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div>
+        <p class="hero-kicker">Analyse multi-source avant match</p>
+        <h2>Décider avec des probabilités, pas avec une intuition.</h2>
+        <p class="hero-copy">Forme, xG, domicile/extérieur, compos, absences, fatigue, météo, pelouse, arbitre, historique, calendrier et cotes.</p>
+      </div>
+      <div class="hero-stat">
+        <div class="big" id="coverageValue">7</div>
+        <div class="small">compétitions suivies</div>
+      </div>
+    </section>
+
+    <nav id="leagueTabs" class="league-tabs" aria-label="Compétitions"></nav>
+
+    <main>
+      <section class="section-head">
+        <div>
+          <div class="eyebrow">MATCHS À ANALYSER</div>
+          <h3 id="sectionTitle">Tous les matchs</h3>
+        </div>
+        <div class="segmented">
+          <button class="seg active" data-filter="all">Tous</button>
+          <button class="seg" data-filter="lineups">Compos</button>
+          <button class="seg" data-filter="high">Confiance ≥ 70</button>
+        </div>
+      </section>
+
+      <section id="matchGrid" class="match-grid"></section>
+
+      <section id="analysisPanel" class="analysis-panel hidden" aria-live="polite">
+        <div class="analysis-top">
+          <button id="backBtn" class="back-btn">← Retour</button>
+          <div class="analysis-badges">
+            <span id="officialBadge" class="pill success">COMPOS OFFICIELLES</span>
+            <span id="qualityBadge" class="pill neutral">QUALITÉ DONNÉES 92%</span>
+          </div>
+        </div>
+
+        <div class="match-hero-card">
+          <div class="team-side">
+            <div id="homeLogo" class="club-mark">H</div>
+            <div>
+              <div class="label">DOMICILE</div>
+              <div id="homeName" class="team-name">Équipe A</div>
+            </div>
+          </div>
+          <div class="match-center">
+            <div id="kickoff" class="kickoff">20:45</div>
+            <div id="venue" class="venue">Stade</div>
+          </div>
+          <div class="team-side away">
+            <div>
+              <div class="label">EXTÉRIEUR</div>
+              <div id="awayName" class="team-name">Équipe B</div>
+            </div>
+            <div id="awayLogo" class="club-mark">A</div>
+          </div>
+        </div>
+
+        <div class="prob-grid">
+          <div class="prob-card"><div>1</div><strong id="pHome">45%</strong><span>Domicile</span></div>
+          <div class="prob-card"><div>N</div><strong id="pDraw">28%</strong><span>Nul</span></div>
+          <div class="prob-card"><div>2</div><strong id="pAway">27%</strong><span>Extérieur</span></div>
+          <div class="prob-card accent"><div>◎</div><strong id="confidence">76%</strong><span>Confiance modèle</span></div>
+        </div>
+
+        <div class="analysis-columns">
+          <div class="panel-card">
+            <div class="card-title-row">
+              <h4>Lecture du match</h4>
+              <span id="modelVersion" class="tiny">Moteur v0.1</span>
+            </div>
+            <div id="factorList" class="factor-list"></div>
+          </div>
+
+          <div class="panel-card">
+            <h4>Marchés</h4>
+            <div id="marketList" class="market-list"></div>
+          </div>
+        </div>
+
+        <div class="analysis-columns">
+          <div class="panel-card">
+            <h4>Onze & absences</h4>
+            <div class="lineup-columns">
+              <div>
+                <div id="homeFormation" class="formation">4-2-3-1</div>
+                <div id="homeLineup" class="player-list"></div>
+              </div>
+              <div>
+                <div id="awayFormation" class="formation">4-3-3</div>
+                <div id="awayLineup" class="player-list"></div>
+              </div>
+            </div>
+            <div id="absences" class="note-box"></div>
+          </div>
+
+          <div class="panel-card">
+            <h4>Contexte</h4>
+            <div id="contextList" class="context-list"></div>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="card-title-row">
+            <h4>Pourquoi le modèle pense ça</h4>
+            <span class="tiny">Poids transparents</span>
+          </div>
+          <div id="weightBars" class="weight-bars"></div>
+        </div>
+
+        <div class="panel-card sources-card">
+          <h4>Sources & fiabilité</h4>
+          <div id="sourceList" class="source-list"></div>
+          <p class="disclaimer">Aucune analyse sportive ne peut garantir un résultat. La confiance mesure la qualité/concordance des données, pas une certitude de gain.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <template id="matchTemplate">
+    <article class="match-card">
+      <div class="match-card-top">
+        <span class="competition"></span>
+        <span class="lineup-state"></span>
+      </div>
+      <div class="fixture-row">
+        <div class="mini-team"><span class="mini-logo home-logo"></span><strong class="home-team"></strong></div>
+        <div class="fixture-meta"><strong class="fixture-time"></strong><span class="fixture-date"></span></div>
+        <div class="mini-team right"><strong class="away-team"></strong><span class="mini-logo away-logo"></span></div>
+      </div>
+      <div class="mini-probs">
+        <span>1 <b class="mh"></b></span>
+        <span>N <b class="md"></b></span>
+        <span>2 <b class="ma"></b></span>
+        <span class="confidence-chip"></span>
+      </div>
+      <div class="card-foot">
+        <span class="signal"></span>
+        <button class="analyse-btn">Analyser →</button>
+      </div>
+    </article>
+  </template>
+
+  <script src="/app.js"></script>
+</body>
+</html>
