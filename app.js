@@ -25,46 +25,65 @@ const competitions = [
   }
 ];
 
-
-// =====================================================
-// POIDS PRÉVUS DU FUTUR MOTEUR D'ANALYSE
-// =====================================================
-
 const weights = [
-  ['Forme pondérée', 18],
-  ['xG / xGA', 20],
-  ['Domicile / extérieur', 12],
-  ['Compositions & absences', 18],
-  ['Repos / fatigue', 8],
-  ['Matchup tactique', 9],
-  ['Cotes / consensus marché', 7],
-  ['Météo / pelouse / stade', 4],
-  ['H2H récent', 4]
+  [
+    'Forme pondérée',
+    18
+  ],
+  [
+    'xG / xGA',
+    20
+  ],
+  [
+    'Domicile / extérieur',
+    12
+  ],
+  [
+    'Compositions & absences',
+    18
+  ],
+  [
+    'Repos / fatigue',
+    8
+  ],
+  [
+    'Matchup tactique',
+    9
+  ],
+  [
+    'Cotes / consensus marché',
+    7
+  ],
+  [
+    'Météo / pelouse / stade',
+    4
+  ],
+  [
+    'H2H récent',
+    4
+  ]
 ];
 
+let selectedLeague =
+  'all';
 
-// =====================================================
-// ÉTAT DE L'APPLICATION
-// =====================================================
+let selectedFilter =
+  'all';
 
-let selectedLeague = 'all';
+let matches =
+  [];
 
-let selectedFilter = 'all';
+let loading =
+  false;
 
-// IMPORTANT : aucune donnée fictive.
-let matches = [];
+let lastError =
+  null;
 
-let loading = false;
-
-let lastError = null;
-
-
-// =====================================================
-// RACCOURCIS DOM
-// =====================================================
-
-const $ = selector =>
-  document.querySelector(selector);
+const $ =
+  selector =>
+    document.querySelector(
+      selector
+    );
 
 const tabs =
   $('#leagueTabs');
@@ -79,18 +98,22 @@ const panel =
   $('#analysisPanel');
 
 
-// =====================================================
-// OUTILS
-// =====================================================
-
-function initials(name = '?') {
+function initials(
+  name = '?'
+) {
 
   return String(name)
     .split(/\s+/)
     .filter(Boolean)
-    .map(word => word[0])
+    .map(
+      word =>
+        word[0]
+    )
     .join('')
-    .slice(0, 2)
+    .slice(
+      0,
+      2
+    )
     .toUpperCase();
 }
 
@@ -101,36 +124,53 @@ function pct(value) {
     value === null ||
     value === undefined ||
     value === '' ||
-    Number.isNaN(Number(value))
+    Number.isNaN(
+      Number(value)
+    )
   ) {
+
     return '—';
   }
 
-  return `${Math.round(Number(value))}%`;
+  return `${Math.round(
+    Number(value)
+  )}%`;
 }
 
 
-function confidenceText(value) {
+function confidenceText(
+  value
+) {
 
   if (
     value === null ||
     value === undefined
   ) {
+
     return 'En attente';
   }
 
   const number =
     Number(value);
 
-  if (number >= 80) {
+  if (
+    number >= 80
+  ) {
+
     return 'Très forte';
   }
 
-  if (number >= 70) {
+  if (
+    number >= 70
+  ) {
+
     return 'Forte';
   }
 
-  if (number >= 60) {
+  if (
+    number >= 60
+  ) {
+
     return 'Moyenne';
   }
 
@@ -138,84 +178,117 @@ function confidenceText(value) {
 }
 
 
-function escapeHtml(value = '') {
+function escapeHtml(
+  value = ''
+) {
 
   return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+    .replaceAll(
+      '&',
+      '&amp;'
+    )
+    .replaceAll(
+      '<',
+      '&lt;'
+    )
+    .replaceAll(
+      '>',
+      '&gt;'
+    )
+    .replaceAll(
+      '"',
+      '&quot;'
+    )
+    .replaceAll(
+      "'",
+      '&#039;'
+    );
 }
 
 
-function safeArray(value) {
+function safeArray(
+  value
+) {
 
-  return Array.isArray(value)
+  return Array.isArray(
+    value
+  )
     ? value
     : [];
 }
 
 
-// =====================================================
-// ONGLETS CHAMPIONNATS
-// =====================================================
+// ================================
+// ONGLETS DES CHAMPIONNATS
+// ================================
 
 function renderTabs() {
 
-  tabs.innerHTML = '';
+  if (!tabs) {
+    return;
+  }
 
-  competitions.forEach(
-    competition => {
+  tabs.innerHTML =
+    '';
 
-      const button =
-        document.createElement('button');
+  competitions
+    .forEach(
+      competition => {
 
-      button.className =
-        'league-tab' +
-        (
-          competition.id === selectedLeague
-            ? ' active'
-            : ''
+        const button =
+          document
+            .createElement(
+              'button'
+            );
+
+        button.className =
+          'league-tab' +
+          (
+            competition.id ===
+            selectedLeague
+              ? ' active'
+              : ''
+          );
+
+        button.textContent =
+          competition.name;
+
+        button.onclick =
+          () => {
+
+            selectedLeague =
+              competition.id;
+
+            renderTabs();
+
+            renderMatches();
+
+            const title =
+              $('#sectionTitle');
+
+            if (title) {
+
+              title.textContent =
+                competition.id ===
+                'all'
+
+                  ? 'Tous les matchs'
+
+                  : competition.name;
+            }
+          };
+
+        tabs.appendChild(
+          button
         );
-
-      button.textContent =
-        competition.name;
-
-      button.onclick = () => {
-
-        selectedLeague =
-          competition.id;
-
-        renderTabs();
-
-        renderMatches();
-
-        const title =
-          $('#sectionTitle');
-
-        if (title) {
-
-          title.textContent =
-            competition.id === 'all'
-              ? 'Tous les matchs'
-              : competition.name
-                  .replace(
-                    /^[^\wÀ-ÿ]+/,
-                    ''
-                  );
-        }
-      };
-
-      tabs.appendChild(button);
-    }
-  );
+      }
+    );
 }
 
 
-// =====================================================
-// FILTRAGE
-// =====================================================
+// ================================
+// FILTRES
+// ================================
 
 function visibleMatches() {
 
@@ -223,27 +296,43 @@ function visibleMatches() {
 
     .filter(
       match =>
-        selectedLeague === 'all' ||
-        match.competition === selectedLeague
+
+        selectedLeague ===
+        'all' ||
+
+        match.competition ===
+        selectedLeague
     )
 
     .filter(
       match => {
 
         if (
-          selectedFilter === 'lineups'
-        ) {
-          return match.official === true;
-        }
-
-        if (
-          selectedFilter === 'high'
+          selectedFilter ===
+          'lineups'
         ) {
 
           return (
-            match.confidence !== null &&
-            match.confidence !== undefined &&
-            Number(match.confidence) >= 70
+            match.official ===
+            true
+          );
+        }
+
+        if (
+          selectedFilter ===
+          'high'
+        ) {
+
+          return (
+            match.confidence !==
+            null &&
+
+            match.confidence !==
+            undefined &&
+
+            Number(
+              match.confidence
+            ) >= 70
           );
         }
 
@@ -253,22 +342,38 @@ function visibleMatches() {
 }
 
 
-// =====================================================
+// ================================
 // LISTE DES MATCHS
-// =====================================================
+// ================================
 
 function renderMatches() {
 
-  panel.classList.add('hidden');
+  if (
+    !grid ||
+    !panel
+  ) {
 
-  grid.classList.remove('hidden');
+    return;
+  }
 
-  grid.innerHTML = '';
+  panel.classList.add(
+    'hidden'
+  );
 
-  if (loading) {
+  grid.classList.remove(
+    'hidden'
+  );
+
+  grid.innerHTML =
+    '';
+
+  if (
+    loading
+  ) {
 
     grid.innerHTML = `
       <div class="panel-card">
+
         <strong>
           Chargement des matchs…
         </strong>
@@ -276,14 +381,16 @@ function renderMatches() {
         <p>
           Connexion à Sportmonks.
         </p>
+
       </div>
     `;
 
     return;
   }
 
-
-  if (lastError) {
+  if (
+    lastError
+  ) {
 
     grid.innerHTML = `
       <div class="panel-card">
@@ -293,7 +400,9 @@ function renderMatches() {
         </strong>
 
         <p>
-          ${escapeHtml(lastError)}
+          ${escapeHtml(
+            lastError
+          )}
         </p>
 
       </div>
@@ -302,12 +411,12 @@ function renderMatches() {
     return;
   }
 
-
   const data =
     visibleMatches();
 
-
-  if (!data.length) {
+  if (
+    !data.length
+  ) {
 
     grid.innerHTML = `
       <div class="panel-card">
@@ -318,7 +427,8 @@ function renderMatches() {
 
         <p>
           Aucun match ne correspond
-          actuellement à ce filtre.
+          actuellement à ce filtre
+          ou à la période récupérée.
         </p>
 
       </div>
@@ -327,157 +437,200 @@ function renderMatches() {
     return;
   }
 
-
   data.forEach(
     match => {
 
       const node =
-        template.content
-          .cloneNode(true);
+        template
+          .content
+          .cloneNode(
+            true
+          );
 
       const card =
         node.querySelector(
           '.match-card'
         );
 
-
-      node.querySelector(
-        '.competition'
-      ).textContent =
-        String(
-          match.competitionName ||
-          'Compétition'
-        ).toUpperCase();
-
+      node
+        .querySelector(
+          '.competition'
+        )
+        .textContent =
+          String(
+            match
+              .competitionName ||
+            'Compétition'
+          )
+            .toUpperCase();
 
       const lineupState =
-        node.querySelector(
-          '.lineup-state'
-        );
+        node
+          .querySelector(
+            '.lineup-state'
+          );
 
+      if (
+        match.official
+      ) {
 
-      if (match.official) {
+        lineupState
+          .textContent =
+            '● COMPOS OFFICIELLES';
 
-        lineupState.textContent =
-          '● COMPOS OFFICIELLES';
-
-        lineupState.style.color =
-          'var(--success)';
+        lineupState
+          .style
+          .color =
+            'var(--success)';
 
       } else {
 
-        lineupState.textContent =
-          '○ COMPOS EN ATTENTE';
+        lineupState
+          .textContent =
+            '○ COMPOS EN ATTENTE';
 
-        lineupState.style.color =
-          'var(--warn)';
+        lineupState
+          .style
+          .color =
+            'var(--warn)';
       }
 
+      node
+        .querySelector(
+          '.home-team'
+        )
+        .textContent =
+          match.home ||
+          'Domicile';
 
-      node.querySelector(
-        '.home-team'
-      ).textContent =
-        match.home ||
-        'Domicile';
+      node
+        .querySelector(
+          '.away-team'
+        )
+        .textContent =
+          match.away ||
+          'Extérieur';
 
+      node
+        .querySelector(
+          '.home-logo'
+        )
+        .textContent =
+          initials(
+            match.home
+          );
 
-      node.querySelector(
-        '.away-team'
-      ).textContent =
-        match.away ||
-        'Extérieur';
+      node
+        .querySelector(
+          '.away-logo'
+        )
+        .textContent =
+          initials(
+            match.away
+          );
 
+      node
+        .querySelector(
+          '.fixture-time'
+        )
+        .textContent =
+          match.time ||
+          '—';
 
-      node.querySelector(
-        '.home-logo'
-      ).textContent =
-        initials(match.home);
+      node
+        .querySelector(
+          '.fixture-date'
+        )
+        .textContent =
+          match.date ||
+          '—';
 
+      node
+        .querySelector(
+          '.mh'
+        )
+        .textContent =
+          pct(
+            match
+              .probs
+              ?.home
+          );
 
-      node.querySelector(
-        '.away-logo'
-      ).textContent =
-        initials(match.away);
+      node
+        .querySelector(
+          '.md'
+        )
+        .textContent =
+          pct(
+            match
+              .probs
+              ?.draw
+          );
 
-
-      node.querySelector(
-        '.fixture-time'
-      ).textContent =
-        match.time || '—';
-
-
-      node.querySelector(
-        '.fixture-date'
-      ).textContent =
-        match.date || '—';
-
-
-      node.querySelector(
-        '.mh'
-      ).textContent =
-        pct(
-          match.probs?.home
-        );
-
-
-      node.querySelector(
-        '.md'
-      ).textContent =
-        pct(
-          match.probs?.draw
-        );
-
-
-      node.querySelector(
-        '.ma'
-      ).textContent =
-        pct(
-          match.probs?.away
-        );
-
+      node
+        .querySelector(
+          '.ma'
+        )
+        .textContent =
+          pct(
+            match
+              .probs
+              ?.away
+          );
 
       const confidence =
-        node.querySelector(
-          '.confidence-chip'
-        );
+        node
+          .querySelector(
+            '.confidence-chip'
+          );
 
+      confidence
+        .textContent =
 
-      confidence.textContent =
-        match.confidence === null ||
-        match.confidence === undefined
+          match.confidence ===
+          null ||
 
-          ? 'CONF. —'
+          match.confidence ===
+          undefined
 
-          : `CONF. ${Math.round(
-              Number(
-                match.confidence
-              )
-            )}%`;
+            ? 'CONF. —'
 
+            : `CONF. ${Math.round(
+                Number(
+                  match.confidence
+                )
+              )}%`;
 
       const signal =
-        node.querySelector(
-          '.signal'
-        );
-
+        node
+          .querySelector(
+            '.signal'
+          );
 
       if (
-        match.confidence === null ||
-        match.confidence === undefined
+        match.confidence ===
+        null ||
+
+        match.confidence ===
+        undefined
       ) {
 
         signal.textContent =
           'Analyse statistique en attente';
 
       } else if (
-        Number(match.confidence) >= 80
+        Number(
+          match.confidence
+        ) >= 80
       ) {
 
         signal.textContent =
           'Signal modèle solide';
 
       } else if (
-        Number(match.confidence) >= 70
+        Number(
+          match.confidence
+        ) >= 70
       ) {
 
         signal.textContent =
@@ -489,56 +642,66 @@ function renderMatches() {
           'À confirmer';
       }
 
-
       const analyseButton =
-        node.querySelector(
-          '.analyse-btn'
-        );
-
+        node
+          .querySelector(
+            '.analyse-btn'
+          );
 
       analyseButton.onclick =
         event => {
 
-          event.stopPropagation();
+          event
+            .stopPropagation();
 
           openAnalysis(
             match.id
           );
         };
 
+      card.onclick =
+        () => {
 
-      card.onclick = () => {
+          openAnalysis(
+            match.id
+          );
+        };
 
-        openAnalysis(
-          match.id
-        );
-      };
-
-
-      grid.appendChild(node);
+      grid.appendChild(
+        node
+      );
     }
   );
 }
 
 
-// =====================================================
-// FICHE D'ANALYSE
-// =====================================================
+// ================================
+// FICHE DU MATCH
+// ================================
 
-function openAnalysis(id) {
+function openAnalysis(
+  id
+) {
 
   const match =
     matches.find(
       item =>
-        String(item.id) ===
-        String(id)
+
+        String(
+          item.id
+        ) ===
+
+        String(
+          id
+        )
     );
 
+  if (
+    !match
+  ) {
 
-  if (!match) {
     return;
   }
-
 
   grid.classList.add(
     'hidden'
@@ -548,22 +711,24 @@ function openAnalysis(id) {
     'hidden'
   );
 
-
   window.scrollTo({
-    top: 0,
-    behavior: 'smooth'
-  });
+    top:
+      0,
 
+    behavior:
+      'smooth'
+  });
 
   const officialBadge =
     $('#officialBadge');
 
-
   officialBadge.textContent =
-    match.official
-      ? 'COMPOS OFFICIELLES'
-      : 'COMPOS EN ATTENTE';
 
+    match.official
+
+      ? 'COMPOS OFFICIELLES'
+
+      : 'COMPOS EN ATTENTE';
 
   officialBadge.className =
     'pill ' +
@@ -573,251 +738,336 @@ function openAnalysis(id) {
         : 'warn'
     );
 
+  $('#qualityBadge')
+    .textContent =
 
-  $('#qualityBadge').textContent =
-    match.quality !== null &&
-    match.quality !== undefined
+      match.quality !==
+      null &&
 
-      ? `QUALITÉ DONNÉES ${match.quality}%`
+      match.quality !==
+      undefined
 
-      : 'QUALITÉ DONNÉES —';
+        ? `QUALITÉ DONNÉES ${match.quality}%`
 
+        : 'QUALITÉ DONNÉES —';
 
-  $('#homeName').textContent =
-    match.home || 'Domicile';
+  $('#homeName')
+    .textContent =
+      match.home ||
+      'Domicile';
 
+  $('#awayName')
+    .textContent =
+      match.away ||
+      'Extérieur';
 
-  $('#awayName').textContent =
-    match.away || 'Extérieur';
+  $('#homeLogo')
+    .textContent =
+      initials(
+        match.home
+      );
 
+  $('#awayLogo')
+    .textContent =
+      initials(
+        match.away
+      );
 
-  $('#homeLogo').textContent =
-    initials(match.home);
+  $('#kickoff')
+    .textContent =
+      match.time ||
+      '—';
 
+  $('#venue')
+    .textContent =
+      `${
+        match.date ||
+        '—'
+      } • ${
+        match.venue ||
+        'Stade à confirmer'
+      }`;
 
-  $('#awayLogo').textContent =
-    initials(match.away);
+  $('#pHome')
+    .textContent =
+      pct(
+        match
+          .probs
+          ?.home
+      );
 
+  $('#pDraw')
+    .textContent =
+      pct(
+        match
+          .probs
+          ?.draw
+      );
 
-  $('#kickoff').textContent =
-    match.time || '—';
+  $('#pAway')
+    .textContent =
+      pct(
+        match
+          .probs
+          ?.away
+      );
 
+  $('#confidence')
+    .textContent =
+      pct(
+        match.confidence
+      );
 
-  $('#venue').textContent =
-    `${match.date || '—'} • ${
-      match.venue ||
-      'Stade à confirmer'
-    }`;
+  $('#homeFormation')
+    .textContent =
+      `${
+        match.home ||
+        'Domicile'
+      } • ${
+        match
+          .formationHome ||
+        '—'
+      }`;
 
-
-  $('#pHome').textContent =
-    pct(
-      match.probs?.home
-    );
-
-
-  $('#pDraw').textContent =
-    pct(
-      match.probs?.draw
-    );
-
-
-  $('#pAway').textContent =
-    pct(
-      match.probs?.away
-    );
-
-
-  $('#confidence').textContent =
-    pct(
-      match.confidence
-    );
-
-
-  $('#homeFormation').textContent =
-    `${match.home || 'Domicile'} • ${
-      match.formationHome ||
-      '—'
-    }`;
-
-
-  $('#awayFormation').textContent =
-    `${match.away || 'Extérieur'} • ${
-      match.formationAway ||
-      '—'
-    }`;
-
+  $('#awayFormation')
+    .textContent =
+      `${
+        match.away ||
+        'Extérieur'
+      } • ${
+        match
+          .formationAway ||
+        '—'
+      }`;
 
   const homeXI =
     safeArray(
       match.homeXI
     );
 
-
   const awayXI =
     safeArray(
       match.awayXI
     );
 
+  $('#homeLineup')
+    .innerHTML =
 
-  $('#homeLineup').innerHTML =
-    (
-      homeXI.length
-        ? homeXI
-        : [
-            'Composition en attente'
-          ]
-    )
-      .map(
-        player =>
-          `<div class="player">${escapeHtml(player)}</div>`
+      (
+        homeXI.length
+
+          ? homeXI
+
+          : [
+              'Composition en attente'
+            ]
       )
-      .join('');
+        .map(
+          player =>
+            `<div class="player">${
+              escapeHtml(
+                player
+              )
+            }</div>`
+        )
+        .join('');
 
+  $('#awayLineup')
+    .innerHTML =
 
-  $('#awayLineup').innerHTML =
-    (
-      awayXI.length
-        ? awayXI
-        : [
-            'Composition en attente'
-          ]
-    )
-      .map(
-        player =>
-          `<div class="player">${escapeHtml(player)}</div>`
+      (
+        awayXI.length
+
+          ? awayXI
+
+          : [
+              'Composition en attente'
+            ]
       )
-      .join('');
+        .map(
+          player =>
+            `<div class="player">${
+              escapeHtml(
+                player
+              )
+            }</div>`
+        )
+        .join('');
 
-
-  $('#absences').textContent =
-    match.absences ||
-    'Données blessures et suspensions en attente.';
-
+  $('#absences')
+    .textContent =
+      match.absences ||
+      'Données blessures et suspensions en attente.';
 
   const factors =
     safeArray(
       match.factors
     );
 
+  if (
+    factors.length
+  ) {
 
-  if (factors.length) {
+    $('#factorList')
+      .innerHTML =
 
-    $('#factorList').innerHTML =
-      factors
-        .map(
-          (
-            [
-              title,
-              description,
-              impact,
-              color
-            ]
-          ) => `
+        factors
+          .map(
+            (
+              [
+                title,
+                description,
+                impact,
+                color
+              ]
+            ) => `
 
-            <div class="factor">
+              <div class="factor">
 
-              <div>
+                <div>
 
-                <strong>
-                  ${escapeHtml(title)}
-                </strong>
+                  <strong>
+                    ${
+                      escapeHtml(
+                        title
+                      )
+                    }
+                  </strong>
 
-                <p>
-                  ${escapeHtml(description)}
-                </p>
+                  <p>
+                    ${
+                      escapeHtml(
+                        description
+                      )
+                    }
+                  </p>
+
+                </div>
+
+                <div class="impact ${
+                  escapeHtml(
+                    color ||
+                    'mid'
+                  )
+                }">
+
+                  ${
+                    escapeHtml(
+                      impact
+                    )
+                  }
+
+                </div>
 
               </div>
-
-              <div class="impact ${escapeHtml(color || 'mid')}">
-
-                ${escapeHtml(impact)}
-
-              </div>
-
-            </div>
-          `
-        )
-        .join('');
+            `
+          )
+          .join('');
 
   } else {
 
-    $('#factorList').innerHTML = `
-      <div class="note-box">
-        L'analyse avancée sera calculée
-        lorsque les données statistiques
-        seront disponibles.
-      </div>
-    `;
-  }
+    $('#factorList')
+      .innerHTML = `
 
+        <div class="note-box">
+
+          L'analyse avancée sera calculée
+          lorsque les données statistiques
+          seront disponibles.
+
+        </div>
+      `;
+  }
 
   const markets =
     safeArray(
       match.markets
     );
 
+  if (
+    markets.length
+  ) {
 
-  if (markets.length) {
+    $('#marketList')
+      .innerHTML =
 
-    $('#marketList').innerHTML =
-      markets
-        .map(
-          (
-            [
-              name,
-              probability,
-              level
-            ]
-          ) => `
+        markets
+          .map(
+            (
+              [
+                name,
+                probability,
+                level
+              ]
+            ) => `
 
-            <div class="market">
+              <div class="market">
 
-              <div>
+                <div>
 
-                <strong>
-                  ${escapeHtml(name)}
-                </strong>
+                  <strong>
+                    ${
+                      escapeHtml(
+                        name
+                      )
+                    }
+                  </strong>
 
-                <p>
-                  Niveau :
-                  ${escapeHtml(level)}
-                </p>
+                  <p>
+                    Niveau :
+                    ${
+                      escapeHtml(
+                        level
+                      )
+                    }
+                  </p>
+
+                </div>
+
+                <div class="market-prob">
+
+                  <b>
+                    ${
+                      escapeHtml(
+                        probability
+                      )
+                    }
+                  </b>
+
+                  <span>
+                    probabilité
+                  </span>
+
+                </div>
 
               </div>
-
-              <div class="market-prob">
-
-                <b>
-                  ${escapeHtml(probability)}
-                </b>
-
-                <span>
-                  probabilité
-                </span>
-
-              </div>
-
-            </div>
-          `
-        )
-        .join('');
+            `
+          )
+          .join('');
 
   } else {
 
-    $('#marketList').innerHTML = `
-      <div class="note-box">
-        Probabilités en attente.
-        Aucun pronostic fictif
-        n'est généré.
-      </div>
-    `;
+    $('#marketList')
+      .innerHTML = `
+
+        <div class="note-box">
+
+          Probabilités en attente.
+
+          Aucun pronostic fictif
+          n'est généré.
+
+        </div>
+      `;
   }
 
-
   const confidenceLabel =
-    match.confidence === null ||
-    match.confidence === undefined
+
+    match.confidence ===
+    null ||
+
+    match.confidence ===
+    undefined
 
       ? 'En attente'
 
@@ -825,128 +1075,79 @@ function openAnalysis(id) {
           Number(
             match.confidence
           )
-        )}% — ${confidenceText(
-          match.confidence
-        )}`;
-
+        )}% — ${
+          confidenceText(
+            match.confidence
+          )
+        }`;
 
   const context = [
     [
       'Stade',
+
       match.venue ||
       'À confirmer'
     ],
 
     [
       'Surface',
+
       match.surface ||
       'À confirmer'
     ],
 
     [
       'Météo',
+
       match.weather ||
       'À connecter'
     ],
 
     [
       'Confiance',
+
       confidenceLabel
     ],
 
     [
       'Statut XI',
+
       match.official
+
         ? 'Officiel'
+
         : 'En attente'
     ]
   ];
 
+  $('#contextList')
+    .innerHTML =
 
-  $('#contextList').innerHTML =
-    context
-      .map(
-        ([name, value]) => `
-
-          <div class="context-item">
-
-            <strong>
-              ${escapeHtml(name)}
-            </strong>
-
-            <p>
-              ${escapeHtml(value)}
-            </p>
-
-          </div>
-        `
-      )
-      .join('');
-
-
-  $('#weightBars').innerHTML =
-    weights
-      .map(
-        ([name, weight]) => `
-
-          <div class="weight-row">
-
-            <span>
-              ${escapeHtml(name)}
-            </span>
-
-            <div class="weight-track">
-
-              <div
-                class="weight-fill"
-                style="width:${weight * 4}%"
-              ></div>
-
-            </div>
-
-            <em>
-              ${weight}%
-            </em>
-
-          </div>
-        `
-      )
-      .join('');
-
-
-  const sources =
-    safeArray(
-      match.sources
-    );
-
-
-  if (sources.length) {
-
-    $('#sourceList').innerHTML =
-      sources
+      context
         .map(
           (
             [
               name,
-              description,
-              role
+              value
             ]
           ) => `
 
-            <div class="source-item">
+            <div class="context-item">
 
               <strong>
-
-                ${escapeHtml(name)}
-
-                <span class="tiny">
-                  • ${escapeHtml(role)}
-                </span>
-
+                ${
+                  escapeHtml(
+                    name
+                  )
+                }
               </strong>
 
               <p>
-                ${escapeHtml(description)}
+                ${
+                  escapeHtml(
+                    value
+                  )
+                }
               </p>
 
             </div>
@@ -954,54 +1155,158 @@ function openAnalysis(id) {
         )
         .join('');
 
+  $('#weightBars')
+    .innerHTML =
+
+      weights
+        .map(
+          (
+            [
+              name,
+              weight
+            ]
+          ) => `
+
+            <div class="weight-row">
+
+              <span>
+                ${
+                  escapeHtml(
+                    name
+                  )
+                }
+              </span>
+
+              <div class="weight-track">
+
+                <div
+                  class="weight-fill"
+                  style="width:${
+                    weight * 4
+                  }%"
+                ></div>
+
+              </div>
+
+              <em>
+                ${weight}%
+              </em>
+
+            </div>
+          `
+        )
+        .join('');
+
+  const sources =
+    safeArray(
+      match.sources
+    );
+
+  if (
+    sources.length
+  ) {
+
+    $('#sourceList')
+      .innerHTML =
+
+        sources
+          .map(
+            (
+              [
+                name,
+                description,
+                role
+              ]
+            ) => `
+
+              <div class="source-item">
+
+                <strong>
+
+                  ${
+                    escapeHtml(
+                      name
+                    )
+                  }
+
+                  <span class="tiny">
+                    • ${
+                      escapeHtml(
+                        role
+                      )
+                    }
+                  </span>
+
+                </strong>
+
+                <p>
+                  ${
+                    escapeHtml(
+                      description
+                    )
+                  }
+                </p>
+
+              </div>
+            `
+          )
+          .join('');
+
   } else {
 
-    $('#sourceList').innerHTML = `
-      <div class="source-item">
+    $('#sourceList')
+      .innerHTML = `
 
-        <strong>
-          Données live
-        </strong>
+        <div class="source-item">
 
-        <p>
-          Sources supplémentaires
-          à connecter.
-        </p>
+          <strong>
+            Données live
+          </strong>
 
-      </div>
-    `;
+          <p>
+            Sources supplémentaires
+            à connecter.
+          </p>
+
+        </div>
+      `;
   }
-
 
   const modelVersion =
     $('#modelVersion');
 
-  if (modelVersion) {
+  if (
+    modelVersion
+  ) {
 
-    modelVersion.textContent =
-      'Moteur live v0.2';
+    modelVersion
+      .textContent =
+        'Moteur live v0.2';
   }
 }
 
 
-// =====================================================
-// RÉCUPÉRATION DES VRAIS MATCHS
-// =====================================================
+// ================================
+// CONNEXION À SPORTMONKS
+// ================================
 
 async function tryLive() {
 
-  loading = true;
+  loading =
+    true;
 
-  lastError = null;
+  lastError =
+    null;
 
-  matches = [];
-
+  matches =
+    [];
 
   const dataMode =
     $('#dataMode');
 
-
-  if (dataMode) {
+  if (
+    dataMode
+  ) {
 
     dataMode.textContent =
       'CHARGEMENT LIVE…';
@@ -1010,9 +1315,7 @@ async function tryLive() {
       'pill neutral';
   }
 
-
   renderMatches();
-
 
   try {
 
@@ -1020,49 +1323,59 @@ async function tryLive() {
       await fetch(
         '/.netlify/functions/fixtures',
         {
-          cache: 'no-store'
+          cache:
+            'no-store'
         }
       );
 
-
-    let data = {};
-
+    let data =
+      {};
 
     try {
 
       data =
         await response.json();
 
-    } catch (_error) {
+    } catch (
+      _error
+    ) {
 
-      data = {};
+      data =
+        {};
     }
 
-
-    if (!response.ok) {
+    if (
+      !response.ok
+    ) {
 
       throw new Error(
         data.details ||
         data.error ||
-        `Erreur API ${response.status}`
+        `Erreur API ${
+          response.status
+        }`
       );
     }
 
-
     matches =
+
       Array.isArray(
         data.matches
       )
+
         ? data.matches
+
         : [];
 
+    loading =
+      false;
 
-    loading = false;
+    lastError =
+      null;
 
-    lastError = null;
-
-
-    if (dataMode) {
+    if (
+      dataMode
+    ) {
 
       dataMode.textContent =
         'DONNÉES LIVE';
@@ -1071,15 +1384,17 @@ async function tryLive() {
         'pill success';
     }
 
-
     renderMatches();
 
+  } catch (
+    error
+  ) {
 
-  } catch (error) {
+    loading =
+      false;
 
-    loading = false;
-
-    matches = [];
+    matches =
+      [];
 
     lastError =
       String(
@@ -1087,8 +1402,9 @@ async function tryLive() {
         error
       );
 
-
-    if (dataMode) {
+    if (
+      dataMode
+    ) {
 
       dataMode.textContent =
         'LIVE INDISPONIBLE';
@@ -1097,72 +1413,80 @@ async function tryLive() {
         'pill warn';
     }
 
-
     renderMatches();
   }
 }
 
 
-// =====================================================
+// ================================
 // FILTRES
-// =====================================================
+// ================================
 
 document
-  .querySelectorAll('.seg')
+  .querySelectorAll(
+    '.seg'
+  )
   .forEach(
     button => {
 
-      button.addEventListener(
-        'click',
-        () => {
+      button
+        .addEventListener(
+          'click',
+          () => {
 
-          document
-            .querySelectorAll('.seg')
-            .forEach(
-              item =>
-                item.classList.remove(
-                  'active'
-                )
-            );
+            document
+              .querySelectorAll(
+                '.seg'
+              )
+              .forEach(
+                item =>
+                  item
+                    .classList
+                    .remove(
+                      'active'
+                    )
+              );
 
+            button
+              .classList
+              .add(
+                'active'
+              );
 
-          button.classList.add(
-            'active'
-          );
+            selectedFilter =
+              button
+                .dataset
+                .filter;
 
-
-          selectedFilter =
-            button.dataset.filter;
-
-
-          renderMatches();
-        }
-      );
+            renderMatches();
+          }
+        );
     }
   );
 
 
-// =====================================================
+// ================================
 // BOUTONS
-// =====================================================
+// ================================
 
 const backButton =
   $('#backBtn');
 
-
-if (backButton) {
+if (
+  backButton
+) {
 
   backButton.onclick =
     () =>
       renderMatches();
 }
 
-
 const refreshButton =
   $('#refreshBtn');
 
-
-if (refreshButton) {
+if (
+  refreshButton
+) {
 
   refreshButton.onclick =
     () =>
@@ -1170,20 +1494,25 @@ if (refreshButton) {
 }
 
 
-// =====================================================
-// INITIALISATION
-// =====================================================
+// ================================
+// NOMBRE DE COMPÉTITIONS
+// ================================
 
 const coverageValue =
   $('#coverageValue');
 
-
-if (coverageValue) {
+if (
+  coverageValue
+) {
 
   coverageValue.textContent =
     '5';
 }
 
+
+// ================================
+// DÉMARRAGE
+// ================================
 
 renderTabs();
 
