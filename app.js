@@ -4,26 +4,27 @@ const competitions = [
     name: 'Tous'
   },
   {
-    id: 'L1',
-    name: '🇫🇷 Ligue 1'
+    id: 'LL2',
+    name: '🇪🇸 LaLiga 2'
   },
   {
-    id: 'PL',
-    name: '🏴 Premier League'
+    id: 'LMX',
+    name: '🇲🇽 Liga MX'
   },
   {
-    id: 'LL',
-    name: '🇪🇸 La Liga'
+    id: 'CPL',
+    name: '🇨🇦 Canadian Premier League'
   },
   {
-    id: 'BL',
-    name: '🇩🇪 Bundesliga'
-  },
-  {
-    id: 'SA',
-    name: '🇮🇹 Serie A'
+    id: 'MLS',
+    name: '🇺🇸 MLS'
   }
 ];
+
+
+// =====================================================
+// POIDS DU MODÈLE
+// =====================================================
 
 const weights = [
   [
@@ -64,20 +65,25 @@ const weights = [
   ]
 ];
 
-let selectedLeague =
-  'all';
 
-let selectedFilter =
-  'all';
+// =====================================================
+// ÉTAT APPLICATION
+// =====================================================
 
-let matches =
-  [];
+let selectedLeague = 'all';
 
-let loading =
-  false;
+let selectedFilter = 'all';
 
-let lastError =
-  null;
+let matches = [];
+
+let loading = false;
+
+let lastError = null;
+
+
+// =====================================================
+// RACCOURCIS DOM
+// =====================================================
 
 const $ =
   selector =>
@@ -97,6 +103,10 @@ const template =
 const panel =
   $('#analysisPanel');
 
+
+// =====================================================
+// OUTILS
+// =====================================================
 
 function initials(
   name = '?'
@@ -118,7 +128,9 @@ function initials(
 }
 
 
-function pct(value) {
+function pct(
+  value
+) {
 
   if (
     value === null ||
@@ -183,22 +195,27 @@ function escapeHtml(
 ) {
 
   return String(value)
+
     .replaceAll(
       '&',
       '&amp;'
     )
+
     .replaceAll(
       '<',
       '&lt;'
     )
+
     .replaceAll(
       '>',
       '&gt;'
     )
+
     .replaceAll(
       '"',
       '&quot;'
     )
+
     .replaceAll(
       "'",
       '&#039;'
@@ -218,9 +235,9 @@ function safeArray(
 }
 
 
-// ================================
-// ONGLETS DES CHAMPIONNATS
-// ================================
+// =====================================================
+// ONGLETS CHAMPIONNATS
+// =====================================================
 
 function renderTabs() {
 
@@ -228,67 +245,77 @@ function renderTabs() {
     return;
   }
 
-  tabs.innerHTML =
-    '';
 
-  competitions
-    .forEach(
-      competition => {
+  tabs.innerHTML = '';
 
-        const button =
-          document
-            .createElement(
-              'button'
-            );
 
-        button.className =
-          'league-tab' +
-          (
-            competition.id ===
-            selectedLeague
-              ? ' active'
-              : ''
-          );
+  competitions.forEach(
+    competition => {
 
-        button.textContent =
-          competition.name;
-
-        button.onclick =
-          () => {
-
-            selectedLeague =
-              competition.id;
-
-            renderTabs();
-
-            renderMatches();
-
-            const title =
-              $('#sectionTitle');
-
-            if (title) {
-
-              title.textContent =
-                competition.id ===
-                'all'
-
-                  ? 'Tous les matchs'
-
-                  : competition.name;
-            }
-          };
-
-        tabs.appendChild(
-          button
+      const button =
+        document.createElement(
+          'button'
         );
-      }
-    );
+
+
+      button.className =
+        'league-tab' +
+        (
+          competition.id ===
+          selectedLeague
+
+            ? ' active'
+
+            : ''
+        );
+
+
+      button.textContent =
+        competition.name;
+
+
+      button.onclick =
+        () => {
+
+          selectedLeague =
+            competition.id;
+
+
+          renderTabs();
+
+
+          renderMatches();
+
+
+          const title =
+            $('#sectionTitle');
+
+
+          if (title) {
+
+            title.textContent =
+
+              competition.id ===
+              'all'
+
+                ? 'Tous les matchs'
+
+                : competition.name;
+          }
+        };
+
+
+      tabs.appendChild(
+        button
+      );
+    }
+  );
 }
 
 
-// ================================
+// =====================================================
 // FILTRES
-// ================================
+// =====================================================
 
 function visibleMatches() {
 
@@ -318,6 +345,7 @@ function visibleMatches() {
           );
         }
 
+
         if (
           selectedFilter ===
           'high'
@@ -336,15 +364,16 @@ function visibleMatches() {
           );
         }
 
+
         return true;
       }
     );
 }
 
 
-// ================================
-// LISTE DES MATCHS
-// ================================
+// =====================================================
+// AFFICHAGE LISTE DES MATCHS
+// =====================================================
 
 function renderMatches() {
 
@@ -356,16 +385,19 @@ function renderMatches() {
     return;
   }
 
+
   panel.classList.add(
     'hidden'
   );
+
 
   grid.classList.remove(
     'hidden'
   );
 
-  grid.innerHTML =
-    '';
+
+  grid.innerHTML = '';
+
 
   if (
     loading
@@ -379,7 +411,7 @@ function renderMatches() {
         </strong>
 
         <p>
-          Connexion à Sportmonks.
+          Connexion aux données Sportmonks.
         </p>
 
       </div>
@@ -387,6 +419,7 @@ function renderMatches() {
 
     return;
   }
+
 
   if (
     lastError
@@ -411,8 +444,10 @@ function renderMatches() {
     return;
   }
 
+
   const data =
     visibleMatches();
+
 
   if (
     !data.length
@@ -427,8 +462,8 @@ function renderMatches() {
 
         <p>
           Aucun match ne correspond
-          actuellement à ce filtre
-          ou à la période récupérée.
+          actuellement au filtre
+          sélectionné.
         </p>
 
       </div>
@@ -436,6 +471,7 @@ function renderMatches() {
 
     return;
   }
+
 
   data.forEach(
     match => {
@@ -447,10 +483,12 @@ function renderMatches() {
             true
           );
 
+
       const card =
         node.querySelector(
           '.match-card'
         );
+
 
       node
         .querySelector(
@@ -464,36 +502,32 @@ function renderMatches() {
           )
             .toUpperCase();
 
+
       const lineupState =
-        node
-          .querySelector(
-            '.lineup-state'
-          );
+        node.querySelector(
+          '.lineup-state'
+        );
+
 
       if (
         match.official
       ) {
 
-        lineupState
-          .textContent =
-            '● COMPOS OFFICIELLES';
+        lineupState.textContent =
+          '● COMPOS OFFICIELLES';
 
-        lineupState
-          .style
-          .color =
-            'var(--success)';
+        lineupState.style.color =
+          'var(--success)';
 
       } else {
 
-        lineupState
-          .textContent =
-            '○ COMPOS EN ATTENTE';
+        lineupState.textContent =
+          '○ COMPOS EN ATTENTE';
 
-        lineupState
-          .style
-          .color =
-            'var(--warn)';
+        lineupState.style.color =
+          'var(--warn)';
       }
+
 
       node
         .querySelector(
@@ -503,6 +537,7 @@ function renderMatches() {
           match.home ||
           'Domicile';
 
+
       node
         .querySelector(
           '.away-team'
@@ -510,6 +545,7 @@ function renderMatches() {
         .textContent =
           match.away ||
           'Extérieur';
+
 
       node
         .querySelector(
@@ -520,6 +556,7 @@ function renderMatches() {
             match.home
           );
 
+
       node
         .querySelector(
           '.away-logo'
@@ -529,6 +566,7 @@ function renderMatches() {
             match.away
           );
 
+
       node
         .querySelector(
           '.fixture-time'
@@ -537,6 +575,7 @@ function renderMatches() {
           match.time ||
           '—';
 
+
       node
         .querySelector(
           '.fixture-date'
@@ -544,6 +583,7 @@ function renderMatches() {
         .textContent =
           match.date ||
           '—';
+
 
       node
         .querySelector(
@@ -556,6 +596,7 @@ function renderMatches() {
               ?.home
           );
 
+
       node
         .querySelector(
           '.md'
@@ -566,6 +607,7 @@ function renderMatches() {
               .probs
               ?.draw
           );
+
 
       node
         .querySelector(
@@ -578,34 +620,35 @@ function renderMatches() {
               ?.away
           );
 
+
       const confidence =
-        node
-          .querySelector(
-            '.confidence-chip'
-          );
+        node.querySelector(
+          '.confidence-chip'
+        );
 
-      confidence
-        .textContent =
 
-          match.confidence ===
-          null ||
+      confidence.textContent =
 
-          match.confidence ===
-          undefined
+        match.confidence ===
+        null ||
 
-            ? 'CONF. —'
+        match.confidence ===
+        undefined
 
-            : `CONF. ${Math.round(
-                Number(
-                  match.confidence
-                )
-              )}%`;
+          ? 'CONF. —'
+
+          : `CONF. ${Math.round(
+              Number(
+                match.confidence
+              )
+            )}%`;
+
 
       const signal =
-        node
-          .querySelector(
-            '.signal'
-          );
+        node.querySelector(
+          '.signal'
+        );
+
 
       if (
         match.confidence ===
@@ -642,11 +685,12 @@ function renderMatches() {
           'À confirmer';
       }
 
+
       const analyseButton =
-        node
-          .querySelector(
-            '.analyse-btn'
-          );
+        node.querySelector(
+          '.analyse-btn'
+        );
+
 
       analyseButton.onclick =
         event => {
@@ -654,10 +698,12 @@ function renderMatches() {
           event
             .stopPropagation();
 
+
           openAnalysis(
             match.id
           );
         };
+
 
       card.onclick =
         () => {
@@ -667,6 +713,7 @@ function renderMatches() {
           );
         };
 
+
       grid.appendChild(
         node
       );
@@ -675,9 +722,9 @@ function renderMatches() {
 }
 
 
-// ================================
-// FICHE DU MATCH
-// ================================
+// =====================================================
+// OUVERTURE ANALYSE MATCH
+// =====================================================
 
 function openAnalysis(
   id
@@ -696,6 +743,7 @@ function openAnalysis(
         )
     );
 
+
   if (
     !match
   ) {
@@ -703,24 +751,26 @@ function openAnalysis(
     return;
   }
 
+
   grid.classList.add(
     'hidden'
   );
+
 
   panel.classList.remove(
     'hidden'
   );
 
-  window.scrollTo({
-    top:
-      0,
 
-    behavior:
-      'smooth'
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
   });
+
 
   const officialBadge =
     $('#officialBadge');
+
 
   officialBadge.textContent =
 
@@ -730,6 +780,7 @@ function openAnalysis(
 
       : 'COMPOS EN ATTENTE';
 
+
   officialBadge.className =
     'pill ' +
     (
@@ -737,6 +788,7 @@ function openAnalysis(
         ? 'success'
         : 'warn'
     );
+
 
   $('#qualityBadge')
     .textContent =
@@ -751,15 +803,18 @@ function openAnalysis(
 
         : 'QUALITÉ DONNÉES —';
 
+
   $('#homeName')
     .textContent =
       match.home ||
       'Domicile';
 
+
   $('#awayName')
     .textContent =
       match.away ||
       'Extérieur';
+
 
   $('#homeLogo')
     .textContent =
@@ -767,16 +822,19 @@ function openAnalysis(
         match.home
       );
 
+
   $('#awayLogo')
     .textContent =
       initials(
         match.away
       );
 
+
   $('#kickoff')
     .textContent =
       match.time ||
       '—';
+
 
   $('#venue')
     .textContent =
@@ -788,6 +846,7 @@ function openAnalysis(
         'Stade à confirmer'
       }`;
 
+
   $('#pHome')
     .textContent =
       pct(
@@ -795,6 +854,7 @@ function openAnalysis(
           .probs
           ?.home
       );
+
 
   $('#pDraw')
     .textContent =
@@ -804,6 +864,7 @@ function openAnalysis(
           ?.draw
       );
 
+
   $('#pAway')
     .textContent =
       pct(
@@ -812,11 +873,13 @@ function openAnalysis(
           ?.away
       );
 
+
   $('#confidence')
     .textContent =
       pct(
         match.confidence
       );
+
 
   $('#homeFormation')
     .textContent =
@@ -829,6 +892,7 @@ function openAnalysis(
         '—'
       }`;
 
+
   $('#awayFormation')
     .textContent =
       `${
@@ -840,15 +904,18 @@ function openAnalysis(
         '—'
       }`;
 
+
   const homeXI =
     safeArray(
       match.homeXI
     );
 
+
   const awayXI =
     safeArray(
       match.awayXI
     );
+
 
   $('#homeLineup')
     .innerHTML =
@@ -872,6 +939,7 @@ function openAnalysis(
         )
         .join('');
 
+
   $('#awayLineup')
     .innerHTML =
 
@@ -894,15 +962,22 @@ function openAnalysis(
         )
         .join('');
 
+
   $('#absences')
     .textContent =
       match.absences ||
       'Données blessures et suspensions en attente.';
 
+
+// =====================================================
+// FACTEURS
+// =====================================================
+
   const factors =
     safeArray(
       match.factors
     );
+
 
   if (
     factors.length
@@ -971,18 +1046,24 @@ function openAnalysis(
 
         <div class="note-box">
 
-          L'analyse avancée sera calculée
-          lorsque les données statistiques
-          seront disponibles.
+          L'analyse avancée sera disponible
+          lorsque suffisamment de données
+          auront été récupérées.
 
         </div>
       `;
   }
 
+
+// =====================================================
+// MARCHÉS
+// =====================================================
+
   const markets =
     safeArray(
       match.markets
     );
+
 
   if (
     markets.length
@@ -1054,12 +1135,17 @@ function openAnalysis(
 
           Probabilités en attente.
 
-          Aucun pronostic fictif
+          Aucun pronostic artificiel
           n'est généré.
 
         </div>
       `;
   }
+
+
+// =====================================================
+// CONTEXTE
+// =====================================================
 
   const confidenceLabel =
 
@@ -1081,7 +1167,9 @@ function openAnalysis(
           )
         }`;
 
+
   const context = [
+
     [
       'Stade',
 
@@ -1120,6 +1208,7 @@ function openAnalysis(
     ]
   ];
 
+
   $('#contextList')
     .innerHTML =
 
@@ -1154,6 +1243,11 @@ function openAnalysis(
           `
         )
         .join('');
+
+
+// =====================================================
+// POIDS MODÈLE
+// =====================================================
 
   $('#weightBars')
     .innerHTML =
@@ -1197,10 +1291,16 @@ function openAnalysis(
         )
         .join('');
 
+
+// =====================================================
+// SOURCES
+// =====================================================
+
   const sources =
     safeArray(
       match.sources
     );
+
 
   if (
     sources.length
@@ -1264,45 +1364,44 @@ function openAnalysis(
           </strong>
 
           <p>
-            Sources supplémentaires
-            à connecter.
+            Sources supplémentaires à connecter.
           </p>
 
         </div>
       `;
   }
 
+
   const modelVersion =
     $('#modelVersion');
+
 
   if (
     modelVersion
   ) {
 
-    modelVersion
-      .textContent =
-        'Moteur live v0.2';
+    modelVersion.textContent =
+      'Moteur live v0.3';
   }
 }
 
 
-// ================================
-// CONNEXION À SPORTMONKS
-// ================================
+// =====================================================
+// CONNEXION AUX DONNÉES LIVE
+// =====================================================
 
 async function tryLive() {
 
-  loading =
-    true;
+  loading = true;
 
-  lastError =
-    null;
+  lastError = null;
 
-  matches =
-    [];
+  matches = [];
+
 
   const dataMode =
     $('#dataMode');
+
 
   if (
     dataMode
@@ -1315,7 +1414,9 @@ async function tryLive() {
       'pill neutral';
   }
 
+
   renderMatches();
+
 
   try {
 
@@ -1323,13 +1424,13 @@ async function tryLive() {
       await fetch(
         '/.netlify/functions/fixtures',
         {
-          cache:
-            'no-store'
+          cache: 'no-store'
         }
       );
 
-    let data =
-      {};
+
+    let data = {};
+
 
     try {
 
@@ -1340,22 +1441,26 @@ async function tryLive() {
       _error
     ) {
 
-      data =
-        {};
+      data = {};
     }
+
 
     if (
       !response.ok
     ) {
 
       throw new Error(
+
         data.details ||
+
         data.error ||
+
         `Erreur API ${
           response.status
         }`
       );
     }
+
 
     matches =
 
@@ -1367,11 +1472,11 @@ async function tryLive() {
 
         : [];
 
-    loading =
-      false;
 
-    lastError =
-      null;
+    loading = false;
+
+    lastError = null;
+
 
     if (
       dataMode
@@ -1384,23 +1489,24 @@ async function tryLive() {
         'pill success';
     }
 
+
     renderMatches();
+
 
   } catch (
     error
   ) {
 
-    loading =
-      false;
+    loading = false;
 
-    matches =
-      [];
+    matches = [];
 
     lastError =
       String(
         error?.message ||
         error
       );
+
 
     if (
       dataMode
@@ -1413,14 +1519,15 @@ async function tryLive() {
         'pill warn';
     }
 
+
     renderMatches();
   }
 }
 
 
-// ================================
+// =====================================================
 // FILTRES
-// ================================
+// =====================================================
 
 document
   .querySelectorAll(
@@ -1429,48 +1536,51 @@ document
   .forEach(
     button => {
 
-      button
-        .addEventListener(
-          'click',
-          () => {
+      button.addEventListener(
+        'click',
+        () => {
 
-            document
-              .querySelectorAll(
-                '.seg'
-              )
-              .forEach(
-                item =>
-                  item
-                    .classList
-                    .remove(
-                      'active'
-                    )
-              );
+          document
+            .querySelectorAll(
+              '.seg'
+            )
+            .forEach(
+              item =>
+                item
+                  .classList
+                  .remove(
+                    'active'
+                  )
+            );
 
+
+          button
+            .classList
+            .add(
+              'active'
+            );
+
+
+          selectedFilter =
             button
-              .classList
-              .add(
-                'active'
-              );
+              .dataset
+              .filter;
 
-            selectedFilter =
-              button
-                .dataset
-                .filter;
 
-            renderMatches();
-          }
-        );
+          renderMatches();
+        }
+      );
     }
   );
 
 
-// ================================
-// BOUTONS
-// ================================
+// =====================================================
+// BOUTON RETOUR
+// =====================================================
 
 const backButton =
   $('#backBtn');
+
 
 if (
   backButton
@@ -1481,8 +1591,14 @@ if (
       renderMatches();
 }
 
+
+// =====================================================
+// BOUTON ACTUALISER
+// =====================================================
+
 const refreshButton =
   $('#refreshBtn');
+
 
 if (
   refreshButton
@@ -1494,25 +1610,26 @@ if (
 }
 
 
-// ================================
-// NOMBRE DE COMPÉTITIONS
-// ================================
+// =====================================================
+// NOMBRE DE CHAMPIONNATS
+// =====================================================
 
 const coverageValue =
   $('#coverageValue');
+
 
 if (
   coverageValue
 ) {
 
   coverageValue.textContent =
-    '5';
+    '4';
 }
 
 
-// ================================
-// DÉMARRAGE
-// ================================
+// =====================================================
+// DÉMARRAGE APPLICATION
+// =====================================================
 
 renderTabs();
 
