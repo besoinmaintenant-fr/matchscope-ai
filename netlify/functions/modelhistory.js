@@ -32,16 +32,19 @@ const TOTAL_DAYS =
 
 
 /*
- * Sportmonks autorise au maximum
- * 100 jours par requête.
+ * Sportmonks limite la requête "between"
+ * à 100 jours maximum.
  *
- * On utilise 99 jours pour rester
+ * On utilise donc 90 jours par bloc,
  * volontairement sous la limite.
  */
 
 const CHUNK_DAYS =
-  99;
+  90;
 
+
+const ENGINE_VERSION =
+  'modelhistory-v2';
 
 
 // =====================================================
@@ -101,11 +104,6 @@ function parseKickoff(
       .trim();
 
 
-  /*
-   * Format Sportmonks classique :
-   * 2026-09-28 15:30:00
-   */
-
   if (
     /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
       .test(
@@ -136,14 +134,15 @@ function parseKickoff(
   return Number.isNaN(
     date.getTime()
   )
+
     ? null
+
     : date;
 }
 
 
-
 // =====================================================
-// CONSTRUCTION DES 4 PÉRIODES
+// DÉCOUPAGE 365 JOURS
 // =====================================================
 
 function buildRanges(
@@ -168,7 +167,7 @@ function buildRanges(
     let rangeEnd =
       addDays(
         cursor,
-        CHUNK_DAYS
+        CHUNK_DAYS - 1
       );
 
 
@@ -198,12 +197,6 @@ function buildRanges(
     });
 
 
-    /*
-     * Le prochain morceau commence
-     * le lendemain pour éviter
-     * les doublons.
-     */
-
     cursor =
       addDays(
         rangeEnd,
@@ -214,7 +207,6 @@ function buildRanges(
 
   return ranges;
 }
-
 
 
 // =====================================================
@@ -244,7 +236,6 @@ function getTeam(
 }
 
 
-
 // =====================================================
 // SCORE FINAL
 // =====================================================
@@ -266,11 +257,6 @@ function getFinalScore(
   scores.forEach(
     item => {
 
-      /*
-       * C'est la structure qui fonctionnait
-       * déjà dans ton historique 90 jours.
-       */
-
       if (
         item?.description !==
         'CURRENT'
@@ -280,7 +266,7 @@ function getFinalScore(
       }
 
 
-      const participant =
+      const side =
         item
           ?.score
           ?.participant;
@@ -295,7 +281,7 @@ function getFinalScore(
 
 
       if (
-        participant ===
+        side ===
         'home'
 
         &&
@@ -311,7 +297,7 @@ function getFinalScore(
 
 
       if (
-        participant ===
+        side ===
         'away'
 
         &&
@@ -368,12 +354,11 @@ function getResult(
 }
 
 
-
 // =====================================================
 // RÉPONSE NETLIFY
 // =====================================================
 
-function response(
+function jsonResponse(
   statusCode,
   body
 ) {
@@ -390,12 +375,21 @@ function response(
 
 
       /*
-       * Évite de recharger 365 jours
-       * à chaque ouverture d'un match.
+       * Important :
+       * on coupe complètement le cache
+       * pendant nos tests V0.7.
        */
 
       'cache-control':
-        'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400'
+        'no-store, no-cache, must-revalidate, max-age=0',
+
+
+      pragma:
+        'no-cache',
+
+
+      expires:
+        '0'
     },
 
 
@@ -407,9 +401,8 @@ function response(
 }
 
 
-
 // =====================================================
-// RÉCUPÉRER UNE PÉRIODE SPORTMONKS
+// RÉCUPÉRATION D'UN BLOC SPORTMONKS
 // =====================================================
 
 async function fetchRange(
@@ -419,11 +412,6 @@ async function fetchRange(
 
   const fixtures =
     [];
-
-
-  const endpoint =
-
-    `${API}/fixtures/between/${iso(range.start)}/${iso(range.end)}`;
 
 
   let page =
@@ -436,8 +424,13 @@ async function fetchRange(
 
   while (
     hasMore &&
-    page <= 20
+    page <= 30
   ) {
+
+    const endpoint =
+
+      `${API}/fixtures/between/${iso(range.start)}/${iso(range.end)}`;
+
 
     const url =
       new URL(
@@ -494,13 +487,13 @@ async function fetchRange(
     ) {
 
       throw new Error(
-        `Sportmonks ${apiResponse.status} sur ${iso(range.start)} → ${iso(range.end)} : ${raw.slice(0, 800)}`
+
+        `Sportmonks ${apiResponse.status} sur ${iso(range.start)} -> ${iso(range.end)} : ${raw.slice(0, 1000)}`
       );
     }
 
 
-    let payload =
-      {};
+    let payload;
 
 
     try {
@@ -515,7 +508,8 @@ async function fetchRange(
     ) {
 
       throw new Error(
-        `Réponse Sportmonks invalide sur ${iso(range.start)} → ${iso(range.end)}`
+
+        `Réponse Sportmonks invalide sur ${iso(range.start)} -> ${iso(range.end)}`
       );
     }
 
@@ -534,6 +528,7 @@ async function fetchRange(
 
     hasMore =
       Boolean(
+
         payload
           ?.pagination
           ?.has_more
@@ -545,13 +540,23 @@ async function fetchRange(
   }
 
 
+  if (
+    hasMore
+  ) {
+
+    throw new Error(
+
+      `Pagination incomplète sur ${iso(range.start)} -> ${iso(range.end)} après 30 pages.`
+    );
+  }
+
+
   return fixtures;
 }
 
 
-
 // =====================================================
-// TRANSFORMER FIXTURE
+// TRANSFORMATION FIXTURE
 // =====================================================
 
 function transformFixture(
@@ -614,12 +619,6 @@ function transformFixture(
         : []
     );
 
-
-  /*
-   * Match pas terminé ou score
-   * indisponible :
-   * on ne l'utilise pas au backtest.
-   */
 
   if (
     score.home === null ||
@@ -748,13 +747,13 @@ function transformFixture(
 }
 
 
-
 // =====================================================
-// FUNCTION NETLIFY
+// NETLIFY FUNCTION
 // =====================================================
 
 exports.handler =
   async () => {
+
 
     const token =
       process
@@ -766,9 +765,13 @@ exports.handler =
       !token
     ) {
 
-      return response(
+      return jsonResponse(
         500,
         {
+
+          engineVersion:
+            ENGINE_VERSION,
+
 
           error:
             'SPORTMONKS_API_TOKEN absent.'
@@ -777,17 +780,9 @@ exports.handler =
     }
 
 
-    /*
-     * Date aujourd'hui.
-     */
-
     const end =
       new Date();
 
-
-    /*
-     * 365 jours en arrière.
-     */
 
     const start =
       new Date(
@@ -804,15 +799,6 @@ exports.handler =
       );
 
 
-    /*
-     * Exemple :
-     *
-     * bloc 1 = 99 jours
-     * bloc 2 = 99 jours
-     * bloc 3 = 99 jours
-     * bloc 4 = reste
-     */
-
     const ranges =
       buildRanges(
         start,
@@ -823,11 +809,11 @@ exports.handler =
     try {
 
       /*
-       * Les 4 grandes périodes
-       * sont téléchargées en parallèle.
+       * Chaque bloc fait maximum 90 jours.
        *
-       * À l'intérieur de chaque période,
-       * la pagination reste séquentielle.
+       * Ils sont récupérés séparément,
+       * donc Sportmonks ne reçoit jamais
+       * une requête de 365 jours.
        */
 
       const results =
@@ -835,6 +821,7 @@ exports.handler =
 
           ranges.map(
             range =>
+
               fetchRange(
                 token,
                 range
@@ -843,17 +830,12 @@ exports.handler =
         );
 
 
-      /*
-       * Fusion des 4 périodes.
-       */
-
       const rawFixtures =
         results.flat();
 
 
       /*
-       * Protection anti doublon
-       * via fixture.id.
+       * Suppression des doublons.
        */
 
       const uniqueFixtures =
@@ -865,7 +847,10 @@ exports.handler =
 
           if (
             fixture?.id ===
-            undefined ||
+            undefined
+
+            ||
+
             fixture?.id ===
             null
           ) {
@@ -875,19 +860,16 @@ exports.handler =
 
 
           uniqueFixtures.set(
+
             String(
               fixture.id
             ),
+
             fixture
           );
         }
       );
 
-
-      /*
-       * Transformation vers
-       * le format MatchScope.
-       */
 
       const matches =
 
@@ -903,12 +885,6 @@ exports.handler =
             Boolean
           )
 
-          /*
-           * Ordre chronologique :
-           * très important pour Elo
-           * et le backtest.
-           */
-
           .sort(
             (
               first,
@@ -920,23 +896,19 @@ exports.handler =
           );
 
 
-      /*
-       * Informations de diagnostic.
-       */
-
-      const leagueCounts =
+      const leagues =
         {};
 
 
       matches.forEach(
         match => {
 
-          leagueCounts[
+          leagues[
             match.competition
           ] =
 
             (
-              leagueCounts[
+              leagues[
                 match.competition
               ]
 
@@ -952,9 +924,13 @@ exports.handler =
       );
 
 
-      return response(
+      return jsonResponse(
         200,
         {
+
+          engineVersion:
+            ENGINE_VERSION,
+
 
           mode:
             'model-history',
@@ -992,8 +968,7 @@ exports.handler =
             matches.length,
 
 
-          leagues:
-            leagueCounts,
+          leagues,
 
 
           ranges:
@@ -1023,15 +998,20 @@ exports.handler =
       error
     ) {
 
+
       console.error(
         'MatchScope modelhistory:',
         error
       );
 
 
-      return response(
+      return jsonResponse(
         500,
         {
+
+          engineVersion:
+            ENGINE_VERSION,
+
 
           error:
             'Erreur MatchScope model-history',
@@ -1048,18 +1028,16 @@ exports.handler =
             ),
 
 
-          /*
-           * Très pratique pour voir
-           * si les 365 jours ont bien
-           * été divisés.
-           */
-
           requestedDays:
             TOTAL_DAYS,
 
 
           chunkDays:
             CHUNK_DAYS,
+
+
+          chunks:
+            ranges.length,
 
 
           ranges:
