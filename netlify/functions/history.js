@@ -2,10 +2,6 @@ const API =
   'https://api.sportmonks.com/v3/football';
 
 
-// =====================================================
-// LIGUES ACTUELLEMENT DANS TON PLAN
-// =====================================================
-
 const LEAGUES = {
 
   '82': {
@@ -32,7 +28,6 @@ const LEAGUES = {
     code: 'CF1',
     name: 'Club Friendlies 1'
   }
-
 };
 
 
@@ -41,10 +36,6 @@ const LEAGUE_IDS =
     LEAGUES
   );
 
-
-// =====================================================
-// OUTILS
-// =====================================================
 
 function iso(date) {
 
@@ -70,12 +61,15 @@ function parseKickoff(
   const raw =
     String(
       value
-    ).trim();
+    )
+      .trim();
 
 
   if (
     /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
-      .test(raw)
+      .test(
+        raw
+      )
   ) {
 
     return new Date(
@@ -107,13 +101,18 @@ function getTeam(
 ) {
 
   return (
+
     participants.find(
       participant =>
+
         participant
           ?.meta
           ?.location ===
         location
-    ) ||
+    )
+
+    ||
+
     null
   );
 }
@@ -124,8 +123,12 @@ function getFinalScore(
 ) {
 
   const result = {
-    home: null,
-    away: null
+
+    home:
+      null,
+
+    away:
+      null
   };
 
 
@@ -230,6 +233,7 @@ function jsonResponse(
 
     statusCode,
 
+
     headers: {
 
       'content-type':
@@ -239,6 +243,7 @@ function jsonResponse(
         'no-store'
     },
 
+
     body:
       JSON.stringify(
         body
@@ -247,12 +252,9 @@ function jsonResponse(
 }
 
 
-// =====================================================
-// NETLIFY
-// =====================================================
-
 exports.handler =
   async event => {
+
 
     const token =
       process
@@ -265,6 +267,7 @@ exports.handler =
       return jsonResponse(
         500,
         {
+
           error:
             'SPORTMONKS_API_TOKEN absent.'
         }
@@ -272,14 +275,15 @@ exports.handler =
     }
 
 
-    // Par défaut :
-    // 30 derniers jours.
-
     let days =
       Number(
+
         event
           ?.queryStringParameters
-          ?.days ||
+          ?.days
+
+        ||
+
         30
       );
 
@@ -295,15 +299,15 @@ exports.handler =
     }
 
 
-    // Sportmonks autorise
-    // jusqu'à 100 jours.
-    // Pour notre app on limite à 90.
-
     days =
       Math.max(
+
         1,
+
         Math.min(
+
           90,
+
           Math.round(
             days
           )
@@ -317,7 +321,11 @@ exports.handler =
 
     const start =
       new Date(
-        Date.now() -
+
+        Date.now()
+
+        -
+
         days *
         24 *
         60 *
@@ -327,10 +335,12 @@ exports.handler =
 
 
     const endpoint =
+
       `${API}/fixtures/between/${iso(start)}/${iso(end)}`;
 
 
     try {
+
 
       const fixtures =
         [];
@@ -348,6 +358,7 @@ exports.handler =
         hasMore &&
         page <= 20
       ) {
+
 
         const url =
           new URL(
@@ -404,8 +415,11 @@ exports.handler =
         ) {
 
           return jsonResponse(
+
             response.status,
+
             {
+
               error:
                 'Erreur Sportmonks',
 
@@ -439,61 +453,82 @@ exports.handler =
 
         hasMore =
           Boolean(
+
             payload
               ?.pagination
               ?.has_more
           );
 
 
-        page += 1;
+        page +=
+          1;
       }
 
 
       const matches =
+
         fixtures
 
           .map(
             fixture => {
 
+
               const participants =
+
                 Array.isArray(
                   fixture.participants
                 )
+
                   ? fixture.participants
+
                   : [];
 
 
               const home =
+
                 getTeam(
                   participants,
                   'home'
-                ) ||
-                participants[0] ||
+                )
+
+                ||
+
+                participants[0]
+
+                ||
+
                 {};
 
 
               const away =
+
                 getTeam(
                   participants,
                   'away'
-                ) ||
-                participants[1] ||
+                )
+
+                ||
+
+                participants[1]
+
+                ||
+
                 {};
 
 
               const score =
+
                 getFinalScore(
+
                   Array.isArray(
                     fixture.scores
                   )
+
                     ? fixture.scores
+
                     : []
                 );
 
-
-              // Sans score CURRENT,
-              // on considère le match
-              // comme non terminé.
 
               if (
                 score.home === null ||
@@ -505,12 +540,14 @@ exports.handler =
 
 
               const kickoff =
+
                 parseKickoff(
                   fixture.starting_at
                 );
 
 
               const league =
+
                 LEAGUES[
                   String(
                     fixture.league_id
@@ -519,6 +556,7 @@ exports.handler =
 
 
               return {
+
 
                 id:
                   String(
@@ -536,10 +574,17 @@ exports.handler =
 
 
                 competitionName:
+
                   fixture
                     ?.league
-                    ?.name ||
-                  league?.name ||
+                    ?.name
+
+                  ||
+
+                  league?.name
+
+                  ||
+
                   'Compétition',
 
 
@@ -563,13 +608,45 @@ exports.handler =
                   null,
 
 
+                /*
+                IMPORTANT POUR BACKTEST
+
+                On garde maintenant
+                l'heure exacte du match.
+
+                Cela permet au modèle
+                de n'utiliser QUE les matchs
+                qui avaient déjà été joués
+                avant le match testé.
+                */
+
+                startingAt:
+
+                  kickoff
+
+                    ? kickoff.toISOString()
+
+                    : null,
+
+
+                kickoffTs:
+
+                  kickoff
+
+                    ? kickoff.getTime()
+
+                    : null,
+
+
                 date:
+
                   kickoff
 
                     ? kickoff
                         .toLocaleDateString(
                           'fr-FR',
                           {
+
                             day:
                               '2-digit',
 
@@ -588,12 +665,14 @@ exports.handler =
 
 
                 time:
+
                   kickoff
 
                     ? kickoff
                         .toLocaleTimeString(
                           'fr-FR',
                           {
+
                             hour:
                               '2-digit',
 
@@ -609,9 +688,13 @@ exports.handler =
 
 
                 venue:
+
                   fixture
                     ?.venue
-                    ?.name ||
+                    ?.name
+
+                  ||
+
                   'Stade non renseigné',
 
 
@@ -626,21 +709,30 @@ exports.handler =
 
 
                 actualResult:
+
                   getResult(
+
                     score.home,
+
                     score.away
                   ),
 
 
                 resultInfo:
+
                   fixture
-                    ?.result_info ||
+                    ?.result_info
+
+                  ||
+
                   null
               };
             }
           )
 
-          .filter(Boolean)
+          .filter(
+            Boolean
+          )
 
           .sort(
             (
@@ -648,17 +740,24 @@ exports.handler =
               second
             ) =>
 
-              Number(
-                second.id
-              ) -
-              Number(
-                first.id
+              (
+                second.kickoffTs ||
+                0
+              )
+
+              -
+
+              (
+                first.kickoffTs ||
+                0
               )
           );
 
 
       return jsonResponse(
+
         200,
+
         {
 
           mode:
@@ -667,10 +766,14 @@ exports.handler =
           days,
 
           from:
-            iso(start),
+            iso(
+              start
+            ),
 
           to:
-            iso(end),
+            iso(
+              end
+            ),
 
           count:
             matches.length,
@@ -684,14 +787,22 @@ exports.handler =
       error
     ) {
 
+
       return jsonResponse(
+
         500,
+
         {
+
           error:
             'Erreur MatchScope historique',
 
           details:
-            error?.message ||
+
+            error?.message
+
+            ||
+
             String(
               error
             )
