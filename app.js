@@ -24,68 +24,42 @@ const competitions = [
     name: '🌍 Club Friendlies 1'
   }
 ];
-// =====================================================
-// POIDS DU MODÈLE
-// =====================================================
+
 
 const weights = [
-  [
-    'Forme pondérée',
-    18
-  ],
-  [
-    'xG / xGA',
-    20
-  ],
-  [
-    'Domicile / extérieur',
-    12
-  ],
-  [
-    'Compositions & absences',
-    18
-  ],
-  [
-    'Repos / fatigue',
-    8
-  ],
-  [
-    'Matchup tactique',
-    9
-  ],
-  [
-    'Cotes / consensus marché',
-    7
-  ],
-  [
-    'Météo / pelouse / stade',
-    4
-  ],
-  [
-    'H2H récent',
-    4
-  ]
+  ['Forme pondérée', 18],
+  ['xG / xGA', 20],
+  ['Domicile / extérieur', 12],
+  ['Compositions & absences', 18],
+  ['Repos / fatigue', 8],
+  ['Matchup tactique', 9],
+  ['Cotes / consensus', 7],
+  ['Météo / stade', 4],
+  ['H2H récent', 4]
 ];
 
 
-// =====================================================
-// ÉTAT APPLICATION
-// =====================================================
+let selectedLeague =
+  'all';
 
-let selectedLeague = 'all';
+let selectedFilter =
+  'all';
 
-let selectedFilter = 'all';
+let currentMode =
+  'live';
 
-let matches = [];
+let historyDays =
+  30;
 
-let loading = false;
+let matches =
+  [];
 
-let lastError = null;
+let loading =
+  false;
 
+let lastError =
+  null;
 
-// =====================================================
-// RACCOURCIS DOM
-// =====================================================
 
 const $ =
   selector =>
@@ -93,17 +67,18 @@ const $ =
       selector
     );
 
-const tabs =
-  $('#leagueTabs');
 
 const grid =
   $('#matchGrid');
 
+const panel =
+  $('#analysisPanel');
+
 const template =
   $('#matchTemplate');
 
-const panel =
-  $('#analysisPanel');
+const tabs =
+  $('#leagueTabs');
 
 
 // =====================================================
@@ -146,49 +121,22 @@ function pct(
     return '—';
   }
 
+
   return `${Math.round(
     Number(value)
   )}%`;
 }
 
 
-function confidenceText(
+function safeArray(
   value
 ) {
 
-  if (
-    value === null ||
-    value === undefined
-  ) {
-
-    return 'En attente';
-  }
-
-  const number =
-    Number(value);
-
-  if (
-    number >= 80
-  ) {
-
-    return 'Très forte';
-  }
-
-  if (
-    number >= 70
-  ) {
-
-    return 'Forte';
-  }
-
-  if (
-    number >= 60
-  ) {
-
-    return 'Moyenne';
-  }
-
-  return 'Faible';
+  return Array.isArray(
+    value
+  )
+    ? value
+    : [];
 }
 
 
@@ -225,20 +173,78 @@ function escapeHtml(
 }
 
 
-function safeArray(
-  value
-) {
+// =====================================================
+// TITRE
+// =====================================================
 
-  return Array.isArray(
-    value
-  )
-    ? value
-    : [];
+function updateTitle() {
+
+  const title =
+    $('#sectionTitle');
+
+  const eyebrow =
+    $('#sectionEyebrow');
+
+
+  const competition =
+    competitions.find(
+      item =>
+        item.id ===
+        selectedLeague
+    );
+
+
+  if (
+    currentMode ===
+    'history'
+  ) {
+
+    if (eyebrow) {
+
+      eyebrow.textContent =
+        'RÉSULTATS TERMINÉS';
+    }
+
+
+    if (title) {
+
+      title.textContent =
+
+        selectedLeague ===
+        'all'
+
+          ? `Historique • ${historyDays} jours`
+
+          : `${competition?.name || ''} • ${historyDays} jours`;
+    }
+
+  } else {
+
+    if (eyebrow) {
+
+      eyebrow.textContent =
+        'MATCHS À ANALYSER';
+    }
+
+
+    if (title) {
+
+      title.textContent =
+
+        selectedLeague ===
+        'all'
+
+          ? 'Tous les matchs'
+
+          : competition?.name ||
+            'Compétition';
+    }
+  }
 }
 
 
 // =====================================================
-// ONGLETS CHAMPIONNATS
+// ONGLETS LIGUES
 // =====================================================
 
 function renderTabs() {
@@ -248,7 +254,8 @@ function renderTabs() {
   }
 
 
-  tabs.innerHTML = '';
+  tabs.innerHTML =
+    '';
 
 
   competitions.forEach(
@@ -263,11 +270,9 @@ function renderTabs() {
       button.className =
         'league-tab' +
         (
-          competition.id ===
-          selectedLeague
-
+          selectedLeague ===
+          competition.id
             ? ' active'
-
             : ''
         );
 
@@ -285,25 +290,9 @@ function renderTabs() {
 
           renderTabs();
 
+          updateTitle();
 
           renderMatches();
-
-
-          const title =
-            $('#sectionTitle');
-
-
-          if (title) {
-
-            title.textContent =
-
-              competition.id ===
-              'all'
-
-                ? 'Tous les matchs'
-
-                : competition.name;
-          }
         };
 
 
@@ -316,7 +305,7 @@ function renderTabs() {
 
 
 // =====================================================
-// FILTRES
+// FILTRAGE
 // =====================================================
 
 function visibleMatches() {
@@ -335,6 +324,15 @@ function visibleMatches() {
 
     .filter(
       match => {
+
+        if (
+          currentMode ===
+          'history'
+        ) {
+
+          return true;
+        }
+
 
         if (
           selectedFilter ===
@@ -374,78 +372,36 @@ function visibleMatches() {
 
 
 // =====================================================
-// AFFICHAGE LISTE DES MATCHS
+// MESSAGE
 // =====================================================
 
-function renderMatches() {
+function renderMessage(
+  title,
+  message
+) {
 
-  if (
-    !grid ||
-    !panel
-  ) {
+  grid.innerHTML = `
 
-    return;
-  }
+    <div class="panel-card">
 
+      <strong>
+        ${escapeHtml(title)}
+      </strong>
 
-  panel.classList.add(
-    'hidden'
-  );
+      <p>
+        ${escapeHtml(message)}
+      </p>
 
-
-  grid.classList.remove(
-    'hidden'
-  );
-
-
-  grid.innerHTML = '';
+    </div>
+  `;
+}
 
 
-  if (
-    loading
-  ) {
+// =====================================================
+// HISTORIQUE
+// =====================================================
 
-    grid.innerHTML = `
-      <div class="panel-card">
-
-        <strong>
-          Chargement des matchs…
-        </strong>
-
-        <p>
-          Connexion aux données Sportmonks.
-        </p>
-
-      </div>
-    `;
-
-    return;
-  }
-
-
-  if (
-    lastError
-  ) {
-
-    grid.innerHTML = `
-      <div class="panel-card">
-
-        <strong>
-          Données live indisponibles
-        </strong>
-
-        <p>
-          ${escapeHtml(
-            lastError
-          )}
-        </p>
-
-      </div>
-    `;
-
-    return;
-  }
-
+function renderHistoryMatches() {
 
   const data =
     visibleMatches();
@@ -455,21 +411,174 @@ function renderMatches() {
     !data.length
   ) {
 
-    grid.innerHTML = `
-      <div class="panel-card">
+    renderMessage(
+      'Aucun match historique',
+      'Aucun résultat trouvé pour cette période.'
+    );
 
-        <strong>
-          Aucun match trouvé
-        </strong>
+    return;
+  }
 
-        <p>
-          Aucun match ne correspond
-          actuellement au filtre
-          sélectionné.
-        </p>
 
-      </div>
-    `;
+  data.forEach(
+    match => {
+
+      const article =
+        document.createElement(
+          'article'
+        );
+
+
+      article.className =
+        'match-card history-card';
+
+
+      const homeScore =
+        match?.score?.home ??
+        '—';
+
+
+      const awayScore =
+        match?.score?.away ??
+        '—';
+
+
+      article.innerHTML = `
+
+        <div class="match-card-top">
+
+          <span class="competition">
+            ${escapeHtml(
+              match.competitionName ||
+              'Compétition'
+            )}
+          </span>
+
+          <span class="history-status">
+            ● TERMINÉ
+          </span>
+
+        </div>
+
+
+        <div class="fixture-row">
+
+          <div class="mini-team">
+
+            <span class="mini-logo">
+              ${escapeHtml(
+                initials(
+                  match.home
+                )
+              )}
+            </span>
+
+            <strong>
+              ${escapeHtml(
+                match.home
+              )}
+            </strong>
+
+          </div>
+
+
+          <div class="fixture-meta">
+
+            <strong>
+              ${homeScore}
+              -
+              ${awayScore}
+            </strong>
+
+            <span>
+              ${escapeHtml(
+                match.date ||
+                ''
+              )}
+            </span>
+
+          </div>
+
+
+          <div class="mini-team right">
+
+            <strong>
+              ${escapeHtml(
+                match.away
+              )}
+            </strong>
+
+            <span class="mini-logo">
+              ${escapeHtml(
+                initials(
+                  match.away
+                )
+              )}
+            </span>
+
+          </div>
+
+        </div>
+
+
+        <div class="history-result">
+
+          <div>
+
+            <strong>
+              ${escapeHtml(
+                match.venue ||
+                'Stade non renseigné'
+              )}
+            </strong>
+
+            <div>
+              ${escapeHtml(
+                match.time ||
+                ''
+              )}
+            </div>
+
+          </div>
+
+
+          <div class="result-code">
+            ${escapeHtml(
+              match.actualResult ||
+              '—'
+            )}
+          </div>
+
+        </div>
+      `;
+
+
+      grid.appendChild(
+        article
+      );
+    }
+  );
+}
+
+
+// =====================================================
+// LIVE
+// =====================================================
+
+function renderLiveMatches() {
+
+  const data =
+    visibleMatches();
+
+
+  if (
+    !data.length
+  ) {
+
+    renderMessage(
+      'Aucun match trouvé',
+      'Aucun match ne correspond actuellement à ce filtre.'
+    );
 
     return;
   }
@@ -498,8 +607,7 @@ function renderMatches() {
         )
         .textContent =
           String(
-            match
-              .competitionName ||
+            match.competitionName ||
             'Compétition'
           )
             .toUpperCase();
@@ -594,7 +702,7 @@ function renderMatches() {
         .textContent =
           pct(
             match
-              .probs
+              ?.probs
               ?.home
           );
 
@@ -606,7 +714,7 @@ function renderMatches() {
         .textContent =
           pct(
             match
-              .probs
+              ?.probs
               ?.draw
           );
 
@@ -618,32 +726,30 @@ function renderMatches() {
         .textContent =
           pct(
             match
-              .probs
+              ?.probs
               ?.away
           );
 
 
-      const confidence =
-        node.querySelector(
+      node
+        .querySelector(
           '.confidence-chip'
-        );
+        )
+        .textContent =
 
+          match.confidence ===
+          null ||
 
-      confidence.textContent =
+          match.confidence ===
+          undefined
 
-        match.confidence ===
-        null ||
+            ? 'CONF. —'
 
-        match.confidence ===
-        undefined
-
-          ? 'CONF. —'
-
-          : `CONF. ${Math.round(
-              Number(
-                match.confidence
-              )
-            )}%`;
+            : `CONF. ${Math.round(
+                Number(
+                  match.confidence
+                )
+              )}%`;
 
 
       const signal =
@@ -652,59 +758,32 @@ function renderMatches() {
         );
 
 
-      if (
+      signal.textContent =
+
         match.confidence ===
         null ||
 
         match.confidence ===
         undefined
-      ) {
 
-        signal.textContent =
-          'Analyse statistique en attente';
+          ? 'Analyse statistique en attente'
 
-      } else if (
-        Number(
-          match.confidence
-        ) >= 80
-      ) {
-
-        signal.textContent =
-          'Signal modèle solide';
-
-      } else if (
-        Number(
-          match.confidence
-        ) >= 70
-      ) {
-
-        signal.textContent =
-          'Signal exploitable';
-
-      } else {
-
-        signal.textContent =
-          'À confirmer';
-      }
+          : 'Analyse disponible';
 
 
-      const analyseButton =
-        node.querySelector(
+      node
+        .querySelector(
           '.analyse-btn'
-        );
+        )
+        .onclick =
+          event => {
 
+            event.stopPropagation();
 
-      analyseButton.onclick =
-        event => {
-
-          event
-            .stopPropagation();
-
-
-          openAnalysis(
-            match.id
-          );
-        };
+            openAnalysis(
+              match.id
+            );
+          };
 
 
       card.onclick =
@@ -725,7 +804,78 @@ function renderMatches() {
 
 
 // =====================================================
-// OUVERTURE ANALYSE MATCH
+// AFFICHAGE GLOBAL
+// =====================================================
+
+function renderMatches() {
+
+  if (
+    !grid ||
+    !panel
+  ) {
+
+    return;
+  }
+
+
+  panel.classList.add(
+    'hidden'
+  );
+
+
+  grid.classList.remove(
+    'hidden'
+  );
+
+
+  grid.innerHTML =
+    '';
+
+
+  if (
+    loading
+  ) {
+
+    renderMessage(
+      'Chargement…',
+      currentMode === 'history'
+        ? 'Récupération des matchs historiques.'
+        : 'Connexion aux données Sportmonks.'
+    );
+
+    return;
+  }
+
+
+  if (
+    lastError
+  ) {
+
+    renderMessage(
+      'Données indisponibles',
+      lastError
+    );
+
+    return;
+  }
+
+
+  if (
+    currentMode ===
+    'history'
+  ) {
+
+    renderHistoryMatches();
+
+  } else {
+
+    renderLiveMatches();
+  }
+}
+
+
+// =====================================================
+// ANALYSE MATCH LIVE
 // =====================================================
 
 function openAnalysis(
@@ -735,21 +885,12 @@ function openAnalysis(
   const match =
     matches.find(
       item =>
-
-        String(
-          item.id
-        ) ===
-
-        String(
-          id
-        )
+        String(item.id) ===
+        String(id)
     );
 
 
-  if (
-    !match
-  ) {
-
+  if (!match) {
     return;
   }
 
@@ -765,8 +906,8 @@ function openAnalysis(
 
 
   window.scrollTo({
-    top: 0,
-    behavior: 'smooth'
+    top:0,
+    behavior:'smooth'
   });
 
 
@@ -784,10 +925,14 @@ function openAnalysis(
 
 
   officialBadge.className =
+
     'pill ' +
+
     (
       match.official
+
         ? 'success'
+
         : 'warn'
     );
 
@@ -840,20 +985,14 @@ function openAnalysis(
 
   $('#venue')
     .textContent =
-      `${
-        match.date ||
-        '—'
-      } • ${
-        match.venue ||
-        'Stade à confirmer'
-      }`;
+      `${match.date || '—'} • ${match.venue || 'Stade à confirmer'}`;
 
 
   $('#pHome')
     .textContent =
       pct(
         match
-          .probs
+          ?.probs
           ?.home
       );
 
@@ -862,7 +1001,7 @@ function openAnalysis(
     .textContent =
       pct(
         match
-          .probs
+          ?.probs
           ?.draw
       );
 
@@ -871,7 +1010,7 @@ function openAnalysis(
     .textContent =
       pct(
         match
-          .probs
+          ?.probs
           ?.away
       );
 
@@ -885,26 +1024,12 @@ function openAnalysis(
 
   $('#homeFormation')
     .textContent =
-      `${
-        match.home ||
-        'Domicile'
-      } • ${
-        match
-          .formationHome ||
-        '—'
-      }`;
+      `${match.home || 'Domicile'} • ${match.formationHome || '—'}`;
 
 
   $('#awayFormation')
     .textContent =
-      `${
-        match.away ||
-        'Extérieur'
-      } • ${
-        match
-          .formationAway ||
-        '—'
-      }`;
+      `${match.away || 'Extérieur'} • ${match.formationAway || '—'}`;
 
 
   const homeXI =
@@ -924,20 +1049,12 @@ function openAnalysis(
 
       (
         homeXI.length
-
           ? homeXI
-
-          : [
-              'Composition en attente'
-            ]
+          : ['Composition en attente']
       )
         .map(
           player =>
-            `<div class="player">${
-              escapeHtml(
-                player
-              )
-            }</div>`
+            `<div class="player">${escapeHtml(player)}</div>`
         )
         .join('');
 
@@ -947,20 +1064,12 @@ function openAnalysis(
 
       (
         awayXI.length
-
           ? awayXI
-
-          : [
-              'Composition en attente'
-            ]
+          : ['Composition en attente']
       )
         .map(
           player =>
-            `<div class="player">${
-              escapeHtml(
-                player
-              )
-            }</div>`
+            `<div class="player">${escapeHtml(player)}</div>`
         )
         .join('');
 
@@ -971,95 +1080,61 @@ function openAnalysis(
       'Données blessures et suspensions en attente.';
 
 
-// =====================================================
-// FACTEURS
-// =====================================================
-
   const factors =
     safeArray(
       match.factors
     );
 
 
-  if (
-    factors.length
-  ) {
+  $('#factorList')
+    .innerHTML =
 
-    $('#factorList')
-      .innerHTML =
+      factors.length
 
-        factors
-          .map(
-            (
-              [
-                title,
-                description,
-                impact,
-                color
-              ]
-            ) => `
+        ? factors
+            .map(
+              item => `
 
-              <div class="factor">
+                <div class="factor">
 
-                <div>
+                  <div>
 
-                  <strong>
-                    ${
-                      escapeHtml(
-                        title
-                      )
-                    }
-                  </strong>
+                    <strong>
+                      ${escapeHtml(
+                        item[0]
+                      )}
+                    </strong>
 
-                  <p>
-                    ${
-                      escapeHtml(
-                        description
-                      )
-                    }
-                  </p>
+                    <p>
+                      ${escapeHtml(
+                        item[1]
+                      )}
+                    </p>
 
-                </div>
+                  </div>
 
-                <div class="impact ${
-                  escapeHtml(
-                    color ||
+                  <div class="impact ${escapeHtml(
+                    item[3] ||
                     'mid'
-                  )
-                }">
+                  )}">
 
-                  ${
-                    escapeHtml(
-                      impact
-                    )
-                  }
+                    ${escapeHtml(
+                      item[2]
+                    )}
+
+                  </div>
 
                 </div>
+              `
+            )
+            .join('')
 
-              </div>
-            `
-          )
-          .join('');
+        : `
+          <div class="note-box">
+            Analyse avancée en attente.
+          </div>
+        `;
 
-  } else {
-
-    $('#factorList')
-      .innerHTML = `
-
-        <div class="note-box">
-
-          L'analyse avancée sera disponible
-          lorsque suffisamment de données
-          auront été récupérées.
-
-        </div>
-      `;
-  }
-
-
-// =====================================================
-// MARCHÉS
-// =====================================================
 
   const markets =
     safeArray(
@@ -1067,145 +1142,76 @@ function openAnalysis(
     );
 
 
-  if (
-    markets.length
-  ) {
+  $('#marketList')
+    .innerHTML =
 
-    $('#marketList')
-      .innerHTML =
+      markets.length
 
-        markets
-          .map(
-            (
-              [
-                name,
-                probability,
-                level
-              ]
-            ) => `
+        ? markets
+            .map(
+              item => `
 
-              <div class="market">
+                <div class="market">
 
-                <div>
+                  <div>
 
-                  <strong>
-                    ${
-                      escapeHtml(
-                        name
-                      )
-                    }
-                  </strong>
+                    <strong>
+                      ${escapeHtml(
+                        item[0]
+                      )}
+                    </strong>
 
-                  <p>
-                    Niveau :
-                    ${
-                      escapeHtml(
-                        level
-                      )
-                    }
-                  </p>
+                    <p>
+                      ${escapeHtml(
+                        item[2] ||
+                        ''
+                      )}
+                    </p>
 
-                </div>
+                  </div>
 
-                <div class="market-prob">
+                  <div class="market-prob">
 
-                  <b>
-                    ${
-                      escapeHtml(
-                        probability
-                      )
-                    }
-                  </b>
+                    <b>
+                      ${escapeHtml(
+                        item[1]
+                      )}
+                    </b>
 
-                  <span>
-                    probabilité
-                  </span>
+                  </div>
 
                 </div>
+              `
+            )
+            .join('')
 
-              </div>
-            `
-          )
-          .join('');
-
-  } else {
-
-    $('#marketList')
-      .innerHTML = `
-
-        <div class="note-box">
-
-          Probabilités en attente.
-
-          Aucun pronostic artificiel
-          n'est généré.
-
-        </div>
-      `;
-  }
-
-
-// =====================================================
-// CONTEXTE
-// =====================================================
-
-  const confidenceLabel =
-
-    match.confidence ===
-    null ||
-
-    match.confidence ===
-    undefined
-
-      ? 'En attente'
-
-      : `${Math.round(
-          Number(
-            match.confidence
-          )
-        )}% — ${
-          confidenceText(
-            match.confidence
-          )
-        }`;
+        : `
+          <div class="note-box">
+            Probabilités en attente.
+          </div>
+        `;
 
 
   const context = [
-
     [
       'Stade',
-
       match.venue ||
       'À confirmer'
     ],
-
     [
       'Surface',
-
       match.surface ||
       'À confirmer'
     ],
-
     [
       'Météo',
-
       match.weather ||
-      'À connecter'
+      'Indisponible'
     ],
-
-    [
-      'Confiance',
-
-      confidenceLabel
-    ],
-
     [
       'Statut XI',
-
       match.official
-
         ? 'Officiel'
-
         : 'En attente'
     ]
   ];
@@ -1216,29 +1222,20 @@ function openAnalysis(
 
       context
         .map(
-          (
-            [
-              name,
-              value
-            ]
-          ) => `
+          item => `
 
             <div class="context-item">
 
               <strong>
-                ${
-                  escapeHtml(
-                    name
-                  )
-                }
+                ${escapeHtml(
+                  item[0]
+                )}
               </strong>
 
               <p>
-                ${
-                  escapeHtml(
-                    value
-                  )
-                }
+                ${escapeHtml(
+                  item[1]
+                )}
               </p>
 
             </div>
@@ -1247,45 +1244,33 @@ function openAnalysis(
         .join('');
 
 
-// =====================================================
-// POIDS MODÈLE
-// =====================================================
-
   $('#weightBars')
     .innerHTML =
 
       weights
         .map(
-          (
-            [
-              name,
-              weight
-            ]
-          ) => `
+          item => `
 
             <div class="weight-row">
 
               <span>
-                ${
-                  escapeHtml(
-                    name
-                  )
-                }
+                ${escapeHtml(
+                  item[0]
+                )}
               </span>
 
               <div class="weight-track">
 
                 <div
                   class="weight-fill"
-                  style="width:${
-                    weight * 4
-                  }%"
-                ></div>
+                  style="width:${item[1] * 4}%"
+                >
+                </div>
 
               </div>
 
               <em>
-                ${weight}%
+                ${item[1]}%
               </em>
 
             </div>
@@ -1294,120 +1279,101 @@ function openAnalysis(
         .join('');
 
 
-// =====================================================
-// SOURCES
-// =====================================================
-
   const sources =
     safeArray(
       match.sources
     );
 
 
-  if (
-    sources.length
-  ) {
+  $('#sourceList')
+    .innerHTML =
 
-    $('#sourceList')
-      .innerHTML =
+      sources.length
 
-        sources
-          .map(
-            (
-              [
-                name,
-                description,
-                role
-              ]
-            ) => `
+        ? sources
+            .map(
+              item => `
 
-              <div class="source-item">
+                <div class="source-item">
 
-                <strong>
+                  <strong>
+                    ${escapeHtml(
+                      item[0]
+                    )}
+                  </strong>
 
-                  ${
-                    escapeHtml(
-                      name
-                    )
-                  }
+                  <p>
+                    ${escapeHtml(
+                      item[1]
+                    )}
+                  </p>
 
-                  <span class="tiny">
-                    • ${
-                      escapeHtml(
-                        role
-                      )
-                    }
-                  </span>
+                </div>
+              `
+            )
+            .join('')
 
-                </strong>
-
-                <p>
-                  ${
-                    escapeHtml(
-                      description
-                    )
-                  }
-                </p>
-
-              </div>
-            `
-          )
-          .join('');
-
-  } else {
-
-    $('#sourceList')
-      .innerHTML = `
-
-        <div class="source-item">
-
-          <strong>
-            Données live
-          </strong>
-
-          <p>
-            Sources supplémentaires à connecter.
-          </p>
-
-        </div>
-      `;
-  }
+        : `
+          <div class="source-item">
+            <strong>
+              Données live
+            </strong>
+          </div>
+        `;
 
 
-  const modelVersion =
-    $('#modelVersion');
-
-
-  if (
-    modelVersion
-  ) {
-
-    modelVersion.textContent =
-      'Moteur live v0.3';
-  }
+  $('#modelVersion')
+    .textContent =
+      'Moteur live v0.4';
 }
 
 
 // =====================================================
-// CONNEXION AUX DONNÉES LIVE
+// LIVE
 // =====================================================
 
 async function tryLive() {
 
-  loading = true;
+  currentMode =
+    'live';
 
-  lastError = null;
 
-  matches = [];
+  loading =
+    true;
+
+
+  lastError =
+    null;
+
+
+  matches =
+    [];
+
+
+  $('#historyControls')
+    ?.classList
+    .add(
+      'hidden'
+    );
+
+
+  $('#liveFilters')
+    ?.classList
+    .remove(
+      'hidden'
+    );
+
+
+  updateTitle();
+
+  renderMatches();
 
 
   const dataMode =
     $('#dataMode');
 
 
-  if (
-    dataMode
-  ) {
+  if (dataMode) {
 
     dataMode.textContent =
       'CHARGEMENT LIVE…';
@@ -1417,34 +1383,19 @@ async function tryLive() {
   }
 
 
-  renderMatches();
-
-
   try {
 
     const response =
       await fetch(
         '/.netlify/functions/fixtures',
         {
-          cache: 'no-store'
+          cache:'no-store'
         }
       );
 
 
-    let data = {};
-
-
-    try {
-
-      data =
-        await response.json();
-
-    } catch (
-      _error
-    ) {
-
-      data = {};
-    }
+    const data =
+      await response.json();
 
 
     if (
@@ -1452,37 +1403,26 @@ async function tryLive() {
     ) {
 
       throw new Error(
-
         data.details ||
-
         data.error ||
-
-        `Erreur API ${
-          response.status
-        }`
+        `Erreur ${response.status}`
       );
     }
 
 
     matches =
-
       Array.isArray(
         data.matches
       )
-
         ? data.matches
-
         : [];
 
 
-    loading = false;
+    loading =
+      false;
 
-    lastError = null;
 
-
-    if (
-      dataMode
-    ) {
+    if (dataMode) {
 
       dataMode.textContent =
         'DONNÉES LIVE';
@@ -1499,9 +1439,9 @@ async function tryLive() {
     error
   ) {
 
-    loading = false;
+    loading =
+      false;
 
-    matches = [];
 
     lastError =
       String(
@@ -1510,9 +1450,7 @@ async function tryLive() {
       );
 
 
-    if (
-      dataMode
-    ) {
+    if (dataMode) {
 
       dataMode.textContent =
         'LIVE INDISPONIBLE';
@@ -1528,7 +1466,150 @@ async function tryLive() {
 
 
 // =====================================================
-// FILTRES
+// HISTORIQUE
+// =====================================================
+
+async function tryHistory(
+  days = 30
+) {
+
+  currentMode =
+    'history';
+
+
+  historyDays =
+    days;
+
+
+  loading =
+    true;
+
+
+  lastError =
+    null;
+
+
+  matches =
+    [];
+
+
+  $('#historyControls')
+    ?.classList
+    .remove(
+      'hidden'
+    );
+
+
+  $('#liveFilters')
+    ?.classList
+    .add(
+      'hidden'
+    );
+
+
+  updateTitle();
+
+  renderMatches();
+
+
+  const dataMode =
+    $('#dataMode');
+
+
+  if (dataMode) {
+
+    dataMode.textContent =
+      'CHARGEMENT HISTORIQUE…';
+
+    dataMode.className =
+      'pill neutral';
+  }
+
+
+  try {
+
+    const response =
+      await fetch(
+        `/.netlify/functions/history?days=${days}`,
+        {
+          cache:'no-store'
+        }
+      );
+
+
+    const data =
+      await response.json();
+
+
+    if (
+      !response.ok
+    ) {
+
+      throw new Error(
+        data.details ||
+        data.error ||
+        `Erreur ${response.status}`
+      );
+    }
+
+
+    matches =
+      Array.isArray(
+        data.matches
+      )
+        ? data.matches
+        : [];
+
+
+    loading =
+      false;
+
+
+    if (dataMode) {
+
+      dataMode.textContent =
+        `${matches.length} MATCHS • ${days}J`;
+
+      dataMode.className =
+        'pill success';
+    }
+
+
+    renderMatches();
+
+
+  } catch (
+    error
+  ) {
+
+    loading =
+      false;
+
+
+    lastError =
+      String(
+        error?.message ||
+        error
+      );
+
+
+    if (dataMode) {
+
+      dataMode.textContent =
+        'HISTORIQUE INDISPONIBLE';
+
+      dataMode.className =
+        'pill warn';
+    }
+
+
+    renderMatches();
+  }
+}
+
+
+// =====================================================
+// FILTRES LIVE
 // =====================================================
 
 document
@@ -1548,25 +1629,19 @@ document
             )
             .forEach(
               item =>
-                item
-                  .classList
-                  .remove(
-                    'active'
-                  )
+                item.classList.remove(
+                  'active'
+                )
             );
 
 
-          button
-            .classList
-            .add(
-              'active'
-            );
+          button.classList.add(
+            'active'
+          );
 
 
           selectedFilter =
-            button
-              .dataset
-              .filter;
+            button.dataset.filter;
 
 
           renderMatches();
@@ -1577,62 +1652,160 @@ document
 
 
 // =====================================================
-// BOUTON RETOUR
+// LIVE / HISTORIQUE
 // =====================================================
 
-const backButton =
-  $('#backBtn');
+document
+  .querySelectorAll(
+    '.mode-btn'
+  )
+  .forEach(
+    button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          document
+            .querySelectorAll(
+              '.mode-btn'
+            )
+            .forEach(
+              item =>
+                item.classList.remove(
+                  'active'
+                )
+            );
 
 
-if (
-  backButton
-) {
+          button.classList.add(
+            'active'
+          );
 
-  backButton.onclick =
-    () =>
+
+          if (
+            button.dataset.mode ===
+            'history'
+          ) {
+
+            tryHistory(
+              historyDays
+            );
+
+          } else {
+
+            tryLive();
+          }
+        }
+      );
+    }
+  );
+
+
+// =====================================================
+// 7 / 30 / 90 JOURS
+// =====================================================
+
+document
+  .querySelectorAll(
+    '.history-day'
+  )
+  .forEach(
+    button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          document
+            .querySelectorAll(
+              '.history-day'
+            )
+            .forEach(
+              item =>
+                item.classList.remove(
+                  'active'
+                )
+            );
+
+
+          button.classList.add(
+            'active'
+          );
+
+
+          tryHistory(
+            Number(
+              button.dataset.days
+            )
+          );
+        }
+      );
+    }
+  );
+
+
+// =====================================================
+// RETOUR
+// =====================================================
+
+$('#backBtn')
+  ?.addEventListener(
+    'click',
+    () => {
+
+      panel.classList.add(
+        'hidden'
+      );
+
+
+      grid.classList.remove(
+        'hidden'
+      );
+
+
       renderMatches();
-}
+    }
+  );
 
 
 // =====================================================
-// BOUTON ACTUALISER
+// ACTUALISER
 // =====================================================
 
-const refreshButton =
-  $('#refreshBtn');
+$('#refreshBtn')
+  ?.addEventListener(
+    'click',
+    () => {
 
+      if (
+        currentMode ===
+        'history'
+      ) {
 
-if (
-  refreshButton
-) {
+        tryHistory(
+          historyDays
+        );
 
-  refreshButton.onclick =
-    () =>
-      tryLive();
-}
+      } else {
+
+        tryLive();
+      }
+    }
+  );
 
 
 // =====================================================
-// NOMBRE DE CHAMPIONNATS
+// DÉMARRAGE
 // =====================================================
 
-const coverageValue =
-  $('#coverageValue');
-
-
-if (
-  coverageValue
-) {
-
-  coverageValue.textContent =
+$('#coverageValue')
+  .textContent =
     '5';
-}
 
-
-// =====================================================
-// DÉMARRAGE APPLICATION
-// =====================================================
 
 renderTabs();
+
+updateTitle();
 
 tryLive();
