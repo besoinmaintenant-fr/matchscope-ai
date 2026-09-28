@@ -1,69 +1,113 @@
 <!doctype html>
+
 <html lang="fr">
 
 <head>
+
   <meta charset="utf-8">
+
 
   <meta
     name="viewport"
     content="width=device-width,initial-scale=1,viewport-fit=cover"
   >
 
+
   <meta
     name="theme-color"
     content="#001008"
   >
 
+
   <title>
     MatchScope AI
   </title>
+
 
   <link
     rel="stylesheet"
     href="/styles.css"
   >
+
 </head>
+
 
 <body>
 
-  <div class="responsible-strip">
+
+  <!-- ========================================= -->
+  <!-- JEU RESPONSABLE -->
+  <!-- ========================================= -->
+
+  <div
+    class="responsible-strip"
+  >
+
     <strong>
       PARIEZ AVEC RESPONSABILITÉ
     </strong>
 
     <span>
-      Une analyse ne garantit jamais le résultat d'un match.
+      Une analyse ne garantit jamais
+      le résultat d'un match.
     </span>
+
   </div>
 
 
-  <div class="app-shell">
 
+  <div
+    class="app-shell"
+  >
+
+
+    <!-- ========================================= -->
     <!-- HEADER -->
+    <!-- ========================================= -->
 
-    <header class="topbar">
+    <header
+      class="topbar"
+    >
 
-      <div class="brand">
+      <div
+        class="brand"
+      >
 
-        <div class="brand-ball">
+        <div
+          class="brand-ball"
+        >
           ⚽
         </div>
 
+
         <div>
-          <div class="eyebrow">
+
+          <div
+            class="eyebrow"
+          >
             MATCH INTELLIGENCE
           </div>
 
+
           <h1>
+
             MatchScope
-            <span>AI</span>
+
+            <span>
+              AI
+            </span>
+
           </h1>
+
         </div>
 
       </div>
 
 
-      <div class="status-wrap">
+
+      <div
+        class="status-wrap"
+      >
 
         <span
           id="dataMode"
@@ -72,9 +116,11 @@
           CHARGEMENT…
         </span>
 
+
         <button
           id="refreshBtn"
           class="icon-btn"
+          aria-label="Actualiser"
         >
           ↻
         </button>
@@ -84,9 +130,14 @@
     </header>
 
 
-    <!-- RÉSUMÉ -->
 
-    <section class="compact-hero">
+    <!-- ========================================= -->
+    <!-- RÉSUMÉ -->
+    <!-- ========================================= -->
+
+    <section
+      class="compact-hero"
+    >
 
       <div>
 
@@ -95,15 +146,20 @@
         </strong>
 
         <span>
-          Stats • xG • compos • météo • forme • stade
+          Stats • xG • compos • météo
+          • forme • stade
         </span>
 
       </div>
 
 
-      <div class="coverage">
+      <div
+        class="coverage"
+      >
 
-        <b id="coverageValue">
+        <b
+          id="coverageValue"
+        >
           5
         </b>
 
@@ -116,9 +172,14 @@
     </section>
 
 
-    <!-- LIVE / HISTORIQUE -->
 
-    <section class="mode-switch">
+    <!-- ========================================= -->
+    <!-- MODE -->
+    <!-- ========================================= -->
+
+    <section
+      class="mode-switch"
+    >
 
       <button
         class="mode-btn active"
@@ -126,6 +187,7 @@
       >
         🔴 LIVE
       </button>
+
 
       <button
         class="mode-btn"
@@ -137,7 +199,10 @@
     </section>
 
 
-    <!-- PÉRIODE HISTORIQUE -->
+
+    <!-- ========================================= -->
+    <!-- HISTORIQUE 7 / 30 / 90 -->
+    <!-- ========================================= -->
 
     <section
       id="historyControls"
@@ -148,6 +213,7 @@
         Période
       </span>
 
+
       <button
         class="history-day"
         data-days="7"
@@ -155,12 +221,14 @@
         7 jours
       </button>
 
+
       <button
         class="history-day active"
         data-days="30"
       >
         30 jours
       </button>
+
 
       <button
         class="history-day"
@@ -172,20 +240,30 @@
     </section>
 
 
-    <!-- CHAMPIONNATS -->
+
+    <!-- ========================================= -->
+    <!-- LIGUES -->
+    <!-- ========================================= -->
 
     <nav
       id="leagueTabs"
       class="league-tabs"
+      aria-label="Compétitions"
     >
     </nav>
 
 
+
     <main>
 
-      <!-- TITRE -->
 
-      <section class="section-head">
+      <!-- ======================================= -->
+      <!-- TITRE LISTE -->
+      <!-- ======================================= -->
+
+      <section
+        class="section-head"
+      >
 
         <div>
 
@@ -196,11 +274,15 @@
             MATCHS À ANALYSER
           </div>
 
-          <h3 id="sectionTitle">
+
+          <h3
+            id="sectionTitle"
+          >
             Tous les matchs
           </h3>
 
         </div>
+
 
 
         <div
@@ -215,12 +297,14 @@
             Tous
           </button>
 
+
           <button
             class="seg"
             data-filter="lineups"
           >
             Compos
           </button>
+
 
           <button
             class="seg"
@@ -234,7 +318,10 @@
       </section>
 
 
+
+      <!-- ======================================= -->
       <!-- MATCHS -->
+      <!-- ======================================= -->
 
       <section
         id="matchGrid"
@@ -243,14 +330,23 @@
       </section>
 
 
-      <!-- ANALYSE D'UN MATCH LIVE -->
+
+      <!-- ======================================= -->
+      <!-- ANALYSE MATCH -->
+      <!-- ======================================= -->
 
       <section
         id="analysisPanel"
         class="analysis-panel hidden"
+        aria-live="polite"
       >
 
-        <div class="analysis-top">
+
+        <!-- RETOUR -->
+
+        <div
+          class="analysis-top"
+        >
 
           <button
             id="backBtn"
@@ -260,7 +356,10 @@
           </button>
 
 
-          <div class="analysis-badges">
+
+          <div
+            class="analysis-badges"
+          >
 
             <span
               id="officialBadge"
@@ -268,6 +367,7 @@
             >
               COMPOS EN ATTENTE
             </span>
+
 
             <span
               id="qualityBadge"
@@ -281,15 +381,25 @@
         </div>
 
 
+
+        <!-- ===================================== -->
         <!-- MATCH -->
+        <!-- ===================================== -->
 
-        <section class="match-detail-header">
+        <section
+          class="match-detail-header"
+        >
 
-          <div class="competition-detail">
+          <div
+            class="competition-detail"
+          >
 
-            <div class="competition-icon">
+            <div
+              class="competition-icon"
+            >
               ⚽
             </div>
+
 
             <div>
 
@@ -297,7 +407,9 @@
                 Analyse du match
               </strong>
 
-              <span id="venue">
+              <span
+                id="venue"
+              >
                 Stade
               </span>
 
@@ -306,9 +418,17 @@
           </div>
 
 
-          <div class="match-main">
 
-            <div class="team-detail">
+          <div
+            class="match-main"
+          >
+
+
+            <!-- DOMICILE -->
+
+            <div
+              class="team-detail"
+            >
 
               <div
                 id="homeLogo"
@@ -317,20 +437,29 @@
                 H
               </div>
 
-              <strong id="homeName">
+              <strong
+                id="homeName"
+              >
                 Domicile
               </strong>
 
             </div>
 
 
-            <div class="kickoff-block">
+
+            <!-- HEURE -->
+
+            <div
+              class="kickoff-block"
+            >
 
               <span>
                 COUP D'ENVOI
               </span>
 
-              <b id="kickoff">
+              <b
+                id="kickoff"
+              >
                 —
               </b>
 
@@ -341,7 +470,12 @@
             </div>
 
 
-            <div class="team-detail">
+
+            <!-- EXTÉRIEUR -->
+
+            <div
+              class="team-detail"
+            >
 
               <div
                 id="awayLogo"
@@ -350,7 +484,9 @@
                 A
               </div>
 
-              <strong id="awayName">
+              <strong
+                id="awayName"
+              >
                 Extérieur
               </strong>
 
@@ -361,65 +497,169 @@
         </section>
 
 
-        <!-- NAV -->
 
-        <div class="analysis-tabs">
+        <!-- ===================================== -->
+        <!-- NAVIGATION ANALYSE -->
+        <!-- ===================================== -->
 
-          <div class="analysis-tab active">
-            <span>📊</span>
-            <b>Stats</b>
+        <div
+          class="analysis-tabs"
+        >
+
+          <div
+            class="analysis-tab active"
+          >
+            <span>
+              📊
+            </span>
+            <b>
+              Stats
+            </b>
           </div>
 
-          <div class="analysis-tab">
-            <span>👕</span>
-            <b>Compos</b>
+
+          <div
+            class="analysis-tab"
+          >
+            <span>
+              👕
+            </span>
+            <b>
+              Compos
+            </b>
           </div>
 
-          <div class="analysis-tab">
-            <span>☁️</span>
-            <b>Contexte</b>
+
+          <div
+            class="analysis-tab"
+          >
+            <span>
+              ☁️
+            </span>
+            <b>
+              Contexte
+            </b>
           </div>
 
-          <div class="analysis-tab">
-            <span>AI</span>
-            <b>Modèle</b>
+
+          <div
+            class="analysis-tab"
+          >
+            <span>
+              AI
+            </span>
+            <b>
+              Modèle
+            </b>
           </div>
 
         </div>
 
 
+
+        <!-- ===================================== -->
         <!-- PROBABILITÉS -->
+        <!-- ===================================== -->
 
-        <section class="sports-section">
+        <section
+          class="sports-section"
+        >
 
-          <div class="section-label">
+          <div
+            class="section-label"
+          >
             PROBABILITÉS DU MODÈLE
           </div>
 
-          <div class="prob-grid">
 
-            <div class="prob-card">
-              <span>1</span>
-              <strong id="pHome">—</strong>
-              <small>DOMICILE</small>
+          <div
+            class="prob-grid"
+          >
+
+            <div
+              class="prob-card"
+            >
+
+              <span>
+                1
+              </span>
+
+              <strong
+                id="pHome"
+              >
+                —
+              </strong>
+
+              <small>
+                DOMICILE
+              </small>
+
             </div>
 
-            <div class="prob-card">
-              <span>N</span>
-              <strong id="pDraw">—</strong>
-              <small>NUL</small>
+
+
+            <div
+              class="prob-card"
+            >
+
+              <span>
+                N
+              </span>
+
+              <strong
+                id="pDraw"
+              >
+                —
+              </strong>
+
+              <small>
+                NUL
+              </small>
+
             </div>
 
-            <div class="prob-card">
-              <span>2</span>
-              <strong id="pAway">—</strong>
-              <small>EXTÉRIEUR</small>
+
+
+            <div
+              class="prob-card"
+            >
+
+              <span>
+                2
+              </span>
+
+              <strong
+                id="pAway"
+              >
+                —
+              </strong>
+
+              <small>
+                EXTÉRIEUR
+              </small>
+
             </div>
 
-            <div class="prob-card confidence-card">
-              <span>AI</span>
-              <strong id="confidence">—</strong>
-              <small>CONFIANCE</small>
+
+
+            <div
+              class="prob-card confidence-card"
+            >
+
+              <span>
+                AI
+              </span>
+
+              <strong
+                id="confidence"
+              >
+                —
+              </strong>
+
+              <small>
+                CONFIANCE
+              </small>
+
             </div>
 
           </div>
@@ -427,19 +667,67 @@
         </section>
 
 
+
+        <!-- ===================================== -->
+        <!-- NOUVEAU : FORME & HISTORIQUE -->
+        <!-- ===================================== -->
+
+        <section
+          id="preMatchInsights"
+          class="sports-section pre-match-section"
+        >
+
+          <div
+            class="section-label"
+          >
+            FORME & STATS AVANT-MATCH
+          </div>
+
+
+          <div
+            class="panel-card"
+          >
+
+            <div
+              class="preanalysis-loading"
+            >
+              Les statistiques seront calculées
+              à l'ouverture du match.
+            </div>
+
+          </div>
+
+        </section>
+
+
+
+        <!-- ===================================== -->
         <!-- INDICATEURS -->
+        <!-- ===================================== -->
 
-        <section class="sports-section">
+        <section
+          class="sports-section"
+        >
 
-          <div class="section-label">
+          <div
+            class="section-label"
+          >
             INDICATEURS DU MATCH
           </div>
 
-          <div class="analysis-columns">
 
-            <div class="panel-card">
+          <div
+            class="analysis-columns"
+          >
 
-              <div class="card-title-row">
+
+            <div
+              class="panel-card"
+            >
+
+              <div
+                class="card-title-row"
+              >
 
                 <h4>
                   Lecture du match
@@ -454,6 +742,7 @@
 
               </div>
 
+
               <div
                 id="factorList"
                 class="factor-list"
@@ -463,7 +752,10 @@
             </div>
 
 
-            <div class="panel-card">
+
+            <div
+              class="panel-card"
+            >
 
               <h4>
                 Marchés analysés
@@ -482,17 +774,30 @@
         </section>
 
 
-        <!-- COMPOS -->
 
-        <section class="sports-section">
+        <!-- ===================================== -->
+        <!-- COMPOSITIONS -->
+        <!-- ===================================== -->
 
-          <div class="section-label">
+        <section
+          class="sports-section"
+        >
+
+          <div
+            class="section-label"
+          >
             COMPOSITIONS & ABSENCES
           </div>
 
-          <div class="panel-card">
 
-            <div class="lineup-columns">
+          <div
+            class="panel-card"
+          >
+
+            <div
+              class="lineup-columns"
+            >
+
 
               <div>
 
@@ -510,6 +815,7 @@
                 </div>
 
               </div>
+
 
 
               <div>
@@ -543,15 +849,25 @@
         </section>
 
 
+
+        <!-- ===================================== -->
         <!-- CONTEXTE -->
+        <!-- ===================================== -->
 
-        <section class="sports-section">
+        <section
+          class="sports-section"
+        >
 
-          <div class="section-label">
+          <div
+            class="section-label"
+          >
             CONTEXTE DU MATCH
           </div>
 
-          <div class="panel-card">
+
+          <div
+            class="panel-card"
+          >
 
             <div
               id="contextList"
@@ -564,15 +880,25 @@
         </section>
 
 
-        <!-- MODÈLE -->
 
-        <section class="sports-section">
+        <!-- ===================================== -->
+        <!-- POIDS MODÈLE -->
+        <!-- ===================================== -->
 
-          <div class="section-label">
+        <section
+          class="sports-section"
+        >
+
+          <div
+            class="section-label"
+          >
             POIDS DU MODÈLE
           </div>
 
-          <div class="panel-card">
+
+          <div
+            class="panel-card"
+          >
 
             <div
               id="weightBars"
@@ -585,15 +911,25 @@
         </section>
 
 
+
+        <!-- ===================================== -->
         <!-- SOURCES -->
+        <!-- ===================================== -->
 
-        <section class="sports-section">
+        <section
+          class="sports-section"
+        >
 
-          <div class="section-label">
+          <div
+            class="section-label"
+          >
             SOURCES & FIABILITÉ
           </div>
 
-          <div class="panel-card">
+
+          <div
+            class="panel-card"
+          >
 
             <div
               id="sourceList"
@@ -601,13 +937,20 @@
             >
             </div>
 
-            <p class="disclaimer">
-              Une probabilité n'est jamais une garantie de gain.
+
+            <p
+              class="disclaimer"
+            >
+
+              Une probabilité n'est jamais
+              une garantie de gain.
+
             </p>
 
           </div>
 
         </section>
+
 
       </section>
 
@@ -616,53 +959,89 @@
   </div>
 
 
-  <!-- TEMPLATE LIVE -->
 
-  <template id="matchTemplate">
+  <!-- ========================================= -->
+  <!-- TEMPLATE MATCH LIVE -->
+  <!-- ========================================= -->
 
-    <article class="match-card live-card">
+  <template
+    id="matchTemplate"
+  >
 
-      <div class="match-card-top">
+    <article
+      class="match-card live-card"
+    >
 
-        <span class="competition">
+      <div
+        class="match-card-top"
+      >
+
+        <span
+          class="competition"
+        >
         </span>
 
-        <span class="lineup-state">
+        <span
+          class="lineup-state"
+        >
         </span>
 
       </div>
 
 
-      <div class="fixture-row">
 
-        <div class="mini-team">
+      <div
+        class="fixture-row"
+      >
 
-          <span class="mini-logo home-logo">
+        <div
+          class="mini-team"
+        >
+
+          <span
+            class="mini-logo home-logo"
+          >
           </span>
 
-          <strong class="home-team">
+          <strong
+            class="home-team"
+          >
           </strong>
 
         </div>
 
 
-        <div class="fixture-meta">
 
-          <strong class="fixture-time">
+        <div
+          class="fixture-meta"
+        >
+
+          <strong
+            class="fixture-time"
+          >
           </strong>
 
-          <span class="fixture-date">
+          <span
+            class="fixture-date"
+          >
           </span>
 
         </div>
 
 
-        <div class="mini-team right">
 
-          <strong class="away-team">
+        <div
+          class="mini-team right"
+        >
+
+          <strong
+            class="away-team"
+          >
           </strong>
 
-          <span class="mini-logo away-logo">
+          <span
+            class="mini-logo away-logo"
+          >
           </span>
 
         </div>
@@ -670,35 +1049,59 @@
       </div>
 
 
-      <div class="mini-probs">
+
+      <div
+        class="mini-probs"
+      >
 
         <span>
           1
-          <b class="mh"></b>
+          <b
+            class="mh"
+          >
+          </b>
         </span>
+
 
         <span>
           N
-          <b class="md"></b>
+          <b
+            class="md"
+          >
+          </b>
         </span>
+
 
         <span>
           2
-          <b class="ma"></b>
+          <b
+            class="ma"
+          >
+          </b>
         </span>
 
-        <span class="confidence-chip">
+
+        <span
+          class="confidence-chip"
+        >
         </span>
 
       </div>
 
 
-      <div class="card-foot">
 
-        <span class="signal">
+      <div
+        class="card-foot"
+      >
+
+        <span
+          class="signal"
+        >
         </span>
 
-        <button class="analyse-btn">
+        <button
+          class="analyse-btn"
+        >
           Analyser →
         </button>
 
@@ -709,7 +1112,20 @@
   </template>
 
 
-  <script src="/app.js"></script>
+
+  <!-- ========================================= -->
+  <!-- SCRIPTS -->
+  <!-- ========================================= -->
+
+  <script
+    src="/app.js"
+  ></script>
+
+
+  <script
+    src="/preanalysis.js"
+  ></script>
+
 
 </body>
 
