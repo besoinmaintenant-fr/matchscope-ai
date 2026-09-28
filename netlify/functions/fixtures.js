@@ -14,18 +14,15 @@ const TARGET_LEAGUES = [
   {
     code: 'LL2',
 
-    label: 'LaLiga 2',
+    label: 'La Liga 2',
 
-    // Segunda División
     id: 567,
 
     aliases: [
-      'segunda division',
-      'segunda división',
-      'laliga 2',
       'la liga 2',
-      'laliga hypermotion',
-      'la liga hypermotion'
+      'laliga 2',
+      'segunda division',
+      'segunda división'
     ]
   },
 
@@ -44,17 +41,14 @@ const TARGET_LEAGUES = [
 
 
   {
-    code: 'CPL',
+    code: 'CSL',
 
-    label:
-      'Canadian Premier League',
+    label: 'Canadian Soccer League',
 
-    // On le recherche automatiquement
-    // dans les ligues accessibles.
-    id: null,
+    id: 983,
 
     aliases: [
-      'canadian premier league'
+      'canadian soccer league'
     ]
   },
 
@@ -62,8 +56,7 @@ const TARGET_LEAGUES = [
   {
     code: 'MLS',
 
-    label:
-      'Major League Soccer',
+    label: 'Major League Soccer',
 
     id: 779,
 
@@ -74,8 +67,6 @@ const TARGET_LEAGUES = [
   }
 
 ];
-
-
 // =====================================================
 // OUTILS
 // =====================================================
