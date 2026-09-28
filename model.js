@@ -1,9 +1,21 @@
 (() => {
 
+  // ===================================================
+  // MATCHSCOPE AI — MODEL V0.7
+  // Dixon-Coles + Elo + historique 365 jours
+  // calibration par championnat
+  // validation chronologique indépendante
+  // ===================================================
+
+
   if (
     typeof openAnalysis !==
     'function'
   ) {
+    console.error(
+      'MatchScope V0.7 : openAnalysis introuvable.'
+    );
+
     return;
   }
 
@@ -13,7 +25,7 @@
 
 
   const MODEL_VERSION =
-    'v0.6';
+    'v0.7';
 
 
   const TARGET_BRIER =
@@ -28,16 +40,13 @@
     ]);
 
 
-  const LN2 =
-    Math.log(2);
-
-
   let historyPromise =
     null;
 
 
   let tuningCache =
     null;
+
 
 
   // ===================================================
@@ -114,14 +123,37 @@
   }
 
 
+  function teamKey(
+    competition,
+    team
+  ) {
+
+    return (
+      `${competition}::${normalizeTeam(team)}`
+    );
+  }
+
+
   function pct(
     probability
   ) {
 
+    if (
+      probability === null ||
+      probability === undefined ||
+      !Number.isFinite(
+        Number(probability)
+      )
+    ) {
+
+      return '—';
+    }
+
+
     return `${
       Math.round(
         clamp(
-          probability,
+          Number(probability),
           0,
           1
         ) * 100
@@ -138,7 +170,7 @@
       match?.startingAt
     ) {
 
-      const value =
+      const timestamp =
         Date.parse(
           match.startingAt
         );
@@ -146,25 +178,25 @@
 
       if (
         Number.isFinite(
-          value
+          timestamp
         )
       ) {
 
-        return value;
+        return timestamp;
       }
     }
 
 
-    const value =
+    const timestamp =
       Number(
         match?.kickoffTs
       );
 
 
     return Number.isFinite(
-      value
+      timestamp
     )
-      ? value
+      ? timestamp
       : null;
   }
 
@@ -265,8 +297,9 @@
   }
 
 
+
   // ===================================================
-  // HISTORIQUE
+  // HISTORIQUE 365 JOURS
   // ===================================================
 
   async function loadHistory() {
@@ -277,7 +310,7 @@
 
       historyPromise =
         fetch(
-          '/.netlify/functions/history?days=90',
+          '/.netlify/functions/modelhistory',
           {
             cache:
               'no-store'
@@ -287,8 +320,23 @@
           .then(
             async response => {
 
-              const data =
-                await response.json();
+              let data =
+                {};
+
+
+              try {
+
+                data =
+                  await response.json();
+
+              } catch (
+                error
+              ) {
+
+                throw new Error(
+                  'Réponse modelhistory invalide.'
+                );
+              }
 
 
               if (
@@ -298,7 +346,7 @@
                 throw new Error(
                   data.details ||
                   data.error ||
-                  `Erreur historique ${response.status}`
+                  `Erreur modelhistory ${response.status}`
                 );
               }
 
@@ -317,14 +365,15 @@
   }
 
 
+
   // ===================================================
-  // MATCHS DE LIGUE
+  // HISTORIQUE AVANT UNE DATE
   // ===================================================
 
   function leagueMatchesBefore(
     history,
     competition,
-    beforeTime
+    beforeTime = Infinity
   ) {
 
     return history.filter(
@@ -339,7 +388,7 @@
         }
 
 
-        const time =
+        const timestamp =
           matchTime(
             match
           );
@@ -347,7 +396,7 @@
 
         if (
           !Number.isFinite(
-            time
+            timestamp
           )
         ) {
 
@@ -359,7 +408,7 @@
           Number.isFinite(
             beforeTime
           ) &&
-          time >=
+          timestamp >=
           beforeTime
         ) {
 
@@ -383,10 +432,6 @@
     );
   }
 
-
-  // ===================================================
-  // MATCHS ÉQUIPE AVANT UNE DATE
-  // ===================================================
 
   function teamMatchesBefore(
     history,
@@ -422,7 +467,7 @@
           }
 
 
-          const time =
+          const timestamp =
             matchTime(
               match
             );
@@ -430,7 +475,7 @@
 
           if (
             !Number.isFinite(
-              time
+              timestamp
             )
           ) {
 
@@ -442,7 +487,7 @@
             Number.isFinite(
               beforeTime
             ) &&
-            time >=
+            timestamp >=
             beforeTime
           ) {
 
@@ -450,14 +495,14 @@
           }
 
 
-          const home =
+          const isHome =
             sameTeam(
               match.home,
               team
             );
 
 
-          const away =
+          const isAway =
             sameTeam(
               match.away,
               team
@@ -469,7 +514,7 @@
             'home'
           ) {
 
-            return home;
+            return isHome;
           }
 
 
@@ -478,13 +523,13 @@
             'away'
           ) {
 
-            return away;
+            return isAway;
           }
 
 
           return (
-            home ||
-            away
+            isHome ||
+            isAway
           );
         }
       )
@@ -517,22 +562,23 @@
   }
 
 
+
   // ===================================================
   // PONDÉRATION TEMPORELLE
   // ===================================================
 
   function timeWeight(
-    matchTs,
-    referenceTs,
+    matchTimestamp,
+    referenceTimestamp,
     halfLife
   ) {
 
     if (
       !Number.isFinite(
-        matchTs
+        matchTimestamp
       ) ||
       !Number.isFinite(
-        referenceTs
+        referenceTimestamp
       )
     ) {
 
@@ -540,22 +586,31 @@
     }
 
 
-    const days =
+    const ageDays =
       Math.max(
         0,
         (
-          referenceTs -
-          matchTs
-        ) / 86400000
+          referenceTimestamp -
+          matchTimestamp
+        ) /
+        86400000
       );
 
 
     return Math.exp(
-      -LN2 *
-      days /
+
+      -Math.log(2)
+
+      *
+
+      ageDays
+
+      /
+
       halfLife
     );
   }
+
 
 
   // ===================================================
@@ -565,7 +620,7 @@
   function weightedSummary(
     list,
     team,
-    referenceTs,
+    referenceTimestamp,
     halfLife
   ) {
 
@@ -626,7 +681,7 @@
         const weight =
           timeWeight(
             matchTime(match),
-            referenceTs,
+            referenceTimestamp,
             halfLife
           );
 
@@ -675,6 +730,7 @@
   }
 
 
+
   // ===================================================
   // BASELINE CHAMPIONNAT
   // ===================================================
@@ -694,7 +750,7 @@
       );
 
 
-    const reference =
+    const referenceTimestamp =
 
       Number.isFinite(
         beforeTime
@@ -705,7 +761,7 @@
         : Date.now();
 
 
-    let weight =
+    let totalWeight =
       0;
 
 
@@ -733,40 +789,49 @@
       match => {
 
         const home =
-          Number(
-            match.score.home
+          num(
+            match?.score?.home
           );
 
 
         const away =
-          Number(
-            match.score.away
+          num(
+            match?.score?.away
           );
 
 
-        const matchWeight =
+        if (
+          home === null ||
+          away === null
+        ) {
+
+          return;
+        }
+
+
+        const weight =
           timeWeight(
             matchTime(match),
-            reference,
+            referenceTimestamp,
             Math.max(
-              60,
+              90,
               halfLife * 2
             )
           );
 
 
-        weight +=
-          matchWeight;
+        totalWeight +=
+          weight;
 
 
         homeGoals +=
           home *
-          matchWeight;
+          weight;
 
 
         awayGoals +=
           away *
-          matchWeight;
+          weight;
 
 
         if (
@@ -775,7 +840,7 @@
         ) {
 
           homeWins +=
-            matchWeight;
+            weight;
 
         } else if (
           home ===
@@ -783,23 +848,23 @@
         ) {
 
           draws +=
-            matchWeight;
+            weight;
 
         } else {
 
           awayWins +=
-            matchWeight;
+            weight;
         }
       }
     );
 
 
-    const priorWeight =
-      12;
+    const goalPriorWeight =
+      16;
 
 
     const resultPriorWeight =
-      20;
+      26;
 
 
     return {
@@ -808,22 +873,19 @@
         list.length,
 
 
-      weightedN:
-        weight,
-
-
       homeGoalAvg:
 
         (
           homeGoals +
-          priorWeight * 1.45
+          goalPriorWeight *
+          1.45
         )
 
         /
 
         (
-          weight +
-          priorWeight
+          totalWeight +
+          goalPriorWeight
         ),
 
 
@@ -831,14 +893,15 @@
 
         (
           awayGoals +
-          priorWeight * 1.15
+          goalPriorWeight *
+          1.15
         )
 
         /
 
         (
-          weight +
-          priorWeight
+          totalWeight +
+          goalPriorWeight
         ),
 
 
@@ -848,13 +911,14 @@
 
           (
             homeWins +
-            resultPriorWeight * 0.44
+            resultPriorWeight *
+            0.44
           )
 
           /
 
           (
-            weight +
+            totalWeight +
             resultPriorWeight
           ),
 
@@ -863,13 +927,14 @@
 
           (
             draws +
-            resultPriorWeight * 0.28
+            resultPriorWeight *
+            0.28
           )
 
           /
 
           (
-            weight +
+            totalWeight +
             resultPriorWeight
           ),
 
@@ -878,23 +943,20 @@
 
           (
             awayWins +
-            resultPriorWeight * 0.28
+            resultPriorWeight *
+            0.28
           )
 
           /
 
           (
-            weight +
+            totalWeight +
             resultPriorWeight
           )
       }
     };
   }
 
-
-  // ===================================================
-  // SHRINKAGE
-  // ===================================================
 
   function shrinkRate(
     weightedSum,
@@ -918,6 +980,7 @@
       shrinkWeight
     );
   }
+
 
 
   // ===================================================
@@ -962,6 +1025,7 @@
       factorial
     );
   }
+
 
 
   // ===================================================
@@ -1066,7 +1130,7 @@
       0;
 
 
-    let mass =
+    let probabilityMass =
       0;
 
 
@@ -1082,7 +1146,7 @@
         awayGoals += 1
       ) {
 
-        const base =
+        const probability =
 
           poisson(
             lambdaHome,
@@ -1094,12 +1158,9 @@
           poisson(
             lambdaAway,
             awayGoals
-          );
+          )
 
-
-        const probability =
-
-          base *
+          *
 
           dcTau(
             homeGoals,
@@ -1110,7 +1171,7 @@
           );
 
 
-        mass +=
+        probabilityMass +=
           probability;
 
 
@@ -1174,28 +1235,384 @@
     return {
 
       home:
-        home / mass,
+        home /
+        probabilityMass,
 
       draw:
-        draw / mass,
+        draw /
+        probabilityMass,
 
       away:
-        away / mass,
+        away /
+        probabilityMass,
 
       over15:
-        over15 / mass,
+        over15 /
+        probabilityMass,
 
       over25:
-        over25 / mass,
+        over25 /
+        probabilityMass,
 
       btts:
-        btts / mass
+        btts /
+        probabilityMass
     };
   }
 
 
+
   // ===================================================
-  // TEMPÉRATURE
+  // ELO
+  // ===================================================
+
+  function buildEloTimeline(
+    history,
+    config
+  ) {
+
+    const ratings =
+      new Map();
+
+
+    const preMatch =
+      new Map();
+
+
+    const chronological =
+      [...history]
+
+        .filter(
+          match =>
+            MODEL_LEAGUES.has(
+              match.competition
+            )
+        )
+
+        .filter(
+          match =>
+            Number.isFinite(
+              matchTime(match)
+            )
+        )
+
+        .sort(
+          (
+            first,
+            second
+          ) =>
+            matchTime(first) -
+            matchTime(second)
+        );
+
+
+    const getRating =
+      key =>
+
+        ratings.has(
+          key
+        )
+          ? ratings.get(
+              key
+            )
+          : 1500;
+
+
+    chronological.forEach(
+      match => {
+
+        const homeKey =
+          teamKey(
+            match.competition,
+            match.home
+          );
+
+
+        const awayKey =
+          teamKey(
+            match.competition,
+            match.away
+          );
+
+
+        const homeRating =
+          getRating(
+            homeKey
+          );
+
+
+        const awayRating =
+          getRating(
+            awayKey
+          );
+
+
+        preMatch.set(
+          String(match.id),
+          {
+            homeRating,
+            awayRating
+          }
+        );
+
+
+        const expectedHome =
+
+          1
+
+          /
+
+          (
+            1
+
+            +
+
+            Math.pow(
+              10,
+              -(
+                homeRating +
+                config.eloHomeAdv -
+                awayRating
+              ) / 400
+            )
+          );
+
+
+        const homeGoals =
+          num(
+            match?.score?.home
+          );
+
+
+        const awayGoals =
+          num(
+            match?.score?.away
+          );
+
+
+        if (
+          homeGoals === null ||
+          awayGoals === null
+        ) {
+
+          return;
+        }
+
+
+        const actualHome =
+
+          homeGoals >
+          awayGoals
+
+            ? 1
+
+            : homeGoals ===
+              awayGoals
+
+              ? 0.5
+
+              : 0;
+
+
+        const goalDifference =
+          Math.abs(
+            homeGoals -
+            awayGoals
+          );
+
+
+        const marginMultiplier =
+
+          goalDifference <= 1
+
+            ? 1
+
+            : Math.sqrt(
+                goalDifference
+              );
+
+
+        const delta =
+
+          config.eloK
+
+          *
+
+          marginMultiplier
+
+          *
+
+          (
+            actualHome -
+            expectedHome
+          );
+
+
+        ratings.set(
+          homeKey,
+          homeRating +
+          delta
+        );
+
+
+        ratings.set(
+          awayKey,
+          awayRating -
+          delta
+        );
+      }
+    );
+
+
+    return {
+
+      ratings,
+      preMatch
+    };
+  }
+
+
+  function eloProbability(
+    target,
+    baseline,
+    eloState,
+    config
+  ) {
+
+    const snapshot =
+      eloState.preMatch.get(
+        String(target.id)
+      );
+
+
+    let homeRating;
+
+
+    let awayRating;
+
+
+    if (
+      snapshot
+    ) {
+
+      homeRating =
+        snapshot.homeRating;
+
+
+      awayRating =
+        snapshot.awayRating;
+
+    } else {
+
+      homeRating =
+
+        eloState.ratings.get(
+          teamKey(
+            target.competition,
+            target.home
+          )
+        )
+
+        ??
+
+        1500;
+
+
+      awayRating =
+
+        eloState.ratings.get(
+          teamKey(
+            target.competition,
+            target.away
+          )
+        )
+
+        ??
+
+        1500;
+    }
+
+
+    const expectedHome =
+
+      1
+
+      /
+
+      (
+        1
+
+        +
+
+        Math.pow(
+          10,
+          -(
+            homeRating +
+            config.eloHomeAdv -
+            awayRating
+          ) / 400
+        )
+      );
+
+
+    const closeness =
+
+      1
+
+      -
+
+      Math.min(
+        1,
+        Math.abs(
+          expectedHome -
+          0.5
+        ) * 2
+      );
+
+
+    const draw =
+      clamp(
+        baseline.resultPrior.draw *
+        (
+          0.88 +
+          0.24 *
+          closeness
+        ),
+        0.16,
+        0.34
+      );
+
+
+    const remainder =
+      1 -
+      draw;
+
+
+    return {
+
+      home:
+        remainder *
+        expectedHome,
+
+      draw,
+
+      away:
+        remainder *
+        (
+          1 -
+          expectedHome
+        ),
+
+      homeRating,
+
+      awayRating
+    };
+  }
+
+
+
+  // ===================================================
+  // TEMPÉRATURE / CALIBRATION
   // ===================================================
 
   function temperatureScale(
@@ -1205,7 +1622,7 @@
 
     const temp =
       Math.max(
-        0.5,
+        0.6,
         temperature
       );
 
@@ -1260,10 +1677,6 @@
   }
 
 
-  // ===================================================
-  // CALIBRATION PAR CLASSE
-  // ===================================================
-
   function applyClassCalibration(
     probability,
     factors
@@ -1304,8 +1717,40 @@
   }
 
 
+  function calibrationForLeague(
+    calibration,
+    competition
+  ) {
+
+    return (
+
+      calibration?.[
+        competition
+      ]
+
+      ||
+
+      calibration?.GLOBAL
+
+      ||
+
+      {
+        home:
+          1,
+
+        draw:
+          1,
+
+        away:
+          1
+      }
+    );
+  }
+
+
+
   // ===================================================
-  // CONSTRUCTION DU MODÈLE
+  // MODÈLE PRINCIPAL V0.7
   // ===================================================
 
   function buildModel(
@@ -1313,10 +1758,11 @@
     target,
     beforeTime,
     config,
+    eloState,
     calibration = null
   ) {
 
-    const referenceTs =
+    const referenceTimestamp =
 
       Number.isFinite(
         beforeTime
@@ -1336,91 +1782,91 @@
       );
 
 
-    const homeAllList =
-      teamMatchesBefore(
-        history,
-        target.home,
-        target.competition,
-        beforeTime,
-        'all',
-        10,
-        target.id
-      );
-
-
-    const awayAllList =
-      teamMatchesBefore(
-        history,
-        target.away,
-        target.competition,
-        beforeTime,
-        'all',
-        10,
-        target.id
-      );
-
-
-    const homeVenueList =
-      teamMatchesBefore(
-        history,
-        target.home,
-        target.competition,
-        beforeTime,
-        'home',
-        8,
-        target.id
-      );
-
-
-    const awayVenueList =
-      teamMatchesBefore(
-        history,
-        target.away,
-        target.competition,
-        beforeTime,
-        'away',
-        8,
-        target.id
-      );
-
-
     const homeAll =
       weightedSummary(
-        homeAllList,
+
+        teamMatchesBefore(
+          history,
+          target.home,
+          target.competition,
+          beforeTime,
+          'all',
+          10,
+          target.id
+        ),
+
         target.home,
-        referenceTs,
+
+        referenceTimestamp,
+
         config.halfLife
       );
 
 
     const awayAll =
       weightedSummary(
-        awayAllList,
+
+        teamMatchesBefore(
+          history,
+          target.away,
+          target.competition,
+          beforeTime,
+          'all',
+          10,
+          target.id
+        ),
+
         target.away,
-        referenceTs,
+
+        referenceTimestamp,
+
         config.halfLife
       );
 
 
     const homeVenue =
       weightedSummary(
-        homeVenueList,
+
+        teamMatchesBefore(
+          history,
+          target.home,
+          target.competition,
+          beforeTime,
+          'home',
+          8,
+          target.id
+        ),
+
         target.home,
-        referenceTs,
+
+        referenceTimestamp,
+
         config.halfLife
       );
 
 
     const awayVenue =
       weightedSummary(
-        awayVenueList,
+
+        teamMatchesBefore(
+          history,
+          target.away,
+          target.competition,
+          beforeTime,
+          'away',
+          8,
+          target.id
+        ),
+
         target.away,
-        referenceTs,
+
+        referenceTimestamp,
+
         config.halfLife
       );
 
 
-    const leagueTeamAvg =
+    const leagueTeamAverage =
 
       (
         baseline.homeGoalAvg +
@@ -1432,7 +1878,11 @@
       2;
 
 
-    const homeAtkVenue =
+    // -----------------------------------------------
+    // ATTAQUE / DÉFENSE
+    // -----------------------------------------------
+
+    const homeAttackVenue =
       shrinkRate(
         homeVenue.gf,
         homeVenue.weight,
@@ -1441,7 +1891,7 @@
       );
 
 
-    const awayDefVenue =
+    const awayDefenseVenue =
       shrinkRate(
         awayVenue.ga,
         awayVenue.weight,
@@ -1450,7 +1900,7 @@
       );
 
 
-    const awayAtkVenue =
+    const awayAttackVenue =
       shrinkRate(
         awayVenue.gf,
         awayVenue.weight,
@@ -1459,7 +1909,7 @@
       );
 
 
-    const homeDefVenue =
+    const homeDefenseVenue =
       shrinkRate(
         homeVenue.ga,
         homeVenue.weight,
@@ -1468,48 +1918,52 @@
       );
 
 
-    const homeAtkAll =
+    const homeAttackAll =
       shrinkRate(
         homeAll.gf,
         homeAll.weight,
-        leagueTeamAvg,
+        leagueTeamAverage,
         config.shrink
       );
 
 
-    const awayDefAll =
+    const awayDefenseAll =
       shrinkRate(
         awayAll.ga,
         awayAll.weight,
-        leagueTeamAvg,
+        leagueTeamAverage,
         config.shrink
       );
 
 
-    const awayAtkAll =
+    const awayAttackAll =
       shrinkRate(
         awayAll.gf,
         awayAll.weight,
-        leagueTeamAvg,
+        leagueTeamAverage,
         config.shrink
       );
 
 
-    const homeDefAll =
+    const homeDefenseAll =
       shrinkRate(
         homeAll.ga,
         homeAll.weight,
-        leagueTeamAvg,
+        leagueTeamAverage,
         config.shrink
       );
 
+
+    // -----------------------------------------------
+    // BUTS ATTENDUS
+    // -----------------------------------------------
 
     const venueHome =
       Math.sqrt(
         Math.max(
           0.05,
-          homeAtkVenue *
-          awayDefVenue
+          homeAttackVenue *
+          awayDefenseVenue
         )
       );
 
@@ -1518,8 +1972,8 @@
       Math.sqrt(
         Math.max(
           0.05,
-          awayAtkVenue *
-          homeDefVenue
+          awayAttackVenue *
+          homeDefenseVenue
         )
       );
 
@@ -1528,8 +1982,8 @@
       Math.sqrt(
         Math.max(
           0.05,
-          homeAtkAll *
-          awayDefAll
+          homeAttackAll *
+          awayDefenseAll
         )
       );
 
@@ -1538,8 +1992,8 @@
       Math.sqrt(
         Math.max(
           0.05,
-          awayAtkAll *
-          homeDefAll
+          awayAttackAll *
+          homeDefenseAll
         )
       );
 
@@ -1576,6 +2030,10 @@
       generalAway;
 
 
+    // -----------------------------------------------
+    // FORME
+    // -----------------------------------------------
+
     const homePPG =
       shrinkRate(
         homeAll.points,
@@ -1594,7 +2052,7 @@
       );
 
 
-    const formDiff =
+    const formDifference =
       clamp(
         (
           homePPG -
@@ -1608,22 +2066,24 @@
     lambdaHome *=
 
       1 +
+
       config.formImpact *
-      formDiff;
+      formDifference;
 
 
     lambdaAway *=
 
       1 -
+
       config.formImpact *
-      formDiff;
+      formDifference;
 
 
     lambdaHome =
       clamp(
         lambdaHome,
         0.30,
-        3.20
+        3.30
       );
 
 
@@ -1631,11 +2091,15 @@
       clamp(
         lambdaAway,
         0.25,
-        3.00
+        3.10
       );
 
 
-    const raw =
+    // -----------------------------------------------
+    // DIXON COLES
+    // -----------------------------------------------
+
+    const dc =
       dixonColesMarkets(
         lambdaHome,
         lambdaAway,
@@ -1643,12 +2107,84 @@
       );
 
 
+    // -----------------------------------------------
+    // ELO
+    // -----------------------------------------------
+
+    const elo =
+      eloProbability(
+        target,
+        baseline,
+        eloState,
+        config
+      );
+
+
+    // -----------------------------------------------
+    // FUSION
+    // -----------------------------------------------
+
+    let probability = {
+
+      home:
+
+        (
+          1 -
+          config.eloBlend
+        )
+
+        *
+        dc.home
+
+        +
+
+        config.eloBlend *
+        elo.home,
+
+
+      draw:
+
+        (
+          1 -
+          config.eloBlend
+        )
+
+        *
+        dc.draw
+
+        +
+
+        config.eloBlend *
+        elo.draw,
+
+
+      away:
+
+        (
+          1 -
+          config.eloBlend
+        )
+
+        *
+        dc.away
+
+        +
+
+        config.eloBlend *
+        elo.away
+    };
+
+
+    // -----------------------------------------------
+    // QUALITÉ DONNÉES
+    // -----------------------------------------------
+
     const generalCoverage =
       clamp(
         Math.min(
           homeAll.played,
           awayAll.played
-        ) / 5,
+        ) / 8,
         0,
         1
       );
@@ -1659,7 +2195,7 @@
         Math.min(
           homeVenue.played,
           awayVenue.played
-        ) / 4,
+        ) / 5,
         0,
         1
       );
@@ -1668,7 +2204,7 @@
     const leagueCoverage =
       clamp(
         baseline.n /
-        30,
+        100,
         0,
         1
       );
@@ -1677,7 +2213,7 @@
     const quality =
       Math.round(
 
-        35
+        25
 
         +
 
@@ -1686,41 +2222,43 @@
 
         +
 
-        20 *
+        25 *
         venueCoverage
 
         +
 
-        10 *
+        15 *
         leagueCoverage
       );
 
 
-    const uncertaintyBlend =
-
-      config.priorBlend
-
-      +
-
-      (
-        1 -
-        quality /
-        100
-      )
-
-      *
-      0.18;
-
+    // -----------------------------------------------
+    // RETOUR VERS MOYENNE
+    // -----------------------------------------------
 
     const priorBlend =
       clamp(
-        uncertaintyBlend,
-        0.08,
-        0.45
+
+        config.priorBlend
+
+        +
+
+        (
+          1 -
+          quality /
+          100
+        )
+
+        *
+        0.16,
+
+        0.06,
+
+        0.38
       );
 
 
-    let probability = {
+    probability = {
 
       home:
 
@@ -1730,7 +2268,7 @@
         )
 
         *
-        raw.home
+        probability.home
 
         +
 
@@ -1746,7 +2284,7 @@
         )
 
         *
-        raw.draw
+        probability.draw
 
         +
 
@@ -1762,7 +2300,7 @@
         )
 
         *
-        raw.away
+        probability.away
 
         +
 
@@ -1772,7 +2310,6 @@
 
 
     const total =
-
       probability.home +
       probability.draw +
       probability.away;
@@ -1794,12 +2331,20 @@
     };
 
 
+    // -----------------------------------------------
+    // TEMPÉRATURE
+    // -----------------------------------------------
+
     probability =
       temperatureScale(
         probability,
         config.temperature
       );
 
+
+    // -----------------------------------------------
+    // CALIBRATION LIGUE
+    // -----------------------------------------------
 
     if (
       calibration
@@ -1808,7 +2353,10 @@
       probability =
         applyClassCalibration(
           probability,
-          calibration
+          calibrationForLeague(
+            calibration,
+            target.competition
+          )
         );
     }
 
@@ -1819,24 +2367,31 @@
 
 
       over15:
-        raw.over15,
+        dc.over15,
 
 
       over25:
-        raw.over25,
+        dc.over25,
 
 
       btts:
-        raw.btts,
+        dc.btts,
 
 
       lambdaHome,
-
 
       lambdaAway,
 
 
       quality,
+
+
+      eloHome:
+        elo.homeRating,
+
+
+      eloAway:
+        elo.awayRating,
 
 
       sample: {
@@ -1864,99 +2419,292 @@
   }
 
 
+
   // ===================================================
   // PARAMÈTRES À TESTER
   // ===================================================
 
-  function makeCandidates() {
+  function candidateConfigs() {
 
-    const candidates =
-      [];
+    return [
+
+      {
+        halfLife:
+          55,
+
+        rho:
+          -0.10,
+
+        temperature:
+          1.04,
+
+        venueShare:
+          0.52,
+
+        shrink:
+          4,
+
+        formImpact:
+          0.04,
+
+        priorBlend:
+          0.14,
+
+        eloBlend:
+          0.15,
+
+        eloHomeAdv:
+          60,
+
+        eloK:
+          20
+      },
 
 
-    const halfLives =
-      [
-        35,
-        55,
-        80
-      ];
+      {
+        halfLife:
+          55,
+
+        rho:
+          -0.06,
+
+        temperature:
+          1.06,
+
+        venueShare:
+          0.58,
+
+        shrink:
+          4,
+
+        formImpact:
+          0.05,
+
+        priorBlend:
+          0.14,
+
+        eloBlend:
+          0.20,
+
+        eloHomeAdv:
+          60,
+
+        eloK:
+          20
+      },
 
 
-    const rhos =
-      [
-        -0.12,
-        -0.06,
-        0
-      ];
+      {
+        halfLife:
+          75,
+
+        rho:
+          -0.10,
+
+        temperature:
+          1.04,
+
+        venueShare:
+          0.52,
+
+        shrink:
+          4,
+
+        formImpact:
+          0.04,
+
+        priorBlend:
+          0.16,
+
+        eloBlend:
+          0.20,
+
+        eloHomeAdv:
+          60,
+
+        eloK:
+          20
+      },
 
 
-    const temperatures =
-      [
-        0.95,
-        1.05
-      ];
+      {
+        halfLife:
+          75,
+
+        rho:
+          -0.06,
+
+        temperature:
+          1.06,
+
+        venueShare:
+          0.58,
+
+        shrink:
+          4,
+
+        formImpact:
+          0.05,
+
+        priorBlend:
+          0.16,
+
+        eloBlend:
+          0.25,
+
+        eloHomeAdv:
+          65,
+
+        eloK:
+          20
+      },
 
 
-    const venueShares =
-      [
-        0.45,
-        0.60
-      ];
+      {
+        halfLife:
+          90,
+
+        rho:
+          -0.08,
+
+        temperature:
+          1.04,
+
+        venueShare:
+          0.50,
+
+        shrink:
+          5,
+
+        formImpact:
+          0.04,
+
+        priorBlend:
+          0.16,
+
+        eloBlend:
+          0.20,
+
+        eloHomeAdv:
+          65,
+
+        eloK:
+          18
+      },
 
 
-    halfLives.forEach(
-      halfLife => {
+      {
+        halfLife:
+          90,
 
-        rhos.forEach(
-          rho => {
+        rho:
+          -0.04,
 
-            temperatures.forEach(
-              temperature => {
+        temperature:
+          1.08,
 
-                venueShares.forEach(
-                  venueShare => {
+        venueShare:
+          0.58,
 
-                    candidates.push({
+        shrink:
+          5,
 
-                      halfLife,
+        formImpact:
+          0.05,
 
-                      rho,
+        priorBlend:
+          0.18,
 
-                      temperature,
+        eloBlend:
+          0.25,
 
-                      venueShare,
+        eloHomeAdv:
+          65,
 
-                      shrink:
-                        4,
+        eloK:
+          18
+      },
 
-                      formImpact:
-                        0.05,
 
-                      priorBlend:
-                        0.16
-                    });
-                  }
-                );
-              }
-            );
-          }
-        );
+      {
+        halfLife:
+          120,
+
+        rho:
+          -0.08,
+
+        temperature:
+          1.05,
+
+        venueShare:
+          0.50,
+
+        shrink:
+          5,
+
+        formImpact:
+          0.04,
+
+        priorBlend:
+          0.18,
+
+        eloBlend:
+          0.25,
+
+        eloHomeAdv:
+          70,
+
+        eloK:
+          18
+      },
+
+
+      {
+        halfLife:
+          120,
+
+        rho:
+          -0.04,
+
+        temperature:
+          1.08,
+
+        venueShare:
+          0.56,
+
+        shrink:
+          5,
+
+        formImpact:
+          0.05,
+
+        priorBlend:
+          0.18,
+
+        eloBlend:
+          0.30,
+
+        eloHomeAdv:
+          70,
+
+        eloK:
+          18
       }
-    );
 
-
-    return candidates;
+    ];
   }
 
 
+
   // ===================================================
-  // LIGNES DE PRÉDICTION
+  // PRÉDICTIONS BACKTEST
   // ===================================================
 
   function predictionRows(
     history,
-    list,
+    matchesToPredict,
     config,
+    eloState,
     calibration = null
   ) {
 
@@ -1964,7 +2712,7 @@
       [];
 
 
-    list.forEach(
+    matchesToPredict.forEach(
       match => {
 
         const model =
@@ -1973,14 +2721,22 @@
             match,
             matchTime(match),
             config,
+            eloState,
             calibration
           );
 
 
         if (
-          model.sample.homeAll < 3 ||
-          model.sample.awayAll < 3 ||
-          model.sample.league < 12 ||
+          model.sample.homeAll < 4 ||
+          model.sample.awayAll < 4 ||
+          model.sample.league < 25
+        ) {
+
+          return;
+        }
+
+
+        if (
           ![
             '1',
             'N',
@@ -2007,11 +2763,12 @@
   }
 
 
+
   // ===================================================
-  // CALIBRATION
+  // CALIBRATION PAR LIGUE
   // ===================================================
 
-  function fitClassCalibration(
+  function fitOneCalibration(
     rows
   ) {
 
@@ -2116,6 +2873,7 @@
         actualRate,
         predictedRate
       ) =>
+
         clamp(
           actualRate /
           Math.max(
@@ -2150,13 +2908,57 @@
   }
 
 
+  function fitLeagueCalibrations(
+    rows
+  ) {
+
+    const result = {
+
+      GLOBAL:
+        fitOneCalibration(
+          rows
+        )
+    };
+
+
+    MODEL_LEAGUES.forEach(
+      league => {
+
+        const leagueRows =
+          rows.filter(
+            row =>
+              row.match.competition ===
+              league
+          );
+
+
+        result[
+          league
+        ] =
+
+          leagueRows.length >=
+          20
+
+            ? fitOneCalibration(
+                leagueRows
+              )
+
+            : result.GLOBAL;
+      }
+    );
+
+
+    return result;
+  }
+
+
+
   // ===================================================
   // ÉVALUATION
   // ===================================================
 
   function evaluateRows(
-    rows,
-    calibration = null
+    rows
   ) {
 
     if (
@@ -2175,7 +2977,10 @@
           null,
 
         referenceBrier:
-          null
+          null,
+
+        byLeague:
+          {}
       };
     }
 
@@ -2184,36 +2989,41 @@
       0;
 
 
-    let brier =
+    let totalBrier =
       0;
 
 
-    let referenceBrier =
+    let totalReference =
       0;
+
+
+    const buckets =
+      {};
 
 
     rows.forEach(
       ({
         match,
-        model:
-          rawModel
+        model
       }) => {
 
-        const probability =
+        const modelBrier =
+          brier3(
+            model,
+            match.actualResult
+          );
 
-          calibration
 
-            ? applyClassCalibration(
-                rawModel,
-                calibration
-              )
-
-            : rawModel;
+        const referenceBrier =
+          brier3(
+            model.baseline,
+            match.actualResult
+          );
 
 
         if (
           bestPick(
-            probability
+            model
           ) ===
           match.actualResult
         ) {
@@ -2223,20 +3033,113 @@
         }
 
 
-        brier +=
-          brier3(
-            probability,
-            match.actualResult
-          );
+        totalBrier +=
+          modelBrier;
 
 
-        referenceBrier +=
-          brier3(
-            rawModel.baseline,
-            match.actualResult
-          );
+        totalReference +=
+          referenceBrier;
+
+
+        const league =
+          match.competition;
+
+
+        if (
+          !buckets[
+            league
+          ]
+        ) {
+
+          buckets[
+            league
+          ] = {
+
+            tested:
+              0,
+
+            correct:
+              0,
+
+            brier:
+              0,
+
+            reference:
+              0
+          };
+        }
+
+
+        buckets[
+          league
+        ].tested +=
+          1;
+
+
+        buckets[
+          league
+        ].brier +=
+          modelBrier;
+
+
+        buckets[
+          league
+        ].reference +=
+          referenceBrier;
+
+
+        if (
+          bestPick(
+            model
+          ) ===
+          match.actualResult
+        ) {
+
+          buckets[
+            league
+          ].correct +=
+            1;
+        }
       }
     );
+
+
+    const byLeague =
+      {};
+
+
+    Object.entries(
+      buckets
+    )
+      .forEach(
+        (
+          [
+            league,
+            item
+          ]
+        ) => {
+
+          byLeague[
+            league
+          ] = {
+
+            tested:
+              item.tested,
+
+            accuracy:
+              item.correct /
+              item.tested,
+
+            brier:
+              item.brier /
+              item.tested,
+
+            referenceBrier:
+              item.reference /
+              item.tested
+          };
+        }
+      );
 
 
     return {
@@ -2244,26 +3147,26 @@
       tested:
         rows.length,
 
-
       accuracy:
         correct /
         rows.length,
 
-
       brier:
-        brier /
+        totalBrier /
         rows.length,
 
-
       referenceBrier:
-        referenceBrier /
-        rows.length
+        totalReference /
+        rows.length,
+
+      byLeague
     };
   }
 
 
+
   // ===================================================
-  // AUTO-RÉGLAGE
+  // AUTO TUNING
   // ===================================================
 
   function tuneModel(
@@ -2279,8 +3182,7 @@
 
 
     const chronological =
-
-      history
+      [...history]
 
         .filter(
           match =>
@@ -2298,13 +3200,10 @@
 
         .filter(
           match =>
-
             num(
               match?.score?.home
             ) !== null
-
             &&
-
             num(
               match?.score?.away
             ) !== null
@@ -2320,17 +3219,22 @@
         );
 
 
+    /*
+     * 78 % : réglage
+     * 22 % : holdout totalement séparé
+     */
+
     const splitIndex =
       Math.max(
         1,
         Math.floor(
           chronological.length *
-          0.72
+          0.78
         )
       );
 
 
-    const tuneMatches =
+    const tuningMatches =
       chronological.slice(
         0,
         splitIndex
@@ -2347,22 +3251,30 @@
       null;
 
 
-    makeCandidates()
+    candidateConfigs()
       .forEach(
         config => {
 
-          const rawTuneRows =
+          const eloState =
+            buildEloTimeline(
+              history,
+              config
+            );
+
+
+          const rawRows =
             predictionRows(
               history,
-              tuneMatches,
+              tuningMatches,
               config,
+              eloState,
               null
             );
 
 
           if (
-            rawTuneRows.length <
-            12
+            rawRows.length <
+            40
           ) {
 
             return;
@@ -2370,92 +3282,85 @@
 
 
           const calibration =
-            fitClassCalibration(
-              rawTuneRows
+            fitLeagueCalibrations(
+              rawRows
             );
 
 
-          const calibratedTuneRows =
+          const calibratedRows =
             predictionRows(
               history,
-              tuneMatches,
+              tuningMatches,
               config,
+              eloState,
               calibration
             );
 
 
-          const tuneScore =
+          const score =
             evaluateRows(
-              calibratedTuneRows,
-              null
+              calibratedRows
             );
 
 
           if (
             !winner ||
-            tuneScore.brier <
-            winner.tune.brier
+            score.brier <
+            winner.score.brier
           ) {
 
             winner = {
 
               config,
 
+              eloState,
+
               calibration,
 
-              tune:
-                tuneScore
+              score
             };
           }
         }
       );
 
 
+    /*
+     * Sécurité si échantillon insuffisant.
+     */
+
     if (
       !winner
     ) {
 
+      const config =
+        candidateConfigs()[0];
+
+
       winner = {
 
-        config: {
+        config,
 
-          halfLife:
-            55,
-
-          rho:
-            -0.06,
-
-          temperature:
-            1.05,
-
-          venueShare:
-            0.55,
-
-          shrink:
-            4,
-
-          formImpact:
-            0.05,
-
-          priorBlend:
-            0.16
-        },
-
+        eloState:
+          buildEloTimeline(
+            history,
+            config
+          ),
 
         calibration: {
 
-          home:
-            1,
+          GLOBAL: {
+            home:
+              1,
 
-          draw:
-            1,
+            draw:
+              1,
 
-          away:
-            1
+            away:
+              1
+          }
         },
 
-
-        tune: {
+        score: {
 
           tested:
             0,
@@ -2467,35 +3372,25 @@
     }
 
 
+    /*
+     * HOLDOUT :
+     * jamais utilisé pour choisir
+     * les paramètres.
+     */
+
     const holdoutRows =
       predictionRows(
         history,
         holdoutMatches,
         winner.config,
+        winner.eloState,
         winner.calibration
       );
 
 
     const holdout =
       evaluateRows(
-        holdoutRows,
-        null
-      );
-
-
-    const fullRows =
-      predictionRows(
-        history,
-        chronological,
-        winner.config,
-        winner.calibration
-      );
-
-
-    const full =
-      evaluateRows(
-        fullRows,
-        null
+        holdoutRows
       );
 
 
@@ -2505,16 +3400,13 @@
 
       holdout,
 
-      full,
-
+      totalHistoricalMatches:
+        chronological.length,
 
       targetReached:
 
-        holdout.brier !==
-        null
-
+        holdout.brier !== null
         &&
-
         holdout.brier <
         TARGET_BRIER
     };
@@ -2524,8 +3416,9 @@
   }
 
 
+
   // ===================================================
-  // AFFICHAGE PRINCIPAL
+  // INTERFACE
   // ===================================================
 
   function updateMainUI(
@@ -2587,9 +3480,13 @@
 
     set(
       '#modelVersion',
-      `Moteur ${MODEL_VERSION} • Dixon-Coles`
+      `Moteur ${MODEL_VERSION} • Dixon-Coles + Elo`
     );
 
+
+    /*
+     * Sauvegarde dans l'objet match.
+     */
 
     match.probs = {
 
@@ -2618,12 +3515,12 @@
     ) {
 
       badge.textContent =
-        `QUALITÉ MODÈLE ${model.quality}%`;
+        `QUALITÉ DONNÉES ${model.quality}%`;
 
 
       badge.className =
         `pill ${
-          model.quality >= 65
+          model.quality >= 70
             ? 'success'
             : 'warn'
         }`;
@@ -2656,6 +3553,7 @@
 
           </div>
 
+
           <div class="market-prob">
 
             <b>
@@ -2680,6 +3578,7 @@
             </p>
 
           </div>
+
 
           <div class="market-prob">
 
@@ -2706,6 +3605,7 @@
 
           </div>
 
+
           <div class="market-prob">
 
             <b>
@@ -2726,31 +3626,48 @@
             </strong>
 
             <p>
-              ${match.home} / ${match.away}
+              ${match.home}
+              /
+              ${match.away}
             </p>
 
           </div>
 
+
           <div class="market-prob">
 
             <b>
-
-              ${
-                model.lambdaHome
-                  .toFixed(
-                    2
-                  )
-              }
-
+              ${model.lambdaHome.toFixed(2)}
               -
+              ${model.lambdaAway.toFixed(2)}
+            </b>
 
-              ${
-                model.lambdaAway
-                  .toFixed(
-                    2
-                  )
-              }
+          </div>
 
+        </div>
+
+
+        <div class="market">
+
+          <div>
+
+            <strong>
+              Rating Elo
+            </strong>
+
+            <p>
+              Force historique
+            </p>
+
+          </div>
+
+
+          <div class="market-prob">
+
+            <b>
+              ${Math.round(model.eloHome)}
+              -
+              ${Math.round(model.eloAway)}
             </b>
 
           </div>
@@ -2761,15 +3678,16 @@
   }
 
 
+
   // ===================================================
-  // ATTENTE PREANALYSIS
+  // ATTENDRE PREANALYSIS
   // ===================================================
 
   async function waitForPreanalysis() {
 
     for (
       let index = 0;
-      index < 40;
+      index < 50;
       index += 1
     ) {
 
@@ -2803,8 +3721,49 @@
   }
 
 
+
   // ===================================================
-  // VALIDATION V0.6
+  // NOMS LIGUES
+  // ===================================================
+
+  function leagueName(
+    code
+  ) {
+
+    if (
+      code ===
+      'PL'
+    ) {
+
+      return 'Premier League';
+    }
+
+
+    if (
+      code ===
+      'BL'
+    ) {
+
+      return 'Bundesliga';
+    }
+
+
+    if (
+      code ===
+      'LL'
+    ) {
+
+      return 'La Liga';
+    }
+
+
+    return code;
+  }
+
+
+
+  // ===================================================
+  // AFFICHAGE VALIDATION
   // ===================================================
 
   async function renderValidation(
@@ -2843,7 +3802,7 @@
 
       footnote.textContent =
 
-        'Ces statistiques alimentent désormais le modèle probabiliste V0.6. La qualité indique la quantité de données disponibles, pas la certitude du résultat.';
+        'Ces statistiques alimentent le modèle probabiliste V0.7. La qualité mesure la quantité de données disponibles et non la certitude du résultat.';
     }
 
 
@@ -2869,6 +3828,75 @@
         : 'var(--yellow)';
 
 
+    let gain =
+      null;
+
+
+    if (
+      holdout.brier !== null &&
+      holdout.referenceBrier !== null &&
+      holdout.referenceBrier >
+      0
+    ) {
+
+      gain =
+
+        (
+          (
+            holdout.referenceBrier -
+            holdout.brier
+          )
+
+          /
+
+          holdout.referenceBrier
+        )
+
+        *
+
+        100;
+    }
+
+
+    const leagueRows =
+      Object.entries(
+        holdout.byLeague ||
+        {}
+      )
+
+        .map(
+          (
+            [
+              league,
+              item
+            ]
+          ) => `
+
+            <div class="pre-stat">
+
+              <span>
+                ${leagueName(league)}
+                •
+                ${item.tested}
+                matchs
+              </span>
+
+              <strong>
+                ${item.brier.toFixed(3)}
+              </strong>
+
+              <small>
+                1N2 :
+                ${pct(item.accuracy)}
+              </small>
+
+            </div>
+          `
+        )
+
+        .join('');
+
+
     const card =
       document.createElement(
         'div'
@@ -2887,7 +3915,7 @@
           padding:11px;
           border:1px solid rgba(0,232,107,.30);
           border-radius:8px;
-          background:#071009
+          background:#071009;
         "
       >
 
@@ -2895,24 +3923,25 @@
           style="
             display:flex;
             justify-content:space-between;
-            gap:8px
+            gap:8px;
+            align-items:center;
           "
         >
 
           <strong
             style="
               font-size:10px;
-              color:var(--green)
+              color:var(--green);
             "
           >
-            PROBABILITÉS ${MODEL_VERSION}
+            PROBABILITÉS V0.7
           </strong>
 
 
           <span
             style="
               font-size:8px;
-              color:var(--muted)
+              color:var(--muted);
             "
           >
             QUALITÉ ${model.quality}%
@@ -2972,23 +4001,35 @@
             </span>
 
             <strong>
-
-              ${
-                model.lambdaHome
-                  .toFixed(
-                    2
-                  )
-              }
-
+              ${model.lambdaHome.toFixed(2)}
               -
+              ${model.lambdaAway.toFixed(2)}
+            </strong>
 
-              ${
-                model.lambdaAway
-                  .toFixed(
-                    2
-                  )
-              }
+          </div>
 
+
+          <div class="pre-stat">
+
+            <span>
+              Elo domicile
+            </span>
+
+            <strong>
+              ${Math.round(model.eloHome)}
+            </strong>
+
+          </div>
+
+
+          <div class="pre-stat">
+
+            <span>
+              Elo extérieur
+            </span>
+
+            <strong>
+              ${Math.round(model.eloAway)}
             </strong>
 
           </div>
@@ -3004,7 +4045,7 @@
           padding:11px;
           border:1px solid var(--line);
           border-radius:8px;
-          background:#071009
+          background:#071009;
         "
       >
 
@@ -3013,24 +4054,25 @@
             display:flex;
             justify-content:space-between;
             gap:8px;
-            align-items:center
+            align-items:flex-start;
           "
         >
 
           <strong
             style="
               font-size:10px;
-              color:var(--cyan)
+              color:var(--cyan);
             "
           >
-            VALIDATION INDÉPENDANTE V0.6
+            VALIDATION INDÉPENDANTE V0.7
           </strong>
 
 
           <span
             style="
               font-size:8px;
-              color:${targetColor}
+              color:${targetColor};
+              text-align:right;
             "
           >
             ${targetText}
@@ -3078,18 +4120,11 @@
                 <div class="pre-stat">
 
                   <span>
-                    Brier V0.6
+                    Brier V0.7
                   </span>
 
                   <strong>
-
-                    ${
-                      holdout.brier
-                        .toFixed(
-                          3
-                        )
-                    }
-
+                    ${holdout.brier.toFixed(3)}
                   </strong>
 
                 </div>
@@ -3102,15 +4137,89 @@
                   </span>
 
                   <strong>
-
-                    ${
-                      holdout.referenceBrier
-                        .toFixed(
-                          3
-                        )
-                    }
-
+                    ${holdout.referenceBrier.toFixed(3)}
                   </strong>
+
+                </div>
+
+
+                <div class="pre-stat">
+
+                  <span>
+                    Historique disponible
+                  </span>
+
+                  <strong>
+                    ${tuning.totalHistoricalMatches}
+                  </strong>
+
+                  <small>
+                    matchs 365 jours
+                  </small>
+
+                </div>
+
+
+                <div class="pre-stat">
+
+                  <span>
+                    Gain Brier
+                  </span>
+
+                  <strong>
+                    ${
+                      gain === null
+                        ? '—'
+                        : `${
+                            gain >= 0
+                              ? '+'
+                              : ''
+                          }${gain.toFixed(1)}%`
+                    }
+                  </strong>
+
+                </div>
+
+              </div>
+
+
+              <div
+                style="
+                  margin-top:12px;
+                  padding-top:10px;
+                  border-top:1px solid var(--line);
+                "
+              >
+
+                <strong
+                  style="
+                    font-size:9px;
+                    color:white;
+                  "
+                >
+                  PERFORMANCE PAR CHAMPIONNAT
+                </strong>
+
+
+                <div
+                  class="pre-stat-grid"
+                  style="margin-top:8px"
+                >
+
+                  ${
+                    leagueRows ||
+                    `
+                      <div class="pre-stat">
+                        <span>
+                          Données
+                        </span>
+
+                        <strong>
+                          —
+                        </strong>
+                      </div>
+                    `
+                  }
 
                 </div>
 
@@ -3121,18 +4230,21 @@
                 style="
                   font-size:8px;
                   color:var(--muted);
-                  line-height:1.45;
-                  margin:8px 0 0
+                  line-height:1.5;
+                  margin:10px 0 0;
                 "
               >
 
-                Paramètres choisis uniquement
-                sur la partie ancienne de l'historique,
-                puis évalués sur les matchs les plus récents
-                non utilisés pour le réglage.
+                Les paramètres sont choisis
+                uniquement avec la partie ancienne
+                de l'historique.
 
-                C'est ce score holdout
-                qui compte pour l'objectif 0,620.
+                Les matchs holdout les plus récents
+                ne servent pas au réglage.
+
+                C'est leur Brier qui détermine
+                si la V0.7 améliore réellement
+                la V0.6.
 
               </p>
             `
@@ -3143,14 +4255,12 @@
                 style="
                   font-size:8px;
                   color:var(--muted);
-                  line-height:1.45;
-                  margin:8px 0 0
+                  line-height:1.5;
+                  margin:10px 0 0;
                 "
               >
-
                 Pas encore assez de matchs
-                pour une validation indépendante.
-
+                pour constituer le holdout.
               </p>
             `
         }
@@ -3165,8 +4275,9 @@
   }
 
 
+
   // ===================================================
-  // LANCEMENT DU MODÈLE
+  // LANCEMENT
   // ===================================================
 
   async function runForMatch(
@@ -3189,6 +4300,16 @@
         await loadHistory();
 
 
+      if (
+        !history.length
+      ) {
+
+        throw new Error(
+          'Historique modèle vide.'
+        );
+      }
+
+
       const tuning =
         tuneModel(
           history
@@ -3201,6 +4322,7 @@
           match,
           Infinity,
           tuning.config,
+          tuning.eloState,
           tuning.calibration
         );
 
@@ -3222,11 +4344,43 @@
     ) {
 
       console.error(
-        'MatchScope Model V0.6:',
+        'MatchScope V0.7 :',
         error
       );
+
+
+      const panel =
+        await waitForPreanalysis();
+
+
+      if (
+        panel
+      ) {
+
+        const warning =
+          document.createElement(
+            'div'
+          );
+
+
+        warning.className =
+          'pre-warning model-validation-card';
+
+
+        warning.textContent =
+          `Erreur moteur V0.7 : ${
+            error?.message ||
+            error
+          }`;
+
+
+        panel.appendChild(
+          warning
+        );
+      }
     }
   }
+
 
 
   // ===================================================
@@ -3237,6 +4391,12 @@
     function (
       id
     ) {
+
+      /*
+       * On laisse app.js puis
+       * preanalysis.js construire
+       * l'écran normalement.
+       */
 
       previousOpenAnalysis(
         id
@@ -3272,13 +4432,16 @@
 
 
       if (
-        match
+        !match
       ) {
 
-        runForMatch(
-          match
-        );
+        return;
       }
+
+
+      runForMatch(
+        match
+      );
     };
 
 
