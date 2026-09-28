@@ -27,12 +27,25 @@ const LEAGUE_IDS =
   );
 
 
-const DAYS =
+const TOTAL_DAYS =
   365;
 
 
+/*
+ * Sportmonks autorise au maximum
+ * 100 jours par requête.
+ *
+ * On utilise 99 jours pour rester
+ * volontairement sous la limite.
+ */
+
+const CHUNK_DAYS =
+  99;
+
+
+
 // =====================================================
-// OUTILS
+// OUTILS DATE
 // =====================================================
 
 function iso(
@@ -48,11 +61,34 @@ function iso(
 }
 
 
+function addDays(
+  date,
+  days
+) {
+
+  const copy =
+    new Date(
+      date
+    );
+
+
+  copy.setUTCDate(
+    copy.getUTCDate() +
+    days
+  );
+
+
+  return copy;
+}
+
+
 function parseKickoff(
   value
 ) {
 
-  if (!value) {
+  if (
+    !value
+  ) {
 
     return null;
   }
@@ -64,6 +100,11 @@ function parseKickoff(
     )
       .trim();
 
+
+  /*
+   * Format Sportmonks classique :
+   * 2026-09-28 15:30:00
+   */
 
   if (
     /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
@@ -100,6 +141,86 @@ function parseKickoff(
 }
 
 
+
+// =====================================================
+// CONSTRUCTION DES 4 PÉRIODES
+// =====================================================
+
+function buildRanges(
+  start,
+  end
+) {
+
+  const ranges =
+    [];
+
+
+  let cursor =
+    new Date(
+      start
+    );
+
+
+  while (
+    cursor <= end
+  ) {
+
+    let rangeEnd =
+      addDays(
+        cursor,
+        CHUNK_DAYS
+      );
+
+
+    if (
+      rangeEnd >
+      end
+    ) {
+
+      rangeEnd =
+        new Date(
+          end
+        );
+    }
+
+
+    ranges.push({
+
+      start:
+        new Date(
+          cursor
+        ),
+
+      end:
+        new Date(
+          rangeEnd
+        )
+    });
+
+
+    /*
+     * Le prochain morceau commence
+     * le lendemain pour éviter
+     * les doublons.
+     */
+
+    cursor =
+      addDays(
+        rangeEnd,
+        1
+      );
+  }
+
+
+  return ranges;
+}
+
+
+
+// =====================================================
+// ÉQUIPES
+// =====================================================
+
 function getTeam(
   participants,
   location
@@ -123,6 +244,11 @@ function getTeam(
 }
 
 
+
+// =====================================================
+// SCORE FINAL
+// =====================================================
+
 function getFinalScore(
   scores = []
 ) {
@@ -140,6 +266,11 @@ function getFinalScore(
   scores.forEach(
     item => {
 
+      /*
+       * C'est la structure qui fonctionnait
+       * déjà dans ton historique 90 jours.
+       */
+
       if (
         item?.description !==
         'CURRENT'
@@ -149,7 +280,7 @@ function getFinalScore(
       }
 
 
-      const side =
+      const participant =
         item
           ?.score
           ?.participant;
@@ -164,7 +295,11 @@ function getFinalScore(
 
 
       if (
-        side === 'home' &&
+        participant ===
+        'home'
+
+        &&
+
         Number.isFinite(
           goals
         )
@@ -176,7 +311,11 @@ function getFinalScore(
 
 
       if (
-        side === 'away' &&
+        participant ===
+        'away'
+
+        &&
+
         Number.isFinite(
           goals
         )
@@ -229,6 +368,11 @@ function getResult(
 }
 
 
+
+// =====================================================
+// RÉPONSE NETLIFY
+// =====================================================
+
 function response(
   statusCode,
   body
@@ -244,6 +388,12 @@ function response(
       'content-type':
         'application/json; charset=utf-8',
 
+
+      /*
+       * Évite de recharger 365 jours
+       * à chaque ouverture d'un match.
+       */
+
       'cache-control':
         'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400'
     },
@@ -257,13 +407,354 @@ function response(
 }
 
 
+
 // =====================================================
-// FUNCTION
+// RÉCUPÉRER UNE PÉRIODE SPORTMONKS
+// =====================================================
+
+async function fetchRange(
+  token,
+  range
+) {
+
+  const fixtures =
+    [];
+
+
+  const endpoint =
+
+    `${API}/fixtures/between/${iso(range.start)}/${iso(range.end)}`;
+
+
+  let page =
+    1;
+
+
+  let hasMore =
+    true;
+
+
+  while (
+    hasMore &&
+    page <= 20
+  ) {
+
+    const url =
+      new URL(
+        endpoint
+      );
+
+
+    url.searchParams.set(
+      'api_token',
+      token
+    );
+
+
+    url.searchParams.set(
+      'filters',
+
+      `fixtureLeagues:${LEAGUE_IDS.join(',')}`
+    );
+
+
+    url.searchParams.set(
+      'include',
+
+      'league;participants;scores'
+    );
+
+
+    url.searchParams.set(
+      'per_page',
+      '50'
+    );
+
+
+    url.searchParams.set(
+      'page',
+      String(
+        page
+      )
+    );
+
+
+    const apiResponse =
+      await fetch(
+        url
+      );
+
+
+    const raw =
+      await apiResponse.text();
+
+
+    if (
+      !apiResponse.ok
+    ) {
+
+      throw new Error(
+        `Sportmonks ${apiResponse.status} sur ${iso(range.start)} → ${iso(range.end)} : ${raw.slice(0, 800)}`
+      );
+    }
+
+
+    let payload =
+      {};
+
+
+    try {
+
+      payload =
+        JSON.parse(
+          raw
+        );
+
+    } catch (
+      error
+    ) {
+
+      throw new Error(
+        `Réponse Sportmonks invalide sur ${iso(range.start)} → ${iso(range.end)}`
+      );
+    }
+
+
+    if (
+      Array.isArray(
+        payload.data
+      )
+    ) {
+
+      fixtures.push(
+        ...payload.data
+      );
+    }
+
+
+    hasMore =
+      Boolean(
+        payload
+          ?.pagination
+          ?.has_more
+      );
+
+
+    page +=
+      1;
+  }
+
+
+  return fixtures;
+}
+
+
+
+// =====================================================
+// TRANSFORMER FIXTURE
+// =====================================================
+
+function transformFixture(
+  fixture
+) {
+
+  const participants =
+
+    Array.isArray(
+      fixture.participants
+    )
+
+      ? fixture.participants
+
+      : [];
+
+
+  const home =
+
+    getTeam(
+      participants,
+      'home'
+    )
+
+    ||
+
+    participants[0]
+
+    ||
+
+    {};
+
+
+  const away =
+
+    getTeam(
+      participants,
+      'away'
+    )
+
+    ||
+
+    participants[1]
+
+    ||
+
+    {};
+
+
+  const score =
+
+    getFinalScore(
+
+      Array.isArray(
+        fixture.scores
+      )
+
+        ? fixture.scores
+
+        : []
+    );
+
+
+  /*
+   * Match pas terminé ou score
+   * indisponible :
+   * on ne l'utilise pas au backtest.
+   */
+
+  if (
+    score.home === null ||
+    score.away === null
+  ) {
+
+    return null;
+  }
+
+
+  const kickoff =
+    parseKickoff(
+      fixture.starting_at
+    );
+
+
+  if (
+    !kickoff
+  ) {
+
+    return null;
+  }
+
+
+  const league =
+
+    LEAGUES[
+      String(
+        fixture.league_id
+      )
+    ];
+
+
+  if (
+    !league
+  ) {
+
+    return null;
+  }
+
+
+  return {
+
+    id:
+      String(
+        fixture.id
+      ),
+
+
+    competition:
+      league.code,
+
+
+    competitionName:
+
+      fixture
+        ?.league
+        ?.name
+
+      ||
+
+      league.name,
+
+
+    home:
+
+      home?.name
+
+      ||
+
+      'Domicile',
+
+
+    away:
+
+      away?.name
+
+      ||
+
+      'Extérieur',
+
+
+    homeId:
+
+      home?.id
+
+      ||
+
+      null,
+
+
+    awayId:
+
+      away?.id
+
+      ||
+
+      null,
+
+
+    startingAt:
+      kickoff.toISOString(),
+
+
+    kickoffTs:
+      kickoff.getTime(),
+
+
+    score: {
+
+      home:
+        score.home,
+
+      away:
+        score.away
+    },
+
+
+    actualResult:
+
+      getResult(
+        score.home,
+        score.away
+      )
+  };
+}
+
+
+
+// =====================================================
+// FUNCTION NETLIFY
 // =====================================================
 
 exports.handler =
   async () => {
-
 
     const token =
       process
@@ -271,7 +762,9 @@ exports.handler =
         .SPORTMONKS_API_TOKEN;
 
 
-    if (!token) {
+    if (
+      !token
+    ) {
 
       return response(
         500,
@@ -284,9 +777,17 @@ exports.handler =
     }
 
 
+    /*
+     * Date aujourd'hui.
+     */
+
     const end =
       new Date();
 
+
+    /*
+     * 365 jours en arrière.
+     */
 
     const start =
       new Date(
@@ -295,7 +796,7 @@ exports.handler =
 
         -
 
-        DAYS *
+        TOTAL_DAYS *
         24 *
         60 *
         60 *
@@ -303,328 +804,110 @@ exports.handler =
       );
 
 
-    const endpoint =
+    /*
+     * Exemple :
+     *
+     * bloc 1 = 99 jours
+     * bloc 2 = 99 jours
+     * bloc 3 = 99 jours
+     * bloc 4 = reste
+     */
 
-      `${API}/fixtures/between/${iso(start)}/${iso(end)}`;
+    const ranges =
+      buildRanges(
+        start,
+        end
+      );
 
 
     try {
 
+      /*
+       * Les 4 grandes périodes
+       * sont téléchargées en parallèle.
+       *
+       * À l'intérieur de chaque période,
+       * la pagination reste séquentielle.
+       */
 
-      const fixtures =
-        [];
+      const results =
+        await Promise.all(
 
-
-      let page =
-        1;
-
-
-      let hasMore =
-        true;
-
-
-      while (
-        hasMore &&
-        page <= 30
-      ) {
-
-
-        const url =
-          new URL(
-            endpoint
-          );
-
-
-        url.searchParams.set(
-          'api_token',
-          token
-        );
-
-
-        url.searchParams.set(
-          'filters',
-
-          `fixtureLeagues:${LEAGUE_IDS.join(',')}`
-        );
-
-
-        url.searchParams.set(
-          'include',
-
-          'league;participants;scores'
-        );
-
-
-        url.searchParams.set(
-          'per_page',
-          '50'
-        );
-
-
-        url.searchParams.set(
-          'page',
-          String(
-            page
+          ranges.map(
+            range =>
+              fetchRange(
+                token,
+                range
+              )
           )
         );
 
 
-        const apiResponse =
-          await fetch(
-            url
-          );
+      /*
+       * Fusion des 4 périodes.
+       */
+
+      const rawFixtures =
+        results.flat();
 
 
-        const raw =
-          await apiResponse.text();
+      /*
+       * Protection anti doublon
+       * via fixture.id.
+       */
+
+      const uniqueFixtures =
+        new Map();
 
 
-        if (
-          !apiResponse.ok
-        ) {
+      rawFixtures.forEach(
+        fixture => {
 
-          return response(
+          if (
+            fixture?.id ===
+            undefined ||
+            fixture?.id ===
+            null
+          ) {
 
-            apiResponse.status,
-
-            {
-
-              error:
-                'Erreur Sportmonks',
-
-              details:
-                raw.slice(
-                  0,
-                  1500
-                )
-            }
-          );
-        }
+            return;
+          }
 
 
-        const payload =
-          JSON.parse(
-            raw
-          );
-
-
-        if (
-          Array.isArray(
-            payload.data
-          )
-        ) {
-
-          fixtures.push(
-            ...payload.data
+          uniqueFixtures.set(
+            String(
+              fixture.id
+            ),
+            fixture
           );
         }
+      );
 
 
-        hasMore =
-          Boolean(
-
-            payload
-              ?.pagination
-              ?.has_more
-          );
-
-
-        page +=
-          1;
-      }
-
+      /*
+       * Transformation vers
+       * le format MatchScope.
+       */
 
       const matches =
 
-        fixtures
+        Array.from(
+          uniqueFixtures.values()
+        )
 
           .map(
-            fixture => {
-
-
-              const participants =
-
-                Array.isArray(
-                  fixture.participants
-                )
-
-                  ? fixture.participants
-
-                  : [];
-
-
-              const home =
-
-                getTeam(
-                  participants,
-                  'home'
-                )
-
-                ||
-
-                participants[0]
-
-                ||
-
-                {};
-
-
-              const away =
-
-                getTeam(
-                  participants,
-                  'away'
-                )
-
-                ||
-
-                participants[1]
-
-                ||
-
-                {};
-
-
-              const score =
-
-                getFinalScore(
-
-                  Array.isArray(
-                    fixture.scores
-                  )
-
-                    ? fixture.scores
-
-                    : []
-                );
-
-
-              if (
-                score.home === null ||
-                score.away === null
-              ) {
-
-                return null;
-              }
-
-
-              const kickoff =
-                parseKickoff(
-                  fixture.starting_at
-                );
-
-
-              const league =
-
-                LEAGUES[
-                  String(
-                    fixture.league_id
-                  )
-                ];
-
-
-              if (
-                !league ||
-                !kickoff
-              ) {
-
-                return null;
-              }
-
-
-              return {
-
-
-                id:
-                  String(
-                    fixture.id
-                  ),
-
-
-                competition:
-                  league.code,
-
-
-                competitionName:
-
-                  fixture
-                    ?.league
-                    ?.name
-
-                  ||
-
-                  league.name,
-
-
-                home:
-
-                  home?.name
-
-                  ||
-
-                  'Domicile',
-
-
-                away:
-
-                  away?.name
-
-                  ||
-
-                  'Extérieur',
-
-
-                homeId:
-
-                  home?.id
-
-                  ||
-
-                  null,
-
-
-                awayId:
-
-                  away?.id
-
-                  ||
-
-                  null,
-
-
-                startingAt:
-                  kickoff.toISOString(),
-
-
-                kickoffTs:
-                  kickoff.getTime(),
-
-
-                score: {
-
-                  home:
-                    score.home,
-
-                  away:
-                    score.away
-                },
-
-
-                actualResult:
-
-                  getResult(
-
-                    score.home,
-
-                    score.away
-                  )
-              };
-            }
+            transformFixture
           )
 
           .filter(
             Boolean
           )
+
+          /*
+           * Ordre chronologique :
+           * très important pour Elo
+           * et le backtest.
+           */
 
           .sort(
             (
@@ -637,30 +920,99 @@ exports.handler =
           );
 
 
+      /*
+       * Informations de diagnostic.
+       */
+
+      const leagueCounts =
+        {};
+
+
+      matches.forEach(
+        match => {
+
+          leagueCounts[
+            match.competition
+          ] =
+
+            (
+              leagueCounts[
+                match.competition
+              ]
+
+              ||
+
+              0
+            )
+
+            +
+
+            1;
+        }
+      );
+
+
       return response(
-
         200,
-
         {
 
           mode:
             'model-history',
 
+
           days:
-            DAYS,
+            TOTAL_DAYS,
+
+
+          chunkDays:
+            CHUNK_DAYS,
+
+
+          chunks:
+            ranges.length,
+
 
           from:
             iso(
               start
             ),
 
+
           to:
             iso(
               end
             ),
 
+
+          rawCount:
+            rawFixtures.length,
+
+
           count:
             matches.length,
+
+
+          leagues:
+            leagueCounts,
+
+
+          ranges:
+
+            ranges.map(
+              range => ({
+
+                from:
+                  iso(
+                    range.start
+                  ),
+
+                to:
+                  iso(
+                    range.end
+                  )
+              })
+            ),
+
 
           matches
         }
@@ -671,15 +1023,19 @@ exports.handler =
       error
     ) {
 
+      console.error(
+        'MatchScope modelhistory:',
+        error
+      );
+
 
       return response(
-
         500,
-
         {
 
           error:
             'Erreur MatchScope model-history',
+
 
           details:
 
@@ -689,6 +1045,38 @@ exports.handler =
 
             String(
               error
+            ),
+
+
+          /*
+           * Très pratique pour voir
+           * si les 365 jours ont bien
+           * été divisés.
+           */
+
+          requestedDays:
+            TOTAL_DAYS,
+
+
+          chunkDays:
+            CHUNK_DAYS,
+
+
+          ranges:
+
+            ranges.map(
+              range => ({
+
+                from:
+                  iso(
+                    range.start
+                  ),
+
+                to:
+                  iso(
+                    range.end
+                  )
+              })
             )
         }
       );
