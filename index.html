@@ -11,11 +11,11 @@
 
   <meta
     name="theme-color"
-    content="#031009"
+    content="#001008"
   >
 
   <title>
-    MatchScope AI — Analyse football
+    MatchScope AI
   </title>
 
   <link
@@ -26,24 +26,18 @@
 
 <body>
 
-  <!-- JEU RESPONSABLE -->
-
   <div class="responsible-strip">
-
     <strong>
       PARIEZ AVEC RESPONSABILITÉ
     </strong>
 
     <span>
-      Une analyse augmente l'information disponible,
-      elle ne garantit jamais le résultat d'un match.
+      Une analyse ne garantit jamais le résultat d'un match.
     </span>
-
   </div>
 
 
   <div class="app-shell">
-
 
     <!-- HEADER -->
 
@@ -56,7 +50,6 @@
         </div>
 
         <div>
-
           <div class="eyebrow">
             MATCH INTELLIGENCE
           </div>
@@ -65,7 +58,6 @@
             MatchScope
             <span>AI</span>
           </h1>
-
         </div>
 
       </div>
@@ -77,13 +69,12 @@
           id="dataMode"
           class="pill neutral"
         >
-          CONNEXION LIVE…
+          CHARGEMENT…
         </span>
 
         <button
           id="refreshBtn"
           class="icon-btn"
-          aria-label="Actualiser"
         >
           ↻
         </button>
@@ -93,7 +84,7 @@
     </header>
 
 
-    <!-- PETIT BANDEAU -->
+    <!-- RÉSUMÉ -->
 
     <section class="compact-hero">
 
@@ -108,6 +99,7 @@
         </span>
 
       </div>
+
 
       <div class="coverage">
 
@@ -124,75 +116,83 @@
     </section>
 
 
+    <!-- LIVE / HISTORIQUE -->
+
+    <section class="mode-switch">
+
+      <button
+        class="mode-btn active"
+        data-mode="live"
+      >
+        🔴 LIVE
+      </button>
+
+      <button
+        class="mode-btn"
+        data-mode="history"
+      >
+        📚 HISTORIQUE
+      </button>
+
+    </section>
+
+
+    <!-- PÉRIODE HISTORIQUE -->
+
+    <section
+      id="historyControls"
+      class="history-controls hidden"
+    >
+
+      <span>
+        Période
+      </span>
+
+      <button
+        class="history-day"
+        data-days="7"
+      >
+        7 jours
+      </button>
+
+      <button
+        class="history-day active"
+        data-days="30"
+      >
+        30 jours
+      </button>
+
+      <button
+        class="history-day"
+        data-days="90"
+      >
+        90 jours
+      </button>
+
+    </section>
+
+
     <!-- CHAMPIONNATS -->
-<section class="mode-switch">
 
-  <button
-    class="mode-btn active"
-    data-mode="live"
-  >
-    🔴 LIVE
-  </button>
-
-  <button
-    class="mode-btn"
-    data-mode="history"
-  >
-    📚 HISTORIQUE
-  </button>
-
-</section>
-
-
-<section
-  id="historyControls"
-  class="history-controls hidden"
->
-
-  <span>
-    Période :
-  </span>
-
-  <button
-    class="history-day"
-    data-days="7"
-  >
-    7 jours
-  </button>
-
-  <button
-    class="history-day active"
-    data-days="30"
-  >
-    30 jours
-  </button>
-
-  <button
-    class="history-day"
-    data-days="90"
-  >
-    90 jours
-  </button>
-
-</section>
     <nav
       id="leagueTabs"
       class="league-tabs"
-      aria-label="Compétitions"
     >
     </nav>
 
 
     <main>
 
-
-      <!-- LISTE -->
+      <!-- TITRE -->
 
       <section class="section-head">
 
         <div>
 
-          <div class="eyebrow">
+          <div
+            id="sectionEyebrow"
+            class="eyebrow"
+          >
             MATCHS À ANALYSER
           </div>
 
@@ -203,7 +203,10 @@
         </div>
 
 
-        <div class="segmented">
+        <div
+          id="liveFilters"
+          class="segmented"
+        >
 
           <button
             class="seg active"
@@ -231,6 +234,8 @@
       </section>
 
 
+      <!-- MATCHS -->
+
       <section
         id="matchGrid"
         class="match-grid"
@@ -238,18 +243,12 @@
       </section>
 
 
-      <!-- ===================================== -->
-      <!-- FICHE MATCH -->
-      <!-- ===================================== -->
+      <!-- ANALYSE D'UN MATCH LIVE -->
 
       <section
         id="analysisPanel"
         class="analysis-panel hidden"
-        aria-live="polite"
       >
-
-
-        <!-- RETOUR -->
 
         <div class="analysis-top">
 
@@ -274,7 +273,7 @@
               id="qualityBadge"
               class="pill neutral"
             >
-              QUALITÉ DONNÉES —
+              QUALITÉ —
             </span>
 
           </div>
@@ -332,7 +331,7 @@
               </span>
 
               <b id="kickoff">
-                20:45
+                —
               </b>
 
               <small>
@@ -362,140 +361,65 @@
         </section>
 
 
-        <!-- NAVIGATION TYPE PARIONS SPORT -->
+        <!-- NAV -->
 
         <div class="analysis-tabs">
 
           <div class="analysis-tab active">
-
-            <span>
-              📊
-            </span>
-
-            <b>
-              Stats
-            </b>
-
+            <span>📊</span>
+            <b>Stats</b>
           </div>
 
-
           <div class="analysis-tab">
-
-            <span>
-              👕
-            </span>
-
-            <b>
-              Compos
-            </b>
-
+            <span>👕</span>
+            <b>Compos</b>
           </div>
 
-
           <div class="analysis-tab">
-
-            <span>
-              ☁️
-            </span>
-
-            <b>
-              Contexte
-            </b>
-
+            <span>☁️</span>
+            <b>Contexte</b>
           </div>
 
-
           <div class="analysis-tab">
-
-            <span>
-              AI
-            </span>
-
-            <b>
-              Modèle
-            </b>
-
+            <span>AI</span>
+            <b>Modèle</b>
           </div>
 
         </div>
 
 
-        <!-- STATS PRINCIPALES -->
+        <!-- PROBABILITÉS -->
 
-        <section class="stats-section">
+        <section class="sports-section">
 
           <div class="section-label">
             PROBABILITÉS DU MODÈLE
           </div>
 
-
           <div class="prob-grid">
 
             <div class="prob-card">
-
-              <span>
-                1
-              </span>
-
-              <strong id="pHome">
-                —
-              </strong>
-
-              <small>
-                DOMICILE
-              </small>
-
+              <span>1</span>
+              <strong id="pHome">—</strong>
+              <small>DOMICILE</small>
             </div>
-
 
             <div class="prob-card">
-
-              <span>
-                N
-              </span>
-
-              <strong id="pDraw">
-                —
-              </strong>
-
-              <small>
-                NUL
-              </small>
-
+              <span>N</span>
+              <strong id="pDraw">—</strong>
+              <small>NUL</small>
             </div>
-
 
             <div class="prob-card">
-
-              <span>
-                2
-              </span>
-
-              <strong id="pAway">
-                —
-              </strong>
-
-              <small>
-                EXTÉRIEUR
-              </small>
-
+              <span>2</span>
+              <strong id="pAway">—</strong>
+              <small>EXTÉRIEUR</small>
             </div>
-
 
             <div class="prob-card confidence-card">
-
-              <span>
-                AI
-              </span>
-
-              <strong id="confidence">
-                —
-              </strong>
-
-              <small>
-                CONFIANCE
-              </small>
-
+              <span>AI</span>
+              <strong id="confidence">—</strong>
+              <small>CONFIANCE</small>
             </div>
 
           </div>
@@ -503,7 +427,7 @@
         </section>
 
 
-        <!-- MARCHÉS -->
+        <!-- INDICATEURS -->
 
         <section class="sports-section">
 
@@ -511,9 +435,7 @@
             INDICATEURS DU MATCH
           </div>
 
-
           <div class="analysis-columns">
-
 
             <div class="panel-card">
 
@@ -531,7 +453,6 @@
                 </span>
 
               </div>
-
 
               <div
                 id="factorList"
@@ -556,77 +477,12 @@
 
             </div>
 
-
           </div>
 
         </section>
 
 
-        <!-- H2H -->
-
-        <section class="sports-section">
-
-          <div class="section-label">
-            HISTORIQUE DES CONFRONTATIONS
-          </div>
-
-
-          <div class="h2h-grid">
-
-            <div>
-
-              <strong class="green-number">
-                —
-              </strong>
-
-              <span>
-                VICTOIRES
-                <br>
-                DOMICILE
-              </span>
-
-            </div>
-
-
-            <div>
-
-              <strong>
-                —
-              </strong>
-
-              <span>
-                NULS
-              </span>
-
-            </div>
-
-
-            <div>
-
-              <strong class="red-number">
-                —
-              </strong>
-
-              <span>
-                VICTOIRES
-                <br>
-                EXTÉRIEUR
-              </span>
-
-            </div>
-
-          </div>
-
-
-          <p class="future-data">
-            L'historique H2H sera alimenté par les données
-            statistiques Sportmonks.
-          </p>
-
-        </section>
-
-
-        <!-- COMPOSITIONS -->
+        <!-- COMPOS -->
 
         <section class="sports-section">
 
@@ -634,11 +490,9 @@
             COMPOSITIONS & ABSENCES
           </div>
 
-
           <div class="panel-card">
 
             <div class="lineup-columns">
-
 
               <div>
 
@@ -675,7 +529,6 @@
 
               </div>
 
-
             </div>
 
 
@@ -698,7 +551,6 @@
             CONTEXTE DU MATCH
           </div>
 
-
           <div class="panel-card">
 
             <div
@@ -717,9 +569,8 @@
         <section class="sports-section">
 
           <div class="section-label">
-            COMMENT LE MODÈLE ÉVALUE LE MATCH
+            POIDS DU MODÈLE
           </div>
-
 
           <div class="panel-card">
 
@@ -742,7 +593,6 @@
             SOURCES & FIABILITÉ
           </div>
 
-
           <div class="panel-card">
 
             <div
@@ -751,17 +601,13 @@
             >
             </div>
 
-
             <p class="disclaimer">
-              Une probabilité n'est jamais une garantie.
-              Le football reste soumis à une forte part
-              d'incertitude.
+              Une probabilité n'est jamais une garantie de gain.
             </p>
 
           </div>
 
         </section>
-
 
       </section>
 
@@ -770,11 +616,11 @@
   </div>
 
 
-  <!-- TEMPLATE CARTE MATCH -->
+  <!-- TEMPLATE LIVE -->
 
   <template id="matchTemplate">
 
-    <article class="match-card">
+    <article class="match-card live-card">
 
       <div class="match-card-top">
 
@@ -791,9 +637,7 @@
 
         <div class="mini-team">
 
-          <span
-            class="mini-logo home-logo"
-          >
+          <span class="mini-logo home-logo">
           </span>
 
           <strong class="home-team">
@@ -818,9 +662,7 @@
           <strong class="away-team">
           </strong>
 
-          <span
-            class="mini-logo away-logo"
-          >
+          <span class="mini-logo away-logo">
           </span>
 
         </div>
