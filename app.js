@@ -5,23 +5,21 @@ const competitions = [
   },
   {
     id: 'LL2',
-    name: '🇪🇸 LaLiga 2'
+    name: '🇪🇸 La Liga 2'
   },
   {
     id: 'LMX',
     name: '🇲🇽 Liga MX'
   },
   {
-    id: 'CPL',
-    name: '🇨🇦 Canadian Premier League'
+    id: 'CSL',
+    name: '🇨🇦 Canadian Soccer League'
   },
   {
     id: 'MLS',
-    name: '🇺🇸 MLS'
+    name: '🇺🇸 Major League Soccer'
   }
 ];
-
-
 // =====================================================
 // POIDS DU MODÈLE
 // =====================================================
