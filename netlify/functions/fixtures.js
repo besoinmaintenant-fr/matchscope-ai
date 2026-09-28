@@ -10,62 +10,31 @@ const OPEN_METEO_API =
 // =====================================================
 
 const TARGET_LEAGUES = [
-
   {
-    code: 'LL2',
-
-    label: 'La Liga 2',
-
-    id: 567,
-
-    aliases: [
-      'la liga 2',
-      'laliga 2',
-      'segunda division',
-      'segunda división'
-    ]
+    code: 'BL',
+    label: 'Bundesliga',
+    id: 82
   },
-
-
   {
-    code: 'LMX',
-
-    label: 'Liga MX',
-
-    id: 743,
-
-    aliases: [
-      'liga mx'
-    ]
+    code: 'LL',
+    label: 'La Liga',
+    id: 564
   },
-
-
   {
-    code: 'CSL',
-
-    label: 'Canadian Soccer League',
-
-    id: 983,
-
-    aliases: [
-      'canadian soccer league'
-    ]
+    code: 'SC',
+    label: 'Super Cup',
+    id: 1251
   },
-
-
   {
-    code: 'MLS',
-
-    label: 'Major League Soccer',
-
-    id: 779,
-
-    aliases: [
-      'major league soccer',
-      'mls'
-    ]
+    code: 'PL',
+    label: 'Premier League',
+    id: 8
+  },
+  {
+    code: 'CF1',
+    label: 'Club Friendlies 1',
+    id: 1101
   }
-
 ];
 // =====================================================
 // OUTILS
