@@ -4,20 +4,24 @@ const competitions = [
     name: 'Tous'
   },
   {
-    id: 'LL2',
-    name: '🇪🇸 La Liga 2'
+    id: 'BL',
+    name: '🇩🇪 Bundesliga'
   },
   {
-    id: 'LMX',
-    name: '🇲🇽 Liga MX'
+    id: 'LL',
+    name: '🇪🇸 La Liga'
   },
   {
-    id: 'CSL',
-    name: '🇨🇦 Canadian Soccer League'
+    id: 'SC',
+    name: '🇪🇸 Super Cup'
   },
   {
-    id: 'MLS',
-    name: '🇺🇸 Major League Soccer'
+    id: 'PL',
+    name: '🏴 Premier League'
+  },
+  {
+    id: 'CF1',
+    name: '🌍 Club Friendlies 1'
   }
 ];
 // =====================================================
@@ -1621,7 +1625,7 @@ if (
 ) {
 
   coverageValue.textContent =
-    '4';
+    '5';
 }
 
 
