@@ -40,12 +40,8 @@ const SEED_DAYS =
 
 
 /*
- * Un seed complet est volontairement
- * découpé en petits morceaux.
- *
- * 55 jours x 7 parties maximum.
- *
- * La dernière partie sera plus courte.
+ * Seed découpé en plusieurs parties
+ * pour éviter les timeouts Netlify.
  */
 const SEED_PART_DAYS =
   55;
@@ -59,8 +55,8 @@ const SEED_PARTS =
 
 
 /*
- * Les mises à jour normales
- * après le premier seed restent petites.
+ * Mise à jour normale après
+ * le premier remplissage.
  */
 const INCREMENTAL_DAYS =
   14;
@@ -71,7 +67,8 @@ const BATCH_SIZE =
 
 
 /*
- * États Sportmonks considérés terminés.
+ * États Sportmonks considérés
+ * réellement terminés.
  *
  * 5 = FT
  * 7 = AET
@@ -99,7 +96,7 @@ const STATE_LABELS = {
 
 
 // =====================================================
-// RÉPONSE
+// RÉPONSE JSON
 // =====================================================
 
 function jsonResponse(
@@ -155,17 +152,23 @@ function authorized(
   }
 
 
-  const authorization =
+  /*
+   * On utilise notre propre header.
+   *
+   * Pas de Authorization / Bearer.
+   */
+
+  const received =
 
     event
       ?.headers
-      ?.authorization
+      ?.['x-matchscope-secret']
 
     ||
 
     event
       ?.headers
-      ?.Authorization
+      ?.['X-MatchScope-Secret']
 
     ||
 
@@ -175,8 +178,8 @@ function authorized(
   return {
 
     ok:
-      authorization ===
-      `Bearer ${secret}`,
+      received ===
+      secret,
 
     reason:
       'Accès non autorisé.'
@@ -298,6 +301,12 @@ function parseKickoff(
       .trim();
 
 
+  /*
+   * Format Sportmonks fréquent :
+   *
+   * 2026-09-29 19:00:00
+   */
+
   if (
     /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
       .test(raw)
@@ -334,7 +343,7 @@ function parseKickoff(
 
 
 // =====================================================
-// PLAGE DE SYNCHRONISATION
+// PLAGE DU SEED
 // =====================================================
 
 function getSeedRange(
@@ -373,6 +382,10 @@ function getSeedRange(
       -(SEED_DAYS - 1)
     );
 
+
+  /*
+   * Décalage de la partie.
+   */
 
   const offset =
     (
@@ -439,6 +452,10 @@ function getSeedRange(
   };
 }
 
+
+// =====================================================
+// PLAGE INCRÉMENTALE
+// =====================================================
 
 function getIncrementalRange() {
 
@@ -598,7 +615,7 @@ function fixtureState(
 
 
 // =====================================================
-// SCORE
+// SCORE FINAL
 // =====================================================
 
 function getFinalScore(
@@ -617,6 +634,11 @@ function getFinalScore(
 
   scores.forEach(
     item => {
+
+      /*
+       * CURRENT n'est accepté
+       * qu'après vérification de l'état final.
+       */
 
       if (
         item?.description !==
@@ -729,8 +751,7 @@ async function fetchRange(
   ) {
 
     /*
-     * Protection supplémentaire
-     * contre une pagination anormale.
+     * Sécurité pagination.
      */
 
     if (
@@ -867,7 +888,7 @@ async function fetchRange(
 
 
 // =====================================================
-// TRANSFORMATION
+// TRANSFORMATION SPORTMONKS -> MATCHSCOPE
 // =====================================================
 
 function transformFixture(
@@ -903,9 +924,8 @@ function transformFixture(
 
 
   /*
-   * Un score n'est accepté que
-   * si Sportmonks indique réellement
-   * que le match est terminé.
+   * On refuse tout match
+   * non réellement terminé.
    */
 
   if (
@@ -1124,8 +1144,10 @@ function transformFixture(
         ),
 
       /*
-       * Pas d'heure de fin inventée.
+       * On ne fabrique pas
+       * une fausse heure de fin.
        */
+
       finished_at:
         null,
 
@@ -1137,7 +1159,7 @@ function transformFixture(
 
 
 // =====================================================
-// BATCH
+// DÉCOUPAGE EN BATCHS
 // =====================================================
 
 function chunks(
@@ -1337,7 +1359,7 @@ function countSkippedStates(
 
 
 // =====================================================
-// HANDLER
+// HANDLER NETLIFY
 // =====================================================
 
 exports.handler =
@@ -1367,7 +1389,7 @@ exports.handler =
 
 
     // -------------------------------------------------
-    // AUTH
+    // AUTHENTIFICATION
     // -------------------------------------------------
 
     const access =
@@ -1393,6 +1415,10 @@ exports.handler =
       );
     }
 
+
+    // -------------------------------------------------
+    // SPORTMONKS TOKEN
+    // -------------------------------------------------
 
     const token =
       process
@@ -1458,13 +1484,8 @@ exports.handler =
 
 
       /*
-       * IMPORTANT :
-       *
-       * un seed sans numéro de partie
-       * est désormais interdit.
-       *
-       * Cela empêche de relancer
-       * accidentellement les 365 jours.
+       * Le seed sans numéro
+       * de partie est interdit.
        */
 
       if (
@@ -1496,7 +1517,7 @@ exports.handler =
               `Le seed doit être lancé partie par partie : part=1 à part=${SEED_PARTS}.`,
 
             example:
-              `?mode=seed&part=1`,
+              '?mode=seed&part=1',
 
             seedParts:
               SEED_PARTS,
@@ -1534,7 +1555,7 @@ exports.handler =
     } else {
 
       // ------------------------------------------------
-      // INCRÉMENTAL NORMAL
+      // MODE INCRÉMENTAL
       // ------------------------------------------------
 
       range =
@@ -1594,7 +1615,7 @@ exports.handler =
 
 
       // ===============================================
-      // 3. VALIDATION
+      // 3. TRANSFORMATION
       // ===============================================
 
       const transformed =
@@ -1633,8 +1654,8 @@ exports.handler =
       // ===============================================
 
       /*
-       * matches en premier car results
-       * possède une clé étrangère vers matches.
+       * Matches en premier
+       * à cause de la clé étrangère.
        */
 
       await saveMatches(
@@ -1648,7 +1669,7 @@ exports.handler =
 
 
       // ===============================================
-      // 5. COMPTAGE LIGUES
+      // 5. COMPTAGE PAR LIGUE
       // ===============================================
 
       const leagueCounts =
@@ -1737,7 +1758,7 @@ exports.handler =
 
 
       // ===============================================
-      // 7. PARTIE SUIVANTE
+      // 7. PROCHAINE PARTIE
       // ===============================================
 
       let nextPart =
@@ -1773,20 +1794,30 @@ exports.handler =
           mode,
 
           part:
-            mode === 'seed'
+            mode ===
+            'seed'
+
               ? part
+
               : null,
 
           seedParts:
-            mode === 'seed'
+            mode ===
+            'seed'
+
               ? SEED_PARTS
+
               : null,
 
           nextPart,
 
           completed:
-            mode === 'seed'
-              ? part === SEED_PARTS
+            mode ===
+            'seed'
+
+              ? part ===
+                SEED_PARTS
+
               : true,
 
           from:
