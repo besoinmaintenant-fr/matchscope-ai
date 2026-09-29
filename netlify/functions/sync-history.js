@@ -40,12 +40,49 @@ const INCREMENTAL_DAYS =
   14;
 
 
+/*
+ * Sportmonks limite la route "between"
+ * à 100 jours.
+ *
+ * On reste volontairement à 90.
+ */
 const CHUNK_DAYS =
   90;
 
 
 const BATCH_SIZE =
   100;
+
+
+/*
+ * États Sportmonks réellement terminés.
+ *
+ * 5 = FT
+ * 7 = AET
+ * 8 = fin après tirs au but
+ *
+ * Pour PL / BL / LL, FT sera de très loin
+ * le cas normal.
+ */
+const FINAL_STATE_IDS =
+  new Set([
+    5,
+    7,
+    8
+  ]);
+
+
+const STATE_LABELS = {
+
+  5:
+    'FT',
+
+  7:
+    'AET',
+
+  8:
+    'FT_PEN'
+};
 
 
 // =====================================================
@@ -95,7 +132,10 @@ function authorized(
   if (!secret) {
 
     return {
-      ok: false,
+
+      ok:
+        false,
+
       reason:
         'MATCHSCOPE_SYNC_SECRET absent.'
     };
@@ -160,7 +200,11 @@ function addDays(
 
 
   copy.setUTCDate(
-    copy.getUTCDate() +
+
+    copy.getUTCDate()
+
+    +
+
     days
   );
 
@@ -174,12 +218,15 @@ function parseKickoff(
 ) {
 
   if (!value) {
+
     return null;
   }
 
 
   const raw =
-    String(value)
+    String(
+      value
+    )
       .trim();
 
 
@@ -203,13 +250,17 @@ function parseKickoff(
 
 
   const date =
-    new Date(raw);
+    new Date(
+      raw
+    );
 
 
   return Number.isNaN(
     date.getTime()
   )
+
     ? null
+
     : date;
 }
 
@@ -224,7 +275,9 @@ function buildRanges(
 
 
   let cursor =
-    new Date(start);
+    new Date(
+      start
+    );
 
 
   while (
@@ -233,7 +286,9 @@ function buildRanges(
 
     let rangeEnd =
       addDays(
+
         cursor,
+
         CHUNK_DAYS - 1
       );
 
@@ -243,23 +298,31 @@ function buildRanges(
     ) {
 
       rangeEnd =
-        new Date(end);
+        new Date(
+          end
+        );
     }
 
 
     ranges.push({
 
       start:
-        new Date(cursor),
+        new Date(
+          cursor
+        ),
 
       end:
-        new Date(rangeEnd)
+        new Date(
+          rangeEnd
+        )
     });
 
 
     cursor =
       addDays(
+
         rangeEnd,
+
         1
       );
   }
@@ -277,14 +340,28 @@ function numberOrNull(
   value
 ) {
 
+  if (
+    value === null ||
+    value === undefined ||
+    value === ''
+  ) {
+
+    return null;
+  }
+
+
   const number =
-    Number(value);
+    Number(
+      value
+    );
 
 
   return Number.isFinite(
     number
   )
+
     ? number
+
     : null;
 }
 
@@ -313,7 +390,65 @@ function getTeam(
 
 
 // =====================================================
-// SCORE
+// ÉTAT DU MATCH
+// =====================================================
+
+function fixtureState(
+  fixture
+) {
+
+  const stateId =
+    Number(
+      fixture?.state_id
+    );
+
+
+  const includedState =
+    fixture?.state
+    ||
+    null;
+
+
+  const code =
+
+    includedState?.short_name
+
+    ||
+
+    includedState?.state
+
+    ||
+
+    STATE_LABELS[
+      stateId
+    ]
+
+    ||
+
+    null;
+
+
+  return {
+
+    id:
+      Number.isFinite(
+        stateId
+      )
+        ? stateId
+        : null,
+
+    code,
+
+    finished:
+      FINAL_STATE_IDS.has(
+        stateId
+      )
+  };
+}
+
+
+// =====================================================
+// SCORE FINAL
 // =====================================================
 
 function getFinalScore(
@@ -332,6 +467,15 @@ function getFinalScore(
 
   scores.forEach(
     item => {
+
+      /*
+       * Sportmonks documente CURRENT
+       * comme le score courant/final.
+       *
+       * Comme on vérifie AVANT l'état
+       * final du fixture, il ne peut plus
+       * s'agir ici d'un simple score live.
+       */
 
       if (
         item?.description !==
@@ -357,8 +501,13 @@ function getFinalScore(
 
 
       if (
-        side === 'home' &&
-        Number.isFinite(goals)
+        side === 'home'
+
+        &&
+
+        Number.isFinite(
+          goals
+        )
       ) {
 
         result.home =
@@ -367,8 +516,13 @@ function getFinalScore(
 
 
       if (
-        side === 'away' &&
-        Number.isFinite(goals)
+        side === 'away'
+
+        &&
+
+        Number.isFinite(
+          goals
+        )
       ) {
 
         result.away =
@@ -463,16 +617,18 @@ async function fetchRange(
 
 
     /*
-     * Pour l'instant :
-     * uniquement les données nécessaires
-     * au moteur V0.7.
+     * state est ajouté explicitement.
+     *
+     * state_id existe déjà sur le fixture,
+     * mais l'include nous donne également
+     * le code lisible pour diagnostic.
      */
 
     url.searchParams.set(
 
       'include',
 
-      'league;participants;scores'
+      'league;participants;scores;state'
     );
 
 
@@ -484,7 +640,9 @@ async function fetchRange(
 
     url.searchParams.set(
       'page',
-      String(page)
+      String(
+        page
+      )
     );
 
 
@@ -518,7 +676,9 @@ async function fetchRange(
     try {
 
       payload =
-        JSON.parse(raw);
+        JSON.parse(
+          raw
+        );
 
     } catch {
 
@@ -549,7 +709,8 @@ async function fetchRange(
       );
 
 
-    page += 1;
+    page +=
+      1;
   }
 
 
@@ -586,7 +747,48 @@ function transformFixture(
 
   if (!league) {
 
-    return null;
+    return {
+
+      stored:
+        false,
+
+      reason:
+        'league'
+    };
+  }
+
+
+  /*
+   * CRITIQUE :
+   *
+   * on vérifie maintenant l'état Sportmonks
+   * AVANT de considérer CURRENT comme final.
+   */
+
+  const state =
+    fixtureState(
+      fixture
+    );
+
+
+  if (
+    !state.finished
+  ) {
+
+    return {
+
+      stored:
+        false,
+
+      reason:
+        'not-final',
+
+      stateId:
+        state.id,
+
+      state:
+        state.code
+    };
   }
 
 
@@ -620,7 +822,14 @@ function transformFixture(
     !away
   ) {
 
-    return null;
+    return {
+
+      stored:
+        false,
+
+      reason:
+        'participants'
+    };
   }
 
 
@@ -632,7 +841,14 @@ function transformFixture(
 
   if (!kickoff) {
 
-    return null;
+    return {
+
+      stored:
+        false,
+
+      reason:
+        'kickoff'
+    };
   }
 
 
@@ -649,20 +865,19 @@ function transformFixture(
     );
 
 
-  /*
-   * Pas de score complet :
-   * on n'enregistre pas le résultat.
-   *
-   * Cela évite aussi les matchs reportés,
-   * annulés ou non joués.
-   */
-
   if (
     score.home === null ||
     score.away === null
   ) {
 
-    return null;
+    return {
+
+      stored:
+        false,
+
+      reason:
+        'score'
+    };
   }
 
 
@@ -676,7 +891,14 @@ function transformFixture(
     fixtureId === null
   ) {
 
-    return null;
+    return {
+
+      stored:
+        false,
+
+      reason:
+        'fixture-id'
+    };
   }
 
 
@@ -686,6 +908,10 @@ function transformFixture(
 
 
   return {
+
+    stored:
+      true,
+
 
     match: {
 
@@ -714,6 +940,12 @@ function transformFixture(
         kickoff.toISOString(),
 
       status:
+        state.code
+        ||
+        STATE_LABELS[
+          state.id
+        ]
+        ||
         'FT',
 
       home_team_id:
@@ -753,6 +985,17 @@ function transformFixture(
           score.home,
           score.away
         ),
+
+      /*
+       * On ne connaît pas ici avec précision
+       * l'heure de fin du match.
+       *
+       * On préfère NULL plutôt qu'une heure
+       * inventée.
+       */
+
+      finished_at:
+        null,
 
       updated_at:
         now
@@ -802,6 +1045,14 @@ async function saveMatches(
   matches
 ) {
 
+  if (
+    !matches.length
+  ) {
+
+    return;
+  }
+
+
   const batches =
     chunks(
       matches,
@@ -828,13 +1079,16 @@ async function saveMatches(
           batch,
 
         /*
-         * Important :
-         * on ne touche pas ici aux compositions
-         * ni aux données détaillées déjà présentes.
+         * Merge uniquement sur les colonnes
+         * présentes dans nos lignes.
+         *
+         * Les données plus riches déjà stockées
+         * ailleurs ne doivent pas être remplacées
+         * volontairement par ce job historique.
          */
 
         prefer:
-          'resolution=merge-duplicates,missing=default,return=minimal'
+          'resolution=merge-duplicates,return=minimal'
       }
     );
   }
@@ -848,6 +1102,14 @@ async function saveMatches(
 async function saveResults(
   results
 ) {
+
+  if (
+    !results.length
+  ) {
+
+    return;
+  }
+
 
   const batches =
     chunks(
@@ -875,10 +1137,79 @@ async function saveResults(
           batch,
 
         prefer:
-          'resolution=merge-duplicates,missing=default,return=minimal'
+          'resolution=merge-duplicates,return=minimal'
       }
     );
   }
+}
+
+
+// =====================================================
+// DIAGNOSTIC DES ÉTATS IGNORÉS
+// =====================================================
+
+function countSkippedStates(
+  transformed
+) {
+
+  const result =
+    {};
+
+
+  transformed
+
+    .filter(
+      item =>
+
+        !item.stored
+
+        &&
+
+        item.reason ===
+        'not-final'
+    )
+
+    .forEach(
+      item => {
+
+        const key =
+
+          item.state
+
+          ||
+
+          (
+            item.stateId !==
+            null
+
+              ? `STATE_${item.stateId}`
+
+              : 'UNKNOWN'
+          );
+
+
+        result[
+          key
+        ] =
+
+          (
+            result[
+              key
+            ]
+
+            ||
+
+            0
+          )
+
+          +
+
+          1;
+      }
+    );
+
+
+  return result;
 }
 
 
@@ -897,6 +1228,9 @@ exports.handler =
       return jsonResponse(
         405,
         {
+
+          success:
+            false,
 
           error:
             'Méthode non autorisée.'
@@ -919,6 +1253,9 @@ exports.handler =
         401,
         {
 
+          success:
+            false,
+
           error:
             access.reason
         }
@@ -938,6 +1275,9 @@ exports.handler =
         500,
         {
 
+          success:
+            false,
+
           error:
             'SPORTMONKS_API_TOKEN absent.'
         }
@@ -950,14 +1290,15 @@ exports.handler =
      * première importation = 365 jours.
      *
      * incremental :
-     * mises à jour suivantes = 14 jours.
+     * suivantes = 14 jours.
      */
 
     const mode =
 
       event
         ?.queryStringParameters
-        ?.mode === 'seed'
+        ?.mode ===
+      'seed'
 
         ? 'seed'
 
@@ -966,7 +1307,8 @@ exports.handler =
 
     const days =
 
-      mode === 'seed'
+      mode ===
+      'seed'
 
         ? SEED_DAYS
 
@@ -974,25 +1316,41 @@ exports.handler =
 
 
     /*
-     * On s'arrête volontairement à hier.
+     * Historique modèle :
+     * on s'arrête à hier.
      *
-     * Ainsi un match actuellement en cours
-     * ne peut jamais être enregistré comme
-     * résultat final par cette fonction.
+     * Les matchs terminés aujourd'hui pourront
+     * être gérés immédiatement par finalize-match
+     * ou entrer dans le prochain incrémental.
      */
 
     const end =
       new Date();
 
 
+    end.setUTCHours(
+      0,
+      0,
+      0,
+      0
+    );
+
+
     end.setUTCDate(
-      end.getUTCDate() - 1
+
+      end.getUTCDate()
+
+      -
+
+      1
     );
 
 
     const start =
       addDays(
+
         end,
+
         -(days - 1)
       );
 
@@ -1006,13 +1364,9 @@ exports.handler =
 
     try {
 
-      /*
-       * Première importation :
-       * environ 5 blocs maximum.
-       *
-       * Ensuite l'incrémental ne demandera
-       * normalement qu'un seul bloc.
-       */
+      // ===============================================
+      // SPORTMONKS
+      // ===============================================
 
       const fetched =
         await Promise.all(
@@ -1032,9 +1386,9 @@ exports.handler =
         fetched.flat();
 
 
-      /*
-       * Déduplication par fixture ID.
-       */
+      // ===============================================
+      // DÉDUPLICATION
+      // ===============================================
 
       const unique =
         new Map();
@@ -1044,14 +1398,21 @@ exports.handler =
         fixture => {
 
           if (
-            fixture?.id !== undefined &&
-            fixture?.id !== null
+            fixture?.id !==
+            undefined
+
+            &&
+
+            fixture?.id !==
+            null
           ) {
 
             unique.set(
+
               String(
                 fixture.id
               ),
+
               fixture
             );
           }
@@ -1059,39 +1420,44 @@ exports.handler =
       );
 
 
-      const transformed =
+      // ===============================================
+      // TRANSFORMATION + VALIDATION
+      // ===============================================
 
+      const transformed =
         Array
           .from(
             unique.values()
           )
-
           .map(
             transformFixture
-          )
+          );
 
-          .filter(Boolean);
+
+      const valid =
+        transformed.filter(
+          item =>
+            item.stored
+        );
 
 
       const matches =
-        transformed.map(
+        valid.map(
           item =>
             item.match
         );
 
 
       const results =
-        transformed.map(
+        valid.map(
           item =>
             item.result
         );
 
 
       /*
-       * Important :
-       *
-       * matches AVANT results
-       * à cause de la clé étrangère.
+       * Matches AVANT results :
+       * FK results -> matches.
        */
 
       await saveMatches(
@@ -1104,6 +1470,10 @@ exports.handler =
       );
 
 
+      // ===============================================
+      // COMPTAGE PAR CHAMPIONNAT
+      // ===============================================
+
       const leagueCounts =
         {};
 
@@ -1115,11 +1485,17 @@ exports.handler =
             match.league_code;
 
 
-          leagueCounts[code] =
+          leagueCounts[
+            code
+          ] =
 
             (
-              leagueCounts[code]
+              leagueCounts[
+                code
+              ]
+
               ||
+
               0
             )
 
@@ -1128,6 +1504,59 @@ exports.handler =
             1;
         }
       );
+
+
+      // ===============================================
+      // RAISONS D'EXCLUSION
+      // ===============================================
+
+      const skipped = {
+
+        notFinal:
+          transformed.filter(
+            item =>
+              !item.stored &&
+              item.reason ===
+              'not-final'
+          ).length,
+
+        missingScore:
+          transformed.filter(
+            item =>
+              !item.stored &&
+              item.reason ===
+              'score'
+          ).length,
+
+        missingParticipants:
+          transformed.filter(
+            item =>
+              !item.stored &&
+              item.reason ===
+              'participants'
+          ).length,
+
+        invalidKickoff:
+          transformed.filter(
+            item =>
+              !item.stored &&
+              item.reason ===
+              'kickoff'
+          ).length,
+
+        invalidFixtureId:
+          transformed.filter(
+            item =>
+              !item.stored &&
+              item.reason ===
+              'fixture-id'
+          ).length,
+
+        states:
+          countSkippedStates(
+            transformed
+          )
+      };
 
 
       return jsonResponse(
@@ -1142,16 +1571,26 @@ exports.handler =
           days,
 
           from:
-            iso(start),
+            iso(
+              start
+            ),
 
           to:
-            iso(end),
+            iso(
+              end
+            ),
+
+          chunks:
+            ranges.length,
 
           sportmonksFixtures:
             rawFixtures.length,
 
           uniqueFixtures:
             unique.size,
+
+          completedFixtures:
+            valid.length,
 
           storedMatches:
             matches.length,
@@ -1162,13 +1601,21 @@ exports.handler =
           leagues:
             leagueCounts,
 
+          skipped,
+
+          finalStateIds:
+            Array.from(
+              FINAL_STATE_IDS
+            ),
+
           message:
 
-            mode === 'seed'
+            mode ===
+            'seed'
 
-              ? 'Historique initial MatchScope synchronisé.'
+              ? 'Historique initial MatchScope synchronisé avec contrôle des états finaux.'
 
-              : 'Mise à jour MatchScope terminée.'
+              : 'Mise à jour MatchScope terminée avec contrôle des états finaux.'
         }
       );
 
@@ -1196,7 +1643,9 @@ exports.handler =
           details:
             error?.message
             ||
-            String(error)
+            String(
+              error
+            )
         }
       );
     }
