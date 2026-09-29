@@ -2,7 +2,7 @@
 // MATCHSCOPE AI
 // PREANALYSIS.JS
 //
-// Transforme l'historique Sportmonks en statistiques
+// // Transforme la mémoire MatchScope / Supabase en statistiques
 // utiles avant un match LIVE.
 //
 // IMPORTANT :
