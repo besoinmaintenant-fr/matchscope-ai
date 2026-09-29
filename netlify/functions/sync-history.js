@@ -8,7 +8,6 @@ const API =
 
 
 const LEAGUES = {
-
   '82': {
     code: 'BL',
     name: 'Bundesliga'
@@ -32,17 +31,10 @@ const LEAGUE_IDS =
   );
 
 
-/*
- * Historique total souhaité.
- */
 const SEED_DAYS =
   365;
 
 
-/*
- * Seed découpé en plusieurs parties
- * pour éviter les timeouts Netlify.
- */
 const SEED_PART_DAYS =
   55;
 
@@ -54,10 +46,6 @@ const SEED_PARTS =
   );
 
 
-/*
- * Mise à jour normale après
- * le premier remplissage.
- */
 const INCREMENTAL_DAYS =
   14;
 
@@ -66,14 +54,6 @@ const BATCH_SIZE =
   100;
 
 
-/*
- * États Sportmonks considérés
- * réellement terminés.
- *
- * 5 = FT
- * 7 = AET
- * 8 = fin après tirs au but
- */
 const FINAL_STATE_IDS =
   new Set([
     5,
@@ -83,15 +63,9 @@ const FINAL_STATE_IDS =
 
 
 const STATE_LABELS = {
-
-  5:
-    'FT',
-
-  7:
-    'AET',
-
-  8:
-    'FT_PEN'
+  5: 'FT',
+  7: 'AET',
+  8: 'FT_PEN'
 };
 
 
@@ -105,11 +79,9 @@ function jsonResponse(
 ) {
 
   return {
-
     statusCode,
 
     headers: {
-
       'content-type':
         'application/json; charset=utf-8',
 
@@ -142,21 +114,12 @@ function authorized(
   if (!secret) {
 
     return {
-
-      ok:
-        false,
-
+      ok: false,
       reason:
         'MATCHSCOPE_SYNC_SECRET absent.'
     };
   }
 
-
-  /*
-   * On utilise notre propre header.
-   *
-   * Pas de Authorization / Bearer.
-   */
 
   const received =
 
@@ -176,10 +139,8 @@ function authorized(
 
 
   return {
-
     ok:
-      received ===
-      secret,
+      received === secret,
 
     reason:
       'Accès non autorisé.'
@@ -216,11 +177,8 @@ function addDays(
 
 
   copy.setUTCDate(
-
     copy.getUTCDate()
-
     +
-
     days
   );
 
@@ -257,28 +215,16 @@ function daysInclusive(
 ) {
 
   return (
-
     Math.floor(
-
       (
-        startOfUtcDay(
-          end
-        ).getTime()
-
+        startOfUtcDay(end).getTime()
         -
-
-        startOfUtcDay(
-          start
-        ).getTime()
+        startOfUtcDay(start).getTime()
       )
-
       /
-
       86400000
     )
-
     +
-
     1
   );
 }
@@ -289,23 +235,14 @@ function parseKickoff(
 ) {
 
   if (!value) {
-
     return null;
   }
 
 
   const raw =
-    String(
-      value
-    )
+    String(value)
       .trim();
 
-
-  /*
-   * Format Sportmonks fréquent :
-   *
-   * 2026-09-29 19:00:00
-   */
 
   if (
     /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
@@ -313,14 +250,11 @@ function parseKickoff(
   ) {
 
     return new Date(
-
       raw.replace(
         ' ',
         'T'
       )
-
       +
-
       'Z'
     );
   }
@@ -335,9 +269,7 @@ function parseKickoff(
   return Number.isNaN(
     date.getTime()
   )
-
     ? null
-
     : date;
 }
 
@@ -350,10 +282,6 @@ function getSeedRange(
   part
 ) {
 
-  /*
-   * Le seed se termine à hier.
-   */
-
   const seedEnd =
     startOfUtcDay(
       new Date()
@@ -361,56 +289,37 @@ function getSeedRange(
 
 
   seedEnd.setUTCDate(
-
     seedEnd.getUTCDate()
-
     -
-
     1
   );
 
 
-  /*
-   * Début exact des 365 jours.
-   */
-
   const seedStart =
     addDays(
-
       seedEnd,
-
       -(SEED_DAYS - 1)
     );
 
-
-  /*
-   * Décalage de la partie.
-   */
 
   const offset =
     (
       part - 1
     )
-
     *
-
     SEED_PART_DAYS;
 
 
   const partStart =
     addDays(
-
       seedStart,
-
       offset
     );
 
 
   let partEnd =
     addDays(
-
       partStart,
-
       SEED_PART_DAYS - 1
     );
 
@@ -437,7 +346,6 @@ function getSeedRange(
 
 
   return {
-
     start:
       partStart,
 
@@ -466,28 +374,21 @@ function getIncrementalRange() {
 
 
   end.setUTCDate(
-
     end.getUTCDate()
-
     -
-
     1
   );
 
 
   const start =
     addDays(
-
       end,
-
       -(INCREMENTAL_DAYS - 1)
     );
 
 
   return {
-
     start,
-
     end
   };
 }
@@ -520,9 +421,7 @@ function numberOrNull(
   return Number.isFinite(
     number
   )
-
     ? number
-
     : null;
 }
 
@@ -533,18 +432,14 @@ function getTeam(
 ) {
 
   return (
-
     participants.find(
       participant =>
-
         participant
           ?.meta
           ?.location ===
         location
     )
-
     ||
-
     null
   );
 }
@@ -594,14 +489,11 @@ function fixtureState(
 
 
   return {
-
     id:
       Number.isFinite(
         stateId
       )
-
         ? stateId
-
         : null,
 
     code,
@@ -623,28 +515,18 @@ function getFinalScore(
 ) {
 
   const result = {
-
-    home:
-      null,
-
-    away:
-      null
+    home: null,
+    away: null
   };
 
 
   scores.forEach(
     item => {
 
-      /*
-       * CURRENT n'est accepté
-       * qu'après vérification de l'état final.
-       */
-
       if (
         item?.description !==
         'CURRENT'
       ) {
-
         return;
       }
 
@@ -665,9 +547,7 @@ function getFinalScore(
 
       if (
         side === 'home'
-
         &&
-
         Number.isFinite(
           goals
         )
@@ -680,9 +560,7 @@ function getFinalScore(
 
       if (
         side === 'away'
-
         &&
-
         Number.isFinite(
           goals
         )
@@ -707,7 +585,6 @@ function getResult(
   if (
     home > away
   ) {
-
     return '1';
   }
 
@@ -715,7 +592,6 @@ function getResult(
   if (
     away > home
   ) {
-
     return '2';
   }
 
@@ -750,10 +626,6 @@ async function fetchRange(
     hasMore
   ) {
 
-    /*
-     * Sécurité pagination.
-     */
-
     if (
       page > 50
     ) {
@@ -765,12 +637,7 @@ async function fetchRange(
 
 
     const endpoint =
-
-      `${API}/fixtures/between/${iso(
-        start
-      )}/${iso(
-        end
-      )}`;
+      `${API}/fixtures/between/${iso(start)}/${iso(end)}`;
 
 
     const url =
@@ -786,17 +653,13 @@ async function fetchRange(
 
 
     url.searchParams.set(
-
       'filters',
-
       `fixtureLeagues:${LEAGUE_IDS.join(',')}`
     );
 
 
     url.searchParams.set(
-
       'include',
-
       'league;participants;scores;state'
     );
 
@@ -809,9 +672,7 @@ async function fetchRange(
 
     url.searchParams.set(
       'page',
-      String(
-        page
-      )
+      String(page)
     );
 
 
@@ -830,11 +691,7 @@ async function fetchRange(
     ) {
 
       throw new Error(
-
-        `Sportmonks ${response.status} : ${raw.slice(
-          0,
-          500
-        )}`
+        `Sportmonks ${response.status} : ${raw.slice(0, 500)}`
       );
     }
 
@@ -871,7 +728,6 @@ async function fetchRange(
 
     hasMore =
       Boolean(
-
         payload
           ?.pagination
           ?.has_more
@@ -896,7 +752,6 @@ function transformFixture(
 ) {
 
   const league =
-
     LEAGUES[
       String(
         fixture?.league_id
@@ -907,12 +762,8 @@ function transformFixture(
   if (!league) {
 
     return {
-
-      stored:
-        false,
-
-      reason:
-        'league'
+      stored: false,
+      reason: 'league'
     };
   }
 
@@ -923,19 +774,12 @@ function transformFixture(
     );
 
 
-  /*
-   * On refuse tout match
-   * non réellement terminé.
-   */
-
   if (
     !state.finished
   ) {
 
     return {
-
-      stored:
-        false,
+      stored: false,
 
       reason:
         'not-final',
@@ -950,13 +794,10 @@ function transformFixture(
 
 
   const participants =
-
     Array.isArray(
       fixture?.participants
     )
-
       ? fixture.participants
-
       : [];
 
 
@@ -980,12 +821,8 @@ function transformFixture(
   ) {
 
     return {
-
-      stored:
-        false,
-
-      reason:
-        'participants'
+      stored: false,
+      reason: 'participants'
     };
   }
 
@@ -999,25 +836,18 @@ function transformFixture(
   if (!kickoff) {
 
     return {
-
-      stored:
-        false,
-
-      reason:
-        'kickoff'
+      stored: false,
+      reason: 'kickoff'
     };
   }
 
 
   const score =
     getFinalScore(
-
       Array.isArray(
         fixture?.scores
       )
-
         ? fixture.scores
-
         : []
     );
 
@@ -1028,12 +858,8 @@ function transformFixture(
   ) {
 
     return {
-
-      stored:
-        false,
-
-      reason:
-        'score'
+      stored: false,
+      reason: 'score'
     };
   }
 
@@ -1049,12 +875,8 @@ function transformFixture(
   ) {
 
     return {
-
-      stored:
-        false,
-
-      reason:
-        'fixture-id'
+      stored: false,
+      reason: 'fixture-id'
     };
   }
 
@@ -1065,13 +887,10 @@ function transformFixture(
 
 
   return {
-
     stored:
       true,
 
-
     match: {
-
       sportmonks_fixture_id:
         fixtureId,
 
@@ -1125,9 +944,7 @@ function transformFixture(
         now
     },
 
-
     result: {
-
       sportmonks_fixture_id:
         fixtureId,
 
@@ -1143,11 +960,6 @@ function transformFixture(
           score.away
         ),
 
-      /*
-       * On ne fabrique pas
-       * une fausse heure de fin.
-       */
-
       finished_at:
         null,
 
@@ -1159,7 +971,7 @@ function transformFixture(
 
 
 // =====================================================
-// DÉCOUPAGE EN BATCHS
+// BATCH
 // =====================================================
 
 function chunks(
@@ -1178,7 +990,6 @@ function chunks(
   ) {
 
     result.push(
-
       array.slice(
         index,
         index + size
@@ -1202,7 +1013,6 @@ async function saveMatches(
   if (
     !matches.length
   ) {
-
     return;
   }
 
@@ -1222,7 +1032,6 @@ async function saveMatches(
     await supabaseRequest(
       'matches',
       {
-
         method:
           'POST',
 
@@ -1241,7 +1050,7 @@ async function saveMatches(
 
 
 // =====================================================
-// SUPABASE : RÉSULTATS
+// SUPABASE : RESULTS
 // =====================================================
 
 async function saveResults(
@@ -1251,7 +1060,6 @@ async function saveResults(
   if (
     !results.length
   ) {
-
     return;
   }
 
@@ -1271,7 +1079,6 @@ async function saveResults(
     await supabaseRequest(
       'results',
       {
-
         method:
           'POST',
 
@@ -1302,33 +1109,22 @@ function countSkippedStates(
 
 
   transformed
-
     .filter(
       item =>
-
         !item.stored
-
         &&
-
         item.reason ===
         'not-final'
     )
-
     .forEach(
       item => {
 
         const key =
-
           item.state
-
           ||
-
           (
-            item.stateId !==
-            null
-
+            item.stateId !== null
               ? `STATE_${item.stateId}`
-
               : 'UNKNOWN'
           );
 
@@ -1336,19 +1132,14 @@ function countSkippedStates(
         result[
           key
         ] =
-
           (
             result[
               key
             ]
-
             ||
-
             0
           )
-
           +
-
           1;
       }
     );
@@ -1365,10 +1156,6 @@ function countSkippedStates(
 exports.handler =
   async event => {
 
-    // -------------------------------------------------
-    // POST UNIQUEMENT
-    // -------------------------------------------------
-
     if (
       event.httpMethod !==
       'POST'
@@ -1377,20 +1164,12 @@ exports.handler =
       return jsonResponse(
         405,
         {
-
-          success:
-            false,
-
-          error:
-            'Méthode non autorisée.'
+          success: false,
+          error: 'Méthode non autorisée.'
         }
       );
     }
 
-
-    // -------------------------------------------------
-    // AUTHENTIFICATION
-    // -------------------------------------------------
 
     const access =
       authorized(
@@ -1405,20 +1184,12 @@ exports.handler =
       return jsonResponse(
         401,
         {
-
-          success:
-            false,
-
-          error:
-            access.reason
+          success: false,
+          error: access.reason
         }
       );
     }
 
-
-    // -------------------------------------------------
-    // SPORTMONKS TOKEN
-    // -------------------------------------------------
 
     const token =
       process
@@ -1431,43 +1202,25 @@ exports.handler =
       return jsonResponse(
         500,
         {
-
-          success:
-            false,
-
-          error:
-            'SPORTMONKS_API_TOKEN absent.'
+          success: false,
+          error: 'SPORTMONKS_API_TOKEN absent.'
         }
       );
     }
 
 
-    // -------------------------------------------------
-    // MODE
-    // -------------------------------------------------
-
     const mode =
-
       event
         ?.queryStringParameters
-        ?.mode ===
-      'seed'
-
+        ?.mode === 'seed'
         ? 'seed'
-
         : 'incremental';
 
 
     let range;
-
-
     let part =
       null;
 
-
-    // -------------------------------------------------
-    // SEED DÉCOUPÉ
-    // -------------------------------------------------
 
     if (
       mode ===
@@ -1476,37 +1229,25 @@ exports.handler =
 
       part =
         Number(
-
           event
             ?.queryStringParameters
             ?.part
         );
 
 
-      /*
-       * Le seed sans numéro
-       * de partie est interdit.
-       */
-
       if (
         !Number.isInteger(
           part
         )
-
         ||
-
         part < 1
-
         ||
-
-        part >
-        SEED_PARTS
+        part > SEED_PARTS
       ) {
 
         return jsonResponse(
           400,
           {
-
             success:
               false,
 
@@ -1535,14 +1276,11 @@ exports.handler =
         );
 
 
-      if (
-        !range
-      ) {
+      if (!range) {
 
         return jsonResponse(
           400,
           {
-
             success:
               false,
 
@@ -1554,10 +1292,6 @@ exports.handler =
 
     } else {
 
-      // ------------------------------------------------
-      // MODE INCRÉMENTAL
-      // ------------------------------------------------
-
       range =
         getIncrementalRange();
     }
@@ -1565,24 +1299,13 @@ exports.handler =
 
     try {
 
-      // ===============================================
-      // 1. SPORTMONKS
-      // ===============================================
-
       const rawFixtures =
         await fetchRange(
-
           token,
-
           range.start,
-
           range.end
         );
 
-
-      // ===============================================
-      // 2. DÉDUPLICATION
-      // ===============================================
 
       const unique =
         new Map();
@@ -1592,31 +1315,21 @@ exports.handler =
         fixture => {
 
           if (
-            fixture?.id !==
-            undefined
-
+            fixture?.id !== undefined
             &&
-
-            fixture?.id !==
-            null
+            fixture?.id !== null
           ) {
 
             unique.set(
-
               String(
                 fixture.id
               ),
-
               fixture
             );
           }
         }
       );
 
-
-      // ===============================================
-      // 3. TRANSFORMATION
-      // ===============================================
 
       const transformed =
         Array
@@ -1649,15 +1362,6 @@ exports.handler =
         );
 
 
-      // ===============================================
-      // 4. SUPABASE
-      // ===============================================
-
-      /*
-       * Matches en premier
-       * à cause de la clé étrangère.
-       */
-
       await saveMatches(
         matches
       );
@@ -1667,10 +1371,6 @@ exports.handler =
         results
       );
 
-
-      // ===============================================
-      // 5. COMPTAGE PAR LIGUE
-      // ===============================================
 
       const leagueCounts =
         {};
@@ -1686,34 +1386,25 @@ exports.handler =
           leagueCounts[
             code
           ] =
-
             (
               leagueCounts[
                 code
               ]
-
               ||
-
               0
             )
-
             +
-
             1;
         }
       );
 
 
-      // ===============================================
-      // 6. DIAGNOSTIC
-      // ===============================================
-
       const skipped = {
-
         notFinal:
           transformed.filter(
             item =>
-              !item.stored &&
+              !item.stored
+              &&
               item.reason ===
               'not-final'
           ).length,
@@ -1721,7 +1412,8 @@ exports.handler =
         missingScore:
           transformed.filter(
             item =>
-              !item.stored &&
+              !item.stored
+              &&
               item.reason ===
               'score'
           ).length,
@@ -1729,7 +1421,8 @@ exports.handler =
         missingParticipants:
           transformed.filter(
             item =>
-              !item.stored &&
+              !item.stored
+              &&
               item.reason ===
               'participants'
           ).length,
@@ -1737,7 +1430,8 @@ exports.handler =
         invalidKickoff:
           transformed.filter(
             item =>
-              !item.stored &&
+              !item.stored
+              &&
               item.reason ===
               'kickoff'
           ).length,
@@ -1745,7 +1439,8 @@ exports.handler =
         invalidFixtureId:
           transformed.filter(
             item =>
-              !item.stored &&
+              !item.stored
+              &&
               item.reason ===
               'fixture-id'
           ).length,
@@ -1757,22 +1452,14 @@ exports.handler =
       };
 
 
-      // ===============================================
-      // 7. PROCHAINE PARTIE
-      // ===============================================
-
       let nextPart =
         null;
 
 
       if (
-        mode ===
-        'seed'
-
+        mode === 'seed'
         &&
-
-        part <
-        SEED_PARTS
+        part < SEED_PARTS
       ) {
 
         nextPart =
@@ -1780,44 +1467,29 @@ exports.handler =
       }
 
 
-      // ===============================================
-      // 8. RÉPONSE
-      // ===============================================
-
       return jsonResponse(
         200,
         {
-
           success:
             true,
 
           mode,
 
           part:
-            mode ===
-            'seed'
-
+            mode === 'seed'
               ? part
-
               : null,
 
           seedParts:
-            mode ===
-            'seed'
-
+            mode === 'seed'
               ? SEED_PARTS
-
               : null,
 
           nextPart,
 
           completed:
-            mode ===
-            'seed'
-
-              ? part ===
-                SEED_PARTS
-
+            mode === 'seed'
+              ? part === SEED_PARTS
               : true,
 
           from:
@@ -1862,19 +1534,12 @@ exports.handler =
             ),
 
           message:
-
-            mode ===
-            'seed'
-
+            mode === 'seed'
               ? (
-                  part ===
-                  SEED_PARTS
-
+                  part === SEED_PARTS
                     ? 'Dernière partie du seed MatchScope terminée.'
-
                     : `Seed MatchScope partie ${part}/${SEED_PARTS} terminé.`
                 )
-
               : 'Mise à jour incrémentale MatchScope terminée.'
         }
       );
@@ -1893,7 +1558,6 @@ exports.handler =
       return jsonResponse(
         500,
         {
-
           success:
             false,
 
