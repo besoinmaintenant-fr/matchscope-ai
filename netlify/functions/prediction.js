@@ -12,7 +12,7 @@ const {
 
 const {
   MODEL_VERSION,
-  predictV07
+  buildModel
 } = require('./lib/model-v07');
 
 
@@ -28,11 +28,6 @@ const PAGE_SIZE =
   1000;
 
 
-/*
- * On ne permet pas au moteur serveur
- * de travailler sur une base historique
- * manifestement incomplète.
- */
 const MIN_HISTORY =
   850;
 
@@ -61,7 +56,7 @@ const LEAGUES = {
 
 
 // =====================================================
-// RÉPONSE
+// RÉPONSE JSON
 // =====================================================
 
 function jsonResponse(
@@ -139,14 +134,11 @@ function parseKickoff(
       .trim();
 
 
-  /*
-   * Format Sportmonks fréquent :
-   * 2026-09-29 19:00:00
-   */
-
   if (
     /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
-      .test(raw)
+      .test(
+        raw
+      )
   ) {
 
     return new Date(
@@ -177,6 +169,43 @@ function parseKickoff(
 }
 
 
+function normalizeTeam(
+  value = ''
+) {
+
+  return String(
+    value
+  )
+
+    .normalize(
+      'NFD'
+    )
+
+    .replace(
+      /[\u0300-\u036f]/g,
+      ''
+    )
+
+    .toLowerCase()
+
+    .replace(
+      /[^a-z0-9]/g,
+      ''
+    );
+}
+
+
+function teamKey(
+  competition,
+  team
+) {
+
+  return `${competition}::${normalizeTeam(
+    team
+  )}`;
+}
+
+
 function getTeam(
   participants,
   location
@@ -201,7 +230,7 @@ function getTeam(
 
 
 // =====================================================
-// SPORTMONKS : MATCH À ANALYSER
+// MATCH SPORTMONKS
 // =====================================================
 
 async function fetchFixture(
@@ -223,15 +252,6 @@ async function fetchFixture(
     token
   );
 
-
-  /*
-   * Pour l'instant les compositions
-   * permettent surtout de déterminer
-   * PRELINEUP / FINAL.
-   *
-   * Leur effet mathématique sera ajouté
-   * séparément après validation.
-   */
 
   url.searchParams.set(
 
@@ -309,7 +329,7 @@ async function fetchFixture(
 
 
 // =====================================================
-// CONVERSION DU MATCH CIBLE
+// MATCH CIBLE
 // =====================================================
 
 function buildTarget(
@@ -431,7 +451,7 @@ function buildTarget(
 
 
 // =====================================================
-// HISTORIQUE SUPABASE -> FORMAT V0.7
+// HISTORIQUE SUPABASE
 // =====================================================
 
 function transformHistoryRow(
@@ -547,7 +567,7 @@ function transformHistoryRow(
 
 
 // =====================================================
-// CHARGER LES 365 JOURS AVANT LE MATCH
+// CHARGEMENT HISTORIQUE
 // =====================================================
 
 async function loadHistory(
@@ -584,13 +604,6 @@ async function loadHistory(
 
 
   while (true) {
-
-    /*
-     * Protection anti-fuite temporelle :
-     *
-     * seules les rencontres antérieures
-     * au coup d'envoi peuvent être utilisées.
-     */
 
     const query =
 
@@ -679,10 +692,6 @@ async function loadHistory(
     offset +=
       PAGE_SIZE;
 
-
-    /*
-     * Sécurité contre une boucle anormale.
-     */
 
     if (
       offset >
@@ -787,7 +796,322 @@ function historyStatus(
 
 
 // =====================================================
-// INTERDIRE UNE PRÉDICTION APRÈS LE COUP D'ENVOI
+// CHARGEMENT DU RÉGLAGE V0.7
+// =====================================================
+
+async function loadRuntime() {
+
+  const query =
+
+    `?model_version=eq.${encodeURIComponent(
+      MODEL_VERSION
+    )}`
+
+    +
+
+    '&select=*'
+
+    +
+
+    '&limit=1';
+
+
+  const rows =
+    await supabaseRequest(
+      'model_runtime',
+      {
+
+        method:
+          'GET',
+
+        query
+      }
+    );
+
+
+  if (
+    !Array.isArray(rows) ||
+    !rows.length
+  ) {
+
+    throw new Error(
+      'V0.7 n’est pas encore calibré dans model_runtime.'
+    );
+  }
+
+
+  const runtime =
+    rows[0];
+
+
+  if (
+    !runtime?.config ||
+    !runtime?.calibration
+  ) {
+
+    throw new Error(
+      'Réglage V0.7 incomplet dans model_runtime.'
+    );
+  }
+
+
+  return runtime;
+}
+
+
+// =====================================================
+// RECONSTRUCTION ELO
+//
+// Même logique que V0.7,
+// mais sans refaire le tuning.
+// =====================================================
+
+function buildEloTimeline(
+  history,
+  config
+) {
+
+  const ratings =
+    new Map();
+
+
+  const preMatch =
+    new Map();
+
+
+  const chronological =
+
+    [...history]
+
+      .filter(
+        match =>
+          [
+            'PL',
+            'BL',
+            'LL'
+          ].includes(
+            match.competition
+          )
+      )
+
+      .filter(
+        match =>
+          Number.isFinite(
+            Number(
+              match.kickoffTs
+            )
+          )
+      )
+
+      .sort(
+        (
+          first,
+          second
+        ) =>
+
+          Number(
+            first.kickoffTs
+          )
+
+          -
+
+          Number(
+            second.kickoffTs
+          )
+      );
+
+
+  const getRating =
+    key =>
+
+      ratings.has(
+        key
+      )
+
+        ? ratings.get(
+            key
+          )
+
+        : 1500;
+
+
+  chronological.forEach(
+    match => {
+
+      const homeKey =
+        teamKey(
+          match.competition,
+          match.home
+        );
+
+
+      const awayKey =
+        teamKey(
+          match.competition,
+          match.away
+        );
+
+
+      const homeRating =
+        getRating(
+          homeKey
+        );
+
+
+      const awayRating =
+        getRating(
+          awayKey
+        );
+
+
+      preMatch.set(
+        String(
+          match.id
+        ),
+        {
+
+          homeRating,
+
+          awayRating
+        }
+      );
+
+
+      const expectedHome =
+
+        1
+
+        /
+
+        (
+          1
+
+          +
+
+          Math.pow(
+
+            10,
+
+            -(
+              homeRating
+              +
+              Number(
+                config.eloHomeAdv
+              )
+              -
+              awayRating
+            )
+
+            /
+
+            400
+          )
+        );
+
+
+      const homeGoals =
+        numberOrNull(
+          match?.score?.home
+        );
+
+
+      const awayGoals =
+        numberOrNull(
+          match?.score?.away
+        );
+
+
+      if (
+        homeGoals === null ||
+        awayGoals === null
+      ) {
+
+        return;
+      }
+
+
+      const actualHome =
+
+        homeGoals >
+        awayGoals
+
+          ? 1
+
+          : homeGoals ===
+            awayGoals
+
+            ? 0.5
+
+            : 0;
+
+
+      const goalDifference =
+        Math.abs(
+          homeGoals -
+          awayGoals
+        );
+
+
+      const marginMultiplier =
+
+        goalDifference <= 1
+
+          ? 1
+
+          : Math.sqrt(
+              goalDifference
+            );
+
+
+      const delta =
+
+        Number(
+          config.eloK
+        )
+
+        *
+
+        marginMultiplier
+
+        *
+
+        (
+          actualHome -
+          expectedHome
+        );
+
+
+      ratings.set(
+
+        homeKey,
+
+        homeRating +
+        delta
+      );
+
+
+      ratings.set(
+
+        awayKey,
+
+        awayRating -
+        delta
+      );
+    }
+  );
+
+
+  return {
+
+    ratings,
+
+    preMatch
+  };
+}
+
+
+// =====================================================
+// INTERDICTION APRÈS COUP D'ENVOI
 // =====================================================
 
 function ensureBeforeKickoff(
@@ -825,7 +1149,7 @@ function ensureBeforeKickoff(
 
 
 // =====================================================
-// FORMAT POUR MEMORY.JS
+// FORMAT MEMORY.JS
 // =====================================================
 
 function predictionPayload(
@@ -871,20 +1195,11 @@ function predictionPayload(
 
 
 // =====================================================
-// HANDLER NETLIFY
+// HANDLER
 // =====================================================
 
 exports.handler =
   async event => {
-
-    /*
-     * POST uniquement.
-     *
-     * Le navigateur n'envoie jamais
-     * les probabilités.
-     *
-     * Il envoie seulement fixtureId.
-     */
 
     if (
       event.httpMethod !==
@@ -985,7 +1300,7 @@ exports.handler =
     try {
 
       // =================================================
-      // 1. RÉCUPÉRER LE MATCH DEPUIS SPORTMONKS
+      // 1. MATCH SPORTMONKS
       // =================================================
 
       const fixture =
@@ -996,7 +1311,7 @@ exports.handler =
 
 
       // =================================================
-      // 2. CONSTRUIRE LA CIBLE V0.7
+      // 2. MATCH CIBLE
       // =================================================
 
       const target =
@@ -1005,19 +1320,13 @@ exports.handler =
         );
 
 
-      /*
-       * Anti-fuite :
-       * jamais de nouvelle prédiction
-       * après le début du match.
-       */
-
       ensureBeforeKickoff(
         target
       );
 
 
       // =================================================
-      // 3. STATUT DES COMPOSITIONS
+      // 3. COMPOSITIONS
       // =================================================
 
       const lineup =
@@ -1036,7 +1345,7 @@ exports.handler =
 
 
       // =================================================
-      // 4. IMMUTABILITÉ
+      // 4. PRÉDICTION DÉJÀ FIGÉE ?
       // =================================================
 
       const existing =
@@ -1085,7 +1394,17 @@ exports.handler =
 
 
       // =================================================
-      // 5. HISTORIQUE MATCHSCOPE
+      // 5. RUNTIME V0.7
+      //
+      // ICI ON NE RETUNE PLUS LE MODÈLE.
+      // =================================================
+
+      const runtime =
+        await loadRuntime();
+
+
+      // =================================================
+      // 6. HISTORIQUE ACTUEL
       // =================================================
 
       const history =
@@ -1115,7 +1434,7 @@ exports.handler =
               'HISTORIQUE_MATCHSCOPE_INCOMPLET',
 
             message:
-              'La base MatchScope doit être initialisée avant les prédictions serveur.',
+              'La mémoire MatchScope est insuffisante pour V0.7.',
 
             history:
               historyInfo
@@ -1125,24 +1444,44 @@ exports.handler =
 
 
       // =================================================
-      // 6. CALCUL V0.7 CÔTÉ SERVEUR
+      // 7. ELO AVEC LES PARAMÈTRES FIGÉS
       // =================================================
 
-      const output =
-        predictV07(
+      const eloState =
+        buildEloTimeline(
 
           history,
 
-          target
+          runtime.config
         );
 
 
+      // =================================================
+      // 8. CALCUL RAPIDE DU MATCH
+      //
+      // Plus de tuneModel()
+      // Plus de backtest à chaque clic.
+      // =================================================
+
       const model =
-        output.model;
+        buildModel(
+
+          history,
+
+          target,
+
+          Infinity,
+
+          runtime.config,
+
+          eloState,
+
+          runtime.calibration
+        );
 
 
       // =================================================
-      // 7. PRELINEUP
+      // 9. PRELINEUP
       // =================================================
 
       if (
@@ -1172,7 +1511,17 @@ exports.handler =
                 'MatchScope V0.7',
 
               source:
-                'supabase-model-history',
+                'supabase-model-runtime',
+
+              runtimeTrainedAt:
+                runtime.trained_at
+                ||
+                null,
+
+              runtimeHistoryCount:
+                runtime.history_count
+                ||
+                null,
 
               historyDays:
                 HISTORY_DAYS,
@@ -1190,7 +1539,9 @@ exports.handler =
                 model.baseline,
 
               validation:
-                output.validation,
+                runtime.validation
+                ||
+                null,
 
               lineupEffectApplied:
                 false
@@ -1222,34 +1573,37 @@ exports.handler =
             officialLineups:
               false,
 
+            runtime: {
+
+              trainedAt:
+                runtime.trained_at
+                ||
+                null,
+
+              historyCount:
+                runtime.history_count
+                ||
+                null
+            },
+
             history:
               historyInfo,
 
             model,
 
             validation:
-              output.validation
+              runtime.validation
+              ||
+              null
           }
         );
       }
 
 
       // =================================================
-      // 8. XI OFFICIELS
-      // =================================================
+      // 10. XI OFFICIELS
       //
-      // IMPORTANT :
-      //
-      // V0.7 n'utilise pas encore les compositions
-      // dans ses mathématiques.
-      //
-      // On ne sauvegarde donc pas une fausse FINAL
-      // identique à la PRELINEUP.
-      //
-      // Cela préservera la qualité scientifique
-      // de notre future comparaison :
-      //
-      // Brier PRELINEUP vs Brier FINAL.
+      // On ne crée toujours PAS de fausse FINAL.
       // =================================================
 
       return jsonResponse(
@@ -1283,7 +1637,20 @@ exports.handler =
             'FINAL_LINEUP_MODEL_PENDING',
 
           message:
-            'Les compositions officielles sont disponibles. La base V0.7 a été calculée, mais aucune prédiction FINAL n’est enregistrée tant que l’effet des compositions n’est pas intégré et validé.',
+            'Les compositions officielles sont disponibles. La base V0.7 est calculée avec le runtime figé, mais aucune prédiction FINAL n’est enregistrée tant que l’effet des compositions n’a pas été validé.',
+
+          runtime: {
+
+            trainedAt:
+              runtime.trained_at
+              ||
+              null,
+
+            historyCount:
+              runtime.history_count
+              ||
+              null
+          },
 
           history:
             historyInfo,
@@ -1292,7 +1659,9 @@ exports.handler =
             model,
 
           validation:
-            output.validation
+            runtime.validation
+            ||
+            null
         }
       );
 
