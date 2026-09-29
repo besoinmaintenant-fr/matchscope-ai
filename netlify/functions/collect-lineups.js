@@ -21,9 +21,9 @@ const LEAGUE_IDS = [
 ];
 
 
-// On commence à surveiller 3 heures avant le match.
+// On commence à surveiller 1 heure avant le match.
 const LOOKAHEAD_MINUTES =
-  180;
+  60;
 
 
 // On continue jusqu'à 30 minutes après le coup d'envoi
