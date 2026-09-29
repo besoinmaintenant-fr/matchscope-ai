@@ -5,6 +5,10 @@ const SUPABASE_SECRET_KEY =
   process.env.SUPABASE_SECRET_KEY;
 
 
+// =====================================================
+// CONFIG
+// =====================================================
+
 function checkConfig() {
 
   if (
@@ -18,6 +22,73 @@ function checkConfig() {
   }
 }
 
+
+// =====================================================
+// HEADERS
+// =====================================================
+
+function buildHeaders(
+  prefer
+) {
+
+  const headers = {
+
+    apikey:
+      SUPABASE_SECRET_KEY,
+
+    'Content-Type':
+      'application/json',
+
+    Prefer:
+      prefer
+  };
+
+
+  /*
+   * Les nouvelles clés Supabase :
+   *
+   * sb_secret_...
+   * sb_publishable_...
+   *
+   * ne sont PAS des JWT.
+   *
+   * Elles doivent être envoyées
+   * dans "apikey".
+   *
+   * On n'ajoute Authorization
+   * que si un ancien token JWT
+   * est utilisé.
+   */
+
+  const isModernApiKey =
+
+    SUPABASE_SECRET_KEY.startsWith(
+      'sb_secret_'
+    )
+
+    ||
+
+    SUPABASE_SECRET_KEY.startsWith(
+      'sb_publishable_'
+    );
+
+
+  if (
+    !isModernApiKey
+  ) {
+
+    headers.Authorization =
+      `Bearer ${SUPABASE_SECRET_KEY}`;
+  }
+
+
+  return headers;
+}
+
+
+// =====================================================
+// REQUÊTE REST SUPABASE
+// =====================================================
 
 async function supabaseRequest(
   table,
@@ -39,20 +110,10 @@ async function supabaseRequest(
     `${SUPABASE_URL}/rest/v1/${table}${query}`;
 
 
-  const headers = {
-
-    apikey:
-      SUPABASE_SECRET_KEY,
-
-    Authorization:
-      `Bearer ${SUPABASE_SECRET_KEY}`,
-
-    'Content-Type':
-      'application/json',
-
-    Prefer:
+  const headers =
+    buildHeaders(
       prefer
-  };
+    );
 
 
   const response =
@@ -122,6 +183,10 @@ async function supabaseRequest(
   return data;
 }
 
+
+// =====================================================
+// EXPORT
+// =====================================================
 
 module.exports = {
 
