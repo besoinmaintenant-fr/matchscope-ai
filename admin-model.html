@@ -1,0 +1,230 @@
+<!doctype html>
+
+<html lang="fr">
+
+<head>
+
+  <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  >
+
+  <title>
+    MatchScope — Calibration V0.7
+  </title>
+
+  <style>
+
+    body {
+      margin: 0;
+      padding: 24px;
+      background: #06110c;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+
+    .box {
+      max-width: 520px;
+      margin: 40px auto;
+      background: #0d1d15;
+      border: 1px solid #244a35;
+      border-radius: 18px;
+      padding: 22px;
+    }
+
+    h1 {
+      margin-top: 0;
+      font-size: 24px;
+    }
+
+    p {
+      color: #b9c9bf;
+      line-height: 1.5;
+    }
+
+    input,
+    button {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 15px;
+      border-radius: 12px;
+      font-size: 16px;
+    }
+
+    input {
+      background: #07100b;
+      color: white;
+      border: 1px solid #315641;
+      margin: 15px 0;
+    }
+
+    button {
+      border: 0;
+      font-weight: bold;
+      background: #37e481;
+      color: #00190b;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+    }
+
+    #status {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 12px;
+      background: #07100b;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+
+  </style>
+
+</head>
+
+<body>
+
+  <div class="box">
+
+    <h1>
+      Calibration MatchScope V0.7
+    </h1>
+
+    <p>
+      Cette opération lance le gros calibrage du modèle une seule fois.
+      Le résultat sera ensuite conservé dans Supabase.
+    </p>
+
+    <input
+      id="secret"
+      type="password"
+      placeholder="MATCHSCOPE_SYNC_SECRET"
+      autocomplete="off"
+    >
+
+    <button id="launch">
+      Lancer la calibration V0.7
+    </button>
+
+    <div id="status">
+      En attente.
+    </div>
+
+  </div>
+
+
+  <script>
+
+    const button =
+      document.querySelector(
+        '#launch'
+      );
+
+    const secretInput =
+      document.querySelector(
+        '#secret'
+      );
+
+    const status =
+      document.querySelector(
+        '#status'
+      );
+
+
+    button.addEventListener(
+      'click',
+      async () => {
+
+        const secret =
+          secretInput.value.trim();
+
+
+        if (!secret) {
+
+          status.textContent =
+            'Entre ton MATCHSCOPE_SYNC_SECRET.';
+
+          return;
+        }
+
+
+        button.disabled =
+          true;
+
+
+        status.textContent =
+          'Lancement de la calibration…';
+
+
+        try {
+
+          const response =
+            await fetch(
+              '/.netlify/functions/train-model-background',
+              {
+
+                method:
+                  'POST',
+
+                headers: {
+
+                  'Content-Type':
+                    'application/json'
+                },
+
+                body:
+                  JSON.stringify({
+                    secret
+                  })
+              }
+            );
+
+
+          if (
+            response.status === 202 ||
+            response.ok
+          ) {
+
+            status.textContent =
+`✅ Calibration lancée.
+
+Le traitement continue côté serveur.
+
+Attends environ 1 à 3 minutes avant de tester un nouveau match dans MatchScope.`;
+
+          } else {
+
+            const text =
+              await response.text();
+
+
+            status.textContent =
+`❌ Erreur ${response.status}
+
+${text}`;
+          }
+
+
+        } catch (
+          error
+        ) {
+
+          status.textContent =
+`❌ Impossible de lancer la calibration.
+
+${error.message}`;
+        }
+
+
+        button.disabled =
+          false;
+      }
+    );
+
+  </script>
+
+</body>
+
+</html>
