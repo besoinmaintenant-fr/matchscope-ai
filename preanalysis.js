@@ -2,21 +2,23 @@
 // MATCHSCOPE AI
 // PREANALYSIS.JS
 //
-// // Transforme la mémoire MatchScope / Supabase en statistiques
-// utiles avant un match LIVE.
+// Transforme la mémoire MatchScope / Supabase
+// en statistiques descriptives utiles avant un match.
 //
 // IMPORTANT :
-// - aucune probabilité inventée
-// - aucune prédiction 1/N/2 calculée ici
-// - historique = variables descriptives uniquement
+// - aucune probabilité 1/N/2 n'est inventée ici
+// - les statistiques affichées sont descriptives
+// - la source de cette section est Supabase
+// - fenêtre d'affichage : 90 jours
+// - maximum : 5 matchs récents par équipe
 // =====================================================
 
 
 (() => {
 
-  // ---------------------------------------------------
+  // ===================================================
   // VÉRIFICATION
-  // ---------------------------------------------------
+  // ===================================================
 
   if (
     typeof openAnalysis !==
@@ -31,7 +33,7 @@
   }
 
 
-  // On conserve la fonction originale de app.js
+  // On conserve openAnalysis de app.js
 
   const originalOpenAnalysis =
     openAnalysis;
@@ -46,7 +48,9 @@
 
 
   let historySource =
-  null;
+    null;
+
+
   // ===================================================
   // OUTILS
   // ===================================================
@@ -90,7 +94,9 @@
 
     return String(value)
 
-      .normalize('NFD')
+      .normalize(
+        'NFD'
+      )
 
       .replace(
         /[\u0300-\u036f]/g,
@@ -135,244 +141,247 @@
 
 
   // ===================================================
-  // CHARGEMENT HISTORIQUE
+  // CHARGEMENT DE LA MÉMOIRE MATCHSCOPE
   // ===================================================
 
-async function loadHistory() {
+  async function loadHistory() {
 
-  if (
-    Array.isArray(
-      historyCache
-    )
-  ) {
+    if (
+      Array.isArray(
+        historyCache
+      )
+    ) {
 
-    return historyCache;
-  }
+      return historyCache;
+    }
 
 
-  if (
-    historyLoading
-  ) {
+    if (
+      historyLoading
+    ) {
+
+      return historyLoading;
+    }
+
+
+    historyLoading =
+      fetch(
+        '/.netlify/functions/modelhistory?v=preanalysis-2',
+        {
+          cache:
+            'no-store'
+        }
+      )
+
+        .then(
+          async response => {
+
+            let data =
+              {};
+
+
+            try {
+
+              data =
+                await response.json();
+
+            } catch (
+              _error
+            ) {
+
+              throw new Error(
+                'Réponse historique MatchScope illisible.'
+              );
+            }
+
+
+            if (
+              !response.ok
+            ) {
+
+              throw new Error(
+
+                data.details
+
+                ||
+
+                data.error
+
+                ||
+
+                `Erreur historique ${
+                  response.status
+                }`
+              );
+            }
+
+
+            // Cette section doit utiliser
+            // la mémoire Supabase.
+
+            if (
+              data.source !==
+              'supabase'
+            ) {
+
+              throw new Error(
+                'Mémoire MatchScope / Supabase indisponible.'
+              );
+            }
+
+
+            if (
+              !Array.isArray(
+                data.matches
+              )
+            ) {
+
+              throw new Error(
+                'Historique MatchScope absent.'
+              );
+            }
+
+
+            const now =
+              Date.now();
+
+
+            const cutoff =
+              now
+
+              -
+
+              90 *
+              24 *
+              60 *
+              60 *
+              1000;
+
+
+            historySource =
+              data.source;
+
+
+            /*
+             * modelhistory contient jusqu'à
+             * 365 jours de données.
+             *
+             * La section visuelle "Forme récente"
+             * utilise volontairement
+             * seulement les 90 derniers jours.
+             */
+
+            historyCache =
+              data.matches
+
+                .filter(
+                  match => {
+
+                    let timestamp =
+                      Number(
+                        match?.kickoffTs
+                      );
+
+
+                    if (
+                      !Number.isFinite(
+                        timestamp
+                      )
+                    ) {
+
+                      timestamp =
+                        Date.parse(
+                          match?.startingAt
+                          ||
+                          ''
+                        );
+                    }
+
+
+                    return (
+                      Number.isFinite(
+                        timestamp
+                      )
+
+                      &&
+
+                      timestamp <
+                      now
+
+                      &&
+
+                      timestamp >=
+                      cutoff
+                    );
+                  }
+                )
+
+                .sort(
+                  (
+                    first,
+                    second
+                  ) => {
+
+                    const firstTime =
+                      Number(
+                        first?.kickoffTs
+                      )
+
+                      ||
+
+                      Date.parse(
+                        first?.startingAt
+                        ||
+                        ''
+                      )
+
+                      ||
+
+                      0;
+
+
+                    const secondTime =
+                      Number(
+                        second?.kickoffTs
+                      )
+
+                      ||
+
+                      Date.parse(
+                        second?.startingAt
+                        ||
+                        ''
+                      )
+
+                      ||
+
+                      0;
+
+
+                    return (
+                      secondTime -
+                      firstTime
+                    );
+                  }
+                );
+
+
+            return historyCache;
+          }
+        )
+
+        .finally(
+          () => {
+
+            historyLoading =
+              null;
+          }
+        );
+
 
     return historyLoading;
   }
 
-
-  historyLoading =
-    fetch(
-      '/.netlify/functions/modelhistory?v=preanalysis-1',
-      {
-        cache:
-          'no-store'
-      }
-    )
-
-      .then(
-        async response => {
-
-          let data =
-            {};
-
-
-          try {
-
-            data =
-              await response.json();
-
-          } catch (
-            _error
-          ) {
-
-            throw new Error(
-              'Réponse historique MatchScope illisible.'
-            );
-          }
-
-
-          if (
-            !response.ok
-          ) {
-
-            throw new Error(
-
-              data.details
-
-              ||
-
-              data.error
-
-              ||
-
-              `Erreur historique ${
-                response.status
-              }`
-            );
-          }
-
-
-          /*
-           * Pour cette section,
-           * nous voulons réellement
-           * utiliser notre mémoire Supabase.
-           */
-
-          if (
-            data.source !==
-            'supabase'
-          ) {
-
-            throw new Error(
-              'Mémoire MatchScope / Supabase indisponible.'
-            );
-          }
-
-
-          if (
-            !Array.isArray(
-              data.matches
-            )
-          ) {
-
-            throw new Error(
-              'Historique MatchScope absent.'
-            );
-          }
-
-
-          const now =
-            Date.now();
-
-
-          const cutoff =
-            now
-            -
-            90 *
-            24 *
-            60 *
-            60 *
-            1000;
-
-
-          historySource =
-            data.source;
-
-
-          /*
-           * modelhistory contient 365 jours.
-           *
-           * La fiche "Forme récente"
-           * conserve volontairement
-           * une fenêtre descriptive de 90 jours.
-           */
-
-          historyCache =
-            data.matches
-
-              .filter(
-                match => {
-
-                  let timestamp =
-                    Number(
-                      match?.kickoffTs
-                    );
-
-
-                  if (
-                    !Number.isFinite(
-                      timestamp
-                    )
-                  ) {
-
-                    timestamp =
-                      Date.parse(
-                        match?.startingAt
-                        ||
-                        ''
-                      );
-                  }
-
-
-                  return (
-                    Number.isFinite(
-                      timestamp
-                    )
-
-                    &&
-
-                    timestamp <
-                    now
-
-                    &&
-
-                    timestamp >=
-                    cutoff
-                  );
-                }
-              )
-
-              /*
-               * Le reste de preanalysis.js
-               * attend les matchs
-               * du plus récent au plus ancien.
-               */
-
-              .sort(
-                (
-                  first,
-                  second
-                ) => {
-
-                  const firstTime =
-                    Number(
-                      first?.kickoffTs
-                    )
-                    ||
-                    Date.parse(
-                      first?.startingAt
-                      ||
-                      ''
-                    )
-                    ||
-                    0;
-
-
-                  const secondTime =
-                    Number(
-                      second?.kickoffTs
-                    )
-                    ||
-                    Date.parse(
-                      second?.startingAt
-                      ||
-                      ''
-                    )
-                    ||
-                    0;
-
-
-                  return (
-                    secondTime -
-                    firstTime
-                  );
-                }
-              );
-
-
-          return historyCache;
-        }
-      )
-
-      .finally(
-        () => {
-
-          historyLoading =
-            null;
-        }
-      );
-
-
-  return historyLoading;
-}
 
   // ===================================================
   // MATCHS D'UNE ÉQUIPE
@@ -449,10 +458,6 @@ async function loadHistory() {
         }
       )
 
-      // history.js renvoie déjà
-      // les matchs du plus récent
-      // au plus ancien.
-
       .slice(
         0,
         5
@@ -471,29 +476,41 @@ async function loadHistory() {
 
     const summary = {
 
-      played: 0,
+      played:
+        0,
 
-      wins: 0,
+      wins:
+        0,
 
-      draws: 0,
+      draws:
+        0,
 
-      losses: 0,
+      losses:
+        0,
 
-      points: 0,
+      points:
+        0,
 
-      goalsFor: 0,
+      goalsFor:
+        0,
 
-      goalsAgainst: 0,
+      goalsAgainst:
+        0,
 
-      btts: 0,
+      btts:
+        0,
 
-      over15: 0,
+      over15:
+        0,
 
-      over25: 0,
+      over25:
+        0,
 
-      cleanSheets: 0,
+      cleanSheets:
+        0,
 
-      failedToScore: 0
+      failedToScore:
+        0
     };
 
 
@@ -558,7 +575,9 @@ async function loadHistory() {
           goalsAgainst;
 
 
-        // Résultat
+        // -----------------------------------------------
+        // RÉSULTAT
+        // -----------------------------------------------
 
         if (
           goalsFor >
@@ -589,7 +608,12 @@ async function loadHistory() {
         }
 
 
+        // -----------------------------------------------
         // BTTS
+        //
+        // Les deux équipes ont marqué
+        // dans CE match historique.
+        // -----------------------------------------------
 
         if (
           goalsFor > 0 &&
@@ -601,7 +625,9 @@ async function loadHistory() {
         }
 
 
-        // Over 1.5
+        // -----------------------------------------------
+        // TOTAL +1,5 BUT
+        // -----------------------------------------------
 
         if (
           goalsFor +
@@ -614,7 +640,9 @@ async function loadHistory() {
         }
 
 
-        // Over 2.5
+        // -----------------------------------------------
+        // TOTAL +2,5 BUTS
+        // -----------------------------------------------
 
         if (
           goalsFor +
@@ -627,7 +655,9 @@ async function loadHistory() {
         }
 
 
-        // Clean sheet
+        // -----------------------------------------------
+        // CLEAN SHEET
+        // -----------------------------------------------
 
         if (
           goalsAgainst ===
@@ -639,7 +669,9 @@ async function loadHistory() {
         }
 
 
-        // N'a pas marqué
+        // -----------------------------------------------
+        // ÉQUIPE SANS BUT
+        // -----------------------------------------------
 
         if (
           goalsFor ===
@@ -779,6 +811,7 @@ async function loadHistory() {
     ) {
 
       return {
+
         letter:
           '?',
 
@@ -794,6 +827,7 @@ async function loadHistory() {
     ) {
 
       return {
+
         letter:
           'V',
 
@@ -809,6 +843,7 @@ async function loadHistory() {
     ) {
 
       return {
+
         letter:
           'D',
 
@@ -819,6 +854,7 @@ async function loadHistory() {
 
 
     return {
+
       letter:
         'N',
 
@@ -879,7 +915,7 @@ async function loadHistory() {
 
 
   // ===================================================
-  // DÉTAIL MATCH
+  // DÉTAIL DES MATCHS RÉCENTS
   // ===================================================
 
   function renderRecentMatches(
@@ -985,18 +1021,22 @@ async function loadHistory() {
                 </strong>
 
                 <small>
+
                   ${
                     isHome
                       ? 'Domicile'
                       : 'Extérieur'
                   }
+
                   •
+
                   ${
                     escapeHtml(
                       match.date ||
                       ''
                     )
                   }
+
                 </small>
 
               </div>
@@ -1005,17 +1045,21 @@ async function loadHistory() {
               <b
                 class="recent-score"
               >
+
                 ${
                   escapeHtml(
                     goalsFor ?? '—'
                   )
                 }
+
                 -
+
                 ${
                   escapeHtml(
                     goalsAgainst ?? '—'
                   )
                 }
+
               </b>
 
             </div>
@@ -1028,7 +1072,7 @@ async function loadHistory() {
 
 
   // ===================================================
-  // QUALITÉ ÉCHANTILLON
+  // QUALITÉ DE L'ÉCHANTILLON
   // ===================================================
 
   function sampleQuality(
@@ -1056,7 +1100,7 @@ async function loadHistory() {
           'good',
 
         explanation:
-          '5 matchs disponibles pour les deux équipes.'
+          '5 matchs récents sont disponibles pour les deux équipes.'
       };
     }
 
@@ -1074,7 +1118,7 @@ async function loadHistory() {
           'medium',
 
         explanation:
-          'Les statistiques sont utiles mais l’échantillon reste limité.'
+          'Les statistiques sont utiles mais l’échantillon récent reste limité.'
       };
     }
 
@@ -1088,13 +1132,13 @@ async function loadHistory() {
         'weak',
 
       explanation:
-        'Trop peu de matchs : ne pas surinterpréter les pourcentages.'
+        'Trop peu de matchs récents : ne pas surinterpréter les pourcentages.'
     };
   }
 
 
   // ===================================================
-  // H2H
+  // FACE-À-FACE
   // ===================================================
 
   function getH2H(
@@ -1123,7 +1167,9 @@ async function loadHistory() {
             sameTeam(
               match.home,
               firstTeam
-            ) &&
+            )
+
+            &&
 
             sameTeam(
               match.away,
@@ -1136,7 +1182,9 @@ async function loadHistory() {
             sameTeam(
               match.home,
               secondTeam
-            ) &&
+            )
+
+            &&
 
             sameTeam(
               match.away,
@@ -1296,7 +1344,7 @@ async function loadHistory() {
           >
 
             <span>
-              BTTS
+              BTTS récent
             </span>
 
             <strong>
@@ -1316,7 +1364,7 @@ async function loadHistory() {
           >
 
             <span>
-              +1,5 buts
+              Matchs +1,5 buts
             </span>
 
             <strong>
@@ -1336,7 +1384,7 @@ async function loadHistory() {
           >
 
             <span>
-              +2,5 buts
+              Matchs +2,5 buts
             </span>
 
             <strong>
@@ -1493,8 +1541,11 @@ async function loadHistory() {
     ) {
 
       return `
-        Échantillon insuffisant pour produire une lecture
-        statistique fiable.
+
+        <li>
+          Échantillon insuffisant pour produire
+          une lecture statistique utile.
+        </li>
       `;
     }
 
@@ -1604,6 +1655,7 @@ async function loadHistory() {
 
       .map(
         text => `
+
           <li>
             ${escapeHtml(text)}
           </li>
@@ -1636,7 +1688,9 @@ async function loadHistory() {
     }
 
 
-    // Chargement
+    // -----------------------------------------------
+    // CHARGEMENT
+    // -----------------------------------------------
 
     container.innerHTML = `
 
@@ -1675,7 +1729,7 @@ async function loadHistory() {
 
 
       // -----------------------------------------------
-      // 5 derniers matchs
+      // 5 DERNIERS MATCHS
       // -----------------------------------------------
 
       const homeAllMatches =
@@ -1709,7 +1763,7 @@ async function loadHistory() {
 
 
       // -----------------------------------------------
-      // Domicile équipe domicile
+      // DOMICILE : ÉQUIPE DOMICILE
       // -----------------------------------------------
 
       const homeSplitMatches =
@@ -1728,7 +1782,7 @@ async function loadHistory() {
 
 
       // -----------------------------------------------
-      // Extérieur équipe extérieure
+      // EXTÉRIEUR : ÉQUIPE EXTÉRIEURE
       // -----------------------------------------------
 
       const awaySplitMatches =
@@ -1829,8 +1883,8 @@ async function loadHistory() {
               </strong>
 
               <p>
-                Matchs terminés récupérés via
-                l'historique Sportmonks.
+                Matchs terminés issus de la mémoire
+                MatchScope / Supabase.
               </p>
 
             </div>
@@ -1870,10 +1924,8 @@ async function loadHistory() {
                 >
 
                   ⚠️ Match amical :
-                  ces statistiques sont affichées
-                  à titre descriptif mais ne doivent
-                  pas avoir le même poids qu'un
-                  championnat dans le futur modèle.
+                  les statistiques sont affichées
+                  uniquement à titre descriptif.
 
                 </div>
               `
@@ -1956,10 +2008,11 @@ async function loadHistory() {
             <p>
 
               Cette lecture décrit uniquement
-              l'échantillon historique.
+              les résultats récents des équipes.
 
-              Elle ne constitue pas encore
-              une prédiction du résultat.
+              Elle ne doit pas être confondue
+              avec les probabilités 1 / N / 2
+              calculées par le moteur V0.7.
 
             </p>
 
@@ -1973,7 +2026,7 @@ async function loadHistory() {
             <div>
 
               <span>
-                Matchs analysés
+                Matchs récents
               </span>
 
               <strong>
@@ -1991,7 +2044,7 @@ async function loadHistory() {
               </strong>
 
               <small>
-                domicile / extérieur
+                équipe domicile / équipe extérieure
               </small>
 
             </div>
@@ -2027,7 +2080,7 @@ async function loadHistory() {
               </strong>
 
               <small>
-                historique maximum
+                statistiques descriptives
               </small>
 
             </div>
@@ -2039,13 +2092,17 @@ async function loadHistory() {
             class="pre-footnote"
           >
 
-            ⚠️ Ces données ne sont pas encore
-            converties directement en probabilités.
+            ℹ️ Cette section présente les tendances
+            récentes de manière descriptive.
 
-            Elles serviront ensuite au moteur
-            MatchScope et au backtest afin de
-            vérifier quelles variables améliorent
-            réellement les prévisions.
+            Le moteur V0.7 calcule séparément ses
+            probabilités à partir de la mémoire
+            historique MatchScope et de ses
+            paramètres calibrés.
+
+            Le pourcentage « BTTS récent » indique
+            la part des derniers matchs de l'équipe
+            où les deux équipes ont marqué.
 
           </div>
 
@@ -2103,17 +2160,20 @@ async function loadHistory() {
       id
     ) {
 
-      // La fiche normale de app.js
+      // Fiche normale de app.js
+
       originalOpenAnalysis(
         id
       );
 
 
-      // uniquement mode LIVE
+      // Seulement en mode LIVE
 
       if (
         typeof currentMode !==
-        'undefined' &&
+        'undefined'
+
+        &&
 
         currentMode !==
         'live'
@@ -2139,7 +2199,9 @@ async function loadHistory() {
 
             String(
               item.id
-            ) ===
+            )
+
+            ===
 
             String(
               id
