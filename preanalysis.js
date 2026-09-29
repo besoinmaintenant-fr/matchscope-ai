@@ -138,100 +138,241 @@
   // CHARGEMENT HISTORIQUE
   // ===================================================
 
-  async function loadHistory() {
+async function loadHistory() {
 
-    if (
-      Array.isArray(
-        historyCache
-      )
-    ) {
+  if (
+    Array.isArray(
+      historyCache
+    )
+  ) {
 
-      return historyCache;
-    }
-
-
-    if (
-      historyLoading
-    ) {
-
-      return historyLoading;
-    }
+    return historyCache;
+  }
 
 
-    historyLoading =
-      fetch(
-        '/.netlify/functions/history?days=90',
-        {
-          cache:
-            'no-store'
-        }
-      )
-
-        .then(
-          async response => {
-
-            let data =
-              {};
-
-
-            try {
-
-              data =
-                await response.json();
-
-            } catch (
-              _error
-            ) {
-
-              data =
-                {};
-            }
-
-
-            if (
-              !response.ok
-            ) {
-
-              throw new Error(
-
-                data.details ||
-
-                data.error ||
-
-                `Erreur historique ${
-                  response.status
-                }`
-              );
-            }
-
-
-            historyCache =
-
-              Array.isArray(
-                data.matches
-              )
-
-                ? data.matches
-
-                : [];
-
-
-            return historyCache;
-          }
-        )
-
-        .finally(
-          () => {
-
-            historyLoading =
-              null;
-          }
-        );
-
+  if (
+    historyLoading
+  ) {
 
     return historyLoading;
   }
 
+
+  historyLoading =
+    fetch(
+      '/.netlify/functions/modelhistory?v=preanalysis-1',
+      {
+        cache:
+          'no-store'
+      }
+    )
+
+      .then(
+        async response => {
+
+          let data =
+            {};
+
+
+          try {
+
+            data =
+              await response.json();
+
+          } catch (
+            _error
+          ) {
+
+            throw new Error(
+              'Réponse historique MatchScope illisible.'
+            );
+          }
+
+
+          if (
+            !response.ok
+          ) {
+
+            throw new Error(
+
+              data.details
+
+              ||
+
+              data.error
+
+              ||
+
+              `Erreur historique ${
+                response.status
+              }`
+            );
+          }
+
+
+          /*
+           * Pour cette section,
+           * nous voulons réellement
+           * utiliser notre mémoire Supabase.
+           */
+
+          if (
+            data.source !==
+            'supabase'
+          ) {
+
+            throw new Error(
+              'Mémoire MatchScope / Supabase indisponible.'
+            );
+          }
+
+
+          if (
+            !Array.isArray(
+              data.matches
+            )
+          ) {
+
+            throw new Error(
+              'Historique MatchScope absent.'
+            );
+          }
+
+
+          const now =
+            Date.now();
+
+
+          const cutoff =
+            now
+            -
+            90 *
+            24 *
+            60 *
+            60 *
+            1000;
+
+
+          historySource =
+            data.source;
+
+
+          /*
+           * modelhistory contient 365 jours.
+           *
+           * La fiche "Forme récente"
+           * conserve volontairement
+           * une fenêtre descriptive de 90 jours.
+           */
+
+          historyCache =
+            data.matches
+
+              .filter(
+                match => {
+
+                  let timestamp =
+                    Number(
+                      match?.kickoffTs
+                    );
+
+
+                  if (
+                    !Number.isFinite(
+                      timestamp
+                    )
+                  ) {
+
+                    timestamp =
+                      Date.parse(
+                        match?.startingAt
+                        ||
+                        ''
+                      );
+                  }
+
+
+                  return (
+                    Number.isFinite(
+                      timestamp
+                    )
+
+                    &&
+
+                    timestamp <
+                    now
+
+                    &&
+
+                    timestamp >=
+                    cutoff
+                  );
+                }
+              )
+
+              /*
+               * Le reste de preanalysis.js
+               * attend les matchs
+               * du plus récent au plus ancien.
+               */
+
+              .sort(
+                (
+                  first,
+                  second
+                ) => {
+
+                  const firstTime =
+                    Number(
+                      first?.kickoffTs
+                    )
+                    ||
+                    Date.parse(
+                      first?.startingAt
+                      ||
+                      ''
+                    )
+                    ||
+                    0;
+
+
+                  const secondTime =
+                    Number(
+                      second?.kickoffTs
+                    )
+                    ||
+                    Date.parse(
+                      second?.startingAt
+                      ||
+                      ''
+                    )
+                    ||
+                    0;
+
+
+                  return (
+                    secondTime -
+                    firstTime
+                  );
+                }
+              );
+
+
+          return historyCache;
+        }
+      )
+
+      .finally(
+        () => {
+
+          historyLoading =
+            null;
+        }
+      );
+
+
+  return historyLoading;
+}
 
   // ===================================================
   // MATCHS D'UNE ÉQUIPE
