@@ -1,0 +1,241 @@
+<!doctype html>
+
+<html lang="fr">
+
+<head>
+
+  <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  >
+
+  <title>
+    MatchScope — Backfill compositions
+  </title>
+
+  <style>
+
+    body {
+      margin: 0;
+      padding: 24px;
+      background: #06110c;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+
+    .box {
+      max-width: 560px;
+      margin: 40px auto;
+      background: #0d1d15;
+      border: 1px solid #244a35;
+      border-radius: 18px;
+      padding: 22px;
+    }
+
+    h1 {
+      margin-top: 0;
+      font-size: 24px;
+    }
+
+    p {
+      color: #b9c9bf;
+      line-height: 1.5;
+    }
+
+    input,
+    button {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 15px;
+      border-radius: 12px;
+      font-size: 16px;
+    }
+
+    input {
+      margin: 16px 0;
+      background: #07100b;
+      color: white;
+      border: 1px solid #315641;
+    }
+
+    button {
+      border: 0;
+      background: #37e481;
+      color: #00190b;
+      font-weight: bold;
+    }
+
+    button:disabled {
+      opacity: .5;
+    }
+
+    #status {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 12px;
+      background: #07100b;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+
+  </style>
+
+</head>
+
+<body>
+
+  <div class="box">
+
+    <h1>
+      Historique des compositions
+    </h1>
+
+    <p>
+      MatchScope va récupérer auprès de Sportmonks
+      les compositions historiques récentes de
+      Premier League, Bundesliga et La Liga.
+    </p>
+
+    <p>
+      Objectif : disposer d'environ 10 compositions
+      précédentes par équipe afin de mesurer ensuite
+      la continuité du XI.
+    </p>
+
+    <input
+      id="secret"
+      type="password"
+      placeholder="MATCHSCOPE_SYNC_SECRET"
+      autocomplete="off"
+    >
+
+    <button id="launch">
+      Lancer le backfill
+    </button>
+
+    <div id="status">
+      En attente.
+    </div>
+
+  </div>
+
+
+  <script>
+
+    const button =
+      document.querySelector(
+        '#launch'
+      );
+
+
+    const secretInput =
+      document.querySelector(
+        '#secret'
+      );
+
+
+    const status =
+      document.querySelector(
+        '#status'
+      );
+
+
+    button.addEventListener(
+      'click',
+      async () => {
+
+        const secret =
+          secretInput.value.trim();
+
+
+        if (!secret) {
+
+          status.textContent =
+            'Entre ton MATCHSCOPE_SYNC_SECRET.';
+
+          return;
+        }
+
+
+        button.disabled =
+          true;
+
+
+        status.textContent =
+          'Lancement du backfill…';
+
+
+        try {
+
+          const response =
+            await fetch(
+              '/.netlify/functions/backfill-lineups-background',
+              {
+
+                method:
+                  'POST',
+
+                headers: {
+
+                  'Content-Type':
+                    'application/json'
+                },
+
+                body:
+                  JSON.stringify({
+                    secret
+                  })
+              }
+            );
+
+
+          if (
+            response.status === 202 ||
+            response.ok
+          ) {
+
+            status.textContent =
+`✅ Backfill lancé.
+
+Le serveur travaille maintenant en arrière-plan.
+
+Ne relance pas le bouton.
+
+Attends quelques minutes avant de contrôler Supabase.`;
+
+          } else {
+
+            const text =
+              await response.text();
+
+
+            status.textContent =
+`❌ Erreur HTTP ${response.status}
+
+${text}`;
+          }
+
+
+        } catch (
+          error
+        ) {
+
+          status.textContent =
+`❌ Impossible de lancer le backfill.
+
+${error.message}`;
+        }
+
+
+        button.disabled =
+          false;
+      }
+    );
+
+  </script>
+
+</body>
+
+</html>
