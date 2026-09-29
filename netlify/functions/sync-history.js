@@ -32,22 +32,38 @@ const LEAGUE_IDS =
   );
 
 
+/*
+ * Historique total souhaité.
+ */
 const SEED_DAYS =
   365;
 
 
-const INCREMENTAL_DAYS =
-  14;
+/*
+ * Un seed complet est volontairement
+ * découpé en petits morceaux.
+ *
+ * 55 jours x 7 parties maximum.
+ *
+ * La dernière partie sera plus courte.
+ */
+const SEED_PART_DAYS =
+  55;
+
+
+const SEED_PARTS =
+  Math.ceil(
+    SEED_DAYS /
+    SEED_PART_DAYS
+  );
 
 
 /*
- * Sportmonks limite la route "between"
- * à 100 jours.
- *
- * On reste volontairement à 90.
+ * Les mises à jour normales
+ * après le premier seed restent petites.
  */
-const CHUNK_DAYS =
-  90;
+const INCREMENTAL_DAYS =
+  14;
 
 
 const BATCH_SIZE =
@@ -55,14 +71,11 @@ const BATCH_SIZE =
 
 
 /*
- * États Sportmonks réellement terminés.
+ * États Sportmonks considérés terminés.
  *
  * 5 = FT
  * 7 = AET
  * 8 = fin après tirs au but
- *
- * Pour PL / BL / LL, FT sera de très loin
- * le cas normal.
  */
 const FINAL_STATE_IDS =
   new Set([
@@ -213,6 +226,61 @@ function addDays(
 }
 
 
+function startOfUtcDay(
+  value = new Date()
+) {
+
+  const date =
+    new Date(
+      value
+    );
+
+
+  date.setUTCHours(
+    0,
+    0,
+    0,
+    0
+  );
+
+
+  return date;
+}
+
+
+function daysInclusive(
+  start,
+  end
+) {
+
+  return (
+
+    Math.floor(
+
+      (
+        startOfUtcDay(
+          end
+        ).getTime()
+
+        -
+
+        startOfUtcDay(
+          start
+        ).getTime()
+      )
+
+      /
+
+      86400000
+    )
+
+    +
+
+    1
+  );
+}
+
+
 function parseKickoff(
   value
 ) {
@@ -265,70 +333,146 @@ function parseKickoff(
 }
 
 
-function buildRanges(
-  start,
-  end
+// =====================================================
+// PLAGE DE SYNCHRONISATION
+// =====================================================
+
+function getSeedRange(
+  part
 ) {
 
-  const ranges =
-    [];
+  /*
+   * Le seed se termine à hier.
+   */
 
-
-  let cursor =
-    new Date(
-      start
+  const seedEnd =
+    startOfUtcDay(
+      new Date()
     );
 
 
-  while (
-    cursor <= end
+  seedEnd.setUTCDate(
+
+    seedEnd.getUTCDate()
+
+    -
+
+    1
+  );
+
+
+  /*
+   * Début exact des 365 jours.
+   */
+
+  const seedStart =
+    addDays(
+
+      seedEnd,
+
+      -(SEED_DAYS - 1)
+    );
+
+
+  const offset =
+    (
+      part - 1
+    )
+
+    *
+
+    SEED_PART_DAYS;
+
+
+  const partStart =
+    addDays(
+
+      seedStart,
+
+      offset
+    );
+
+
+  let partEnd =
+    addDays(
+
+      partStart,
+
+      SEED_PART_DAYS - 1
+    );
+
+
+  if (
+    partEnd >
+    seedEnd
   ) {
 
-    let rangeEnd =
-      addDays(
-
-        cursor,
-
-        CHUNK_DAYS - 1
-      );
-
-
-    if (
-      rangeEnd > end
-    ) {
-
-      rangeEnd =
-        new Date(
-          end
-        );
-    }
-
-
-    ranges.push({
-
-      start:
-        new Date(
-          cursor
-        ),
-
-      end:
-        new Date(
-          rangeEnd
-        )
-    });
-
-
-    cursor =
-      addDays(
-
-        rangeEnd,
-
-        1
+    partEnd =
+      new Date(
+        seedEnd
       );
   }
 
 
-  return ranges;
+  if (
+    partStart >
+    seedEnd
+  ) {
+
+    return null;
+  }
+
+
+  return {
+
+    start:
+      partStart,
+
+    end:
+      partEnd,
+
+    fullStart:
+      seedStart,
+
+    fullEnd:
+      seedEnd
+  };
+}
+
+
+function getIncrementalRange() {
+
+  const end =
+    startOfUtcDay(
+      new Date()
+    );
+
+
+  end.setUTCDate(
+
+    end.getUTCDate()
+
+    -
+
+    1
+  );
+
+
+  const start =
+    addDays(
+
+      end,
+
+      -(INCREMENTAL_DAYS - 1)
+    );
+
+
+  return {
+
+    start,
+
+    end
+  };
 }
 
 
@@ -415,6 +559,10 @@ function fixtureState(
 
     ||
 
+    includedState?.developer_name
+
+    ||
+
     includedState?.state
 
     ||
@@ -434,7 +582,9 @@ function fixtureState(
       Number.isFinite(
         stateId
       )
+
         ? stateId
+
         : null,
 
     code,
@@ -448,7 +598,7 @@ function fixtureState(
 
 
 // =====================================================
-// SCORE FINAL
+// SCORE
 // =====================================================
 
 function getFinalScore(
@@ -467,15 +617,6 @@ function getFinalScore(
 
   scores.forEach(
     item => {
-
-      /*
-       * Sportmonks documente CURRENT
-       * comme le score courant/final.
-       *
-       * Comme on vérifie AVANT l'état
-       * final du fixture, il ne peut plus
-       * s'agir ici d'un simple score live.
-       */
 
       if (
         item?.description !==
@@ -567,7 +708,8 @@ function getResult(
 
 async function fetchRange(
   token,
-  range
+  start,
+  end
 ) {
 
   const fixtures =
@@ -583,16 +725,30 @@ async function fetchRange(
 
 
   while (
-    hasMore &&
-    page <= 30
+    hasMore
   ) {
+
+    /*
+     * Protection supplémentaire
+     * contre une pagination anormale.
+     */
+
+    if (
+      page > 50
+    ) {
+
+      throw new Error(
+        'Pagination Sportmonks anormalement longue.'
+      );
+    }
+
 
     const endpoint =
 
       `${API}/fixtures/between/${iso(
-        range.start
+        start
       )}/${iso(
-        range.end
+        end
       )}`;
 
 
@@ -615,14 +771,6 @@ async function fetchRange(
       `fixtureLeagues:${LEAGUE_IDS.join(',')}`
     );
 
-
-    /*
-     * state est ajouté explicitement.
-     *
-     * state_id existe déjà sur le fixture,
-     * mais l'include nous donne également
-     * le code lisible pour diagnostic.
-     */
 
     url.searchParams.set(
 
@@ -714,16 +862,6 @@ async function fetchRange(
   }
 
 
-  if (
-    hasMore
-  ) {
-
-    throw new Error(
-      'Pagination Sportmonks incomplète.'
-    );
-  }
-
-
   return fixtures;
 }
 
@@ -758,18 +896,17 @@ function transformFixture(
   }
 
 
-  /*
-   * CRITIQUE :
-   *
-   * on vérifie maintenant l'état Sportmonks
-   * AVANT de considérer CURRENT comme final.
-   */
-
   const state =
     fixtureState(
       fixture
     );
 
+
+  /*
+   * Un score n'est accepté que
+   * si Sportmonks indique réellement
+   * que le match est terminé.
+   */
 
   if (
     !state.finished
@@ -987,13 +1124,8 @@ function transformFixture(
         ),
 
       /*
-       * On ne connaît pas ici avec précision
-       * l'heure de fin du match.
-       *
-       * On préfère NULL plutôt qu'une heure
-       * inventée.
+       * Pas d'heure de fin inventée.
        */
-
       finished_at:
         null,
 
@@ -1005,7 +1137,7 @@ function transformFixture(
 
 
 // =====================================================
-// DÉCOUPAGE BATCH
+// BATCH
 // =====================================================
 
 function chunks(
@@ -1078,15 +1210,6 @@ async function saveMatches(
         body:
           batch,
 
-        /*
-         * Merge uniquement sur les colonnes
-         * présentes dans nos lignes.
-         *
-         * Les données plus riches déjà stockées
-         * ailleurs ne doivent pas être remplacées
-         * volontairement par ce job historique.
-         */
-
         prefer:
           'resolution=merge-duplicates,return=minimal'
       }
@@ -1145,7 +1268,7 @@ async function saveResults(
 
 
 // =====================================================
-// DIAGNOSTIC DES ÉTATS IGNORÉS
+// DIAGNOSTIC
 // =====================================================
 
 function countSkippedStates(
@@ -1220,6 +1343,10 @@ function countSkippedStates(
 exports.handler =
   async event => {
 
+    // -------------------------------------------------
+    // POST UNIQUEMENT
+    // -------------------------------------------------
+
     if (
       event.httpMethod !==
       'POST'
@@ -1238,6 +1365,10 @@ exports.handler =
       );
     }
 
+
+    // -------------------------------------------------
+    // AUTH
+    // -------------------------------------------------
 
     const access =
       authorized(
@@ -1285,13 +1416,9 @@ exports.handler =
     }
 
 
-    /*
-     * seed :
-     * première importation = 365 jours.
-     *
-     * incremental :
-     * suivantes = 14 jours.
-     */
+    // -------------------------------------------------
+    // MODE
+    // -------------------------------------------------
 
     const mode =
 
@@ -1305,89 +1432,135 @@ exports.handler =
         : 'incremental';
 
 
-    const days =
+    let range;
 
+
+    let part =
+      null;
+
+
+    // -------------------------------------------------
+    // SEED DÉCOUPÉ
+    // -------------------------------------------------
+
+    if (
       mode ===
       'seed'
+    ) {
 
-        ? SEED_DAYS
+      part =
+        Number(
 
-        : INCREMENTAL_DAYS;
-
-
-    /*
-     * Historique modèle :
-     * on s'arrête à hier.
-     *
-     * Les matchs terminés aujourd'hui pourront
-     * être gérés immédiatement par finalize-match
-     * ou entrer dans le prochain incrémental.
-     */
-
-    const end =
-      new Date();
+          event
+            ?.queryStringParameters
+            ?.part
+        );
 
 
-    end.setUTCHours(
-      0,
-      0,
-      0,
-      0
-    );
+      /*
+       * IMPORTANT :
+       *
+       * un seed sans numéro de partie
+       * est désormais interdit.
+       *
+       * Cela empêche de relancer
+       * accidentellement les 365 jours.
+       */
+
+      if (
+        !Number.isInteger(
+          part
+        )
+
+        ||
+
+        part < 1
+
+        ||
+
+        part >
+        SEED_PARTS
+      ) {
+
+        return jsonResponse(
+          400,
+          {
+
+            success:
+              false,
+
+            error:
+              'SEED_PART_REQUIRED',
+
+            message:
+              `Le seed doit être lancé partie par partie : part=1 à part=${SEED_PARTS}.`,
+
+            example:
+              `?mode=seed&part=1`,
+
+            seedParts:
+              SEED_PARTS,
+
+            daysPerPart:
+              SEED_PART_DAYS
+          }
+        );
+      }
 
 
-    end.setUTCDate(
-
-      end.getUTCDate()
-
-      -
-
-      1
-    );
+      range =
+        getSeedRange(
+          part
+        );
 
 
-    const start =
-      addDays(
+      if (
+        !range
+      ) {
 
-        end,
+        return jsonResponse(
+          400,
+          {
 
-        -(days - 1)
-      );
+            success:
+              false,
 
+            error:
+              'Plage seed invalide.'
+          }
+        );
+      }
 
-    const ranges =
-      buildRanges(
-        start,
-        end
-      );
+    } else {
+
+      // ------------------------------------------------
+      // INCRÉMENTAL NORMAL
+      // ------------------------------------------------
+
+      range =
+        getIncrementalRange();
+    }
 
 
     try {
 
       // ===============================================
-      // SPORTMONKS
+      // 1. SPORTMONKS
       // ===============================================
 
-      const fetched =
-        await Promise.all(
+      const rawFixtures =
+        await fetchRange(
 
-          ranges.map(
-            range =>
+          token,
 
-              fetchRange(
-                token,
-                range
-              )
-          )
+          range.start,
+
+          range.end
         );
 
 
-      const rawFixtures =
-        fetched.flat();
-
-
       // ===============================================
-      // DÉDUPLICATION
+      // 2. DÉDUPLICATION
       // ===============================================
 
       const unique =
@@ -1421,7 +1594,7 @@ exports.handler =
 
 
       // ===============================================
-      // TRANSFORMATION + VALIDATION
+      // 3. VALIDATION
       // ===============================================
 
       const transformed =
@@ -1455,9 +1628,13 @@ exports.handler =
         );
 
 
+      // ===============================================
+      // 4. SUPABASE
+      // ===============================================
+
       /*
-       * Matches AVANT results :
-       * FK results -> matches.
+       * matches en premier car results
+       * possède une clé étrangère vers matches.
        */
 
       await saveMatches(
@@ -1471,7 +1648,7 @@ exports.handler =
 
 
       // ===============================================
-      // COMPTAGE PAR CHAMPIONNAT
+      // 5. COMPTAGE LIGUES
       // ===============================================
 
       const leagueCounts =
@@ -1507,7 +1684,7 @@ exports.handler =
 
 
       // ===============================================
-      // RAISONS D'EXCLUSION
+      // 6. DIAGNOSTIC
       // ===============================================
 
       const skipped = {
@@ -1559,6 +1736,33 @@ exports.handler =
       };
 
 
+      // ===============================================
+      // 7. PARTIE SUIVANTE
+      // ===============================================
+
+      let nextPart =
+        null;
+
+
+      if (
+        mode ===
+        'seed'
+
+        &&
+
+        part <
+        SEED_PARTS
+      ) {
+
+        nextPart =
+          part + 1;
+      }
+
+
+      // ===============================================
+      // 8. RÉPONSE
+      // ===============================================
+
       return jsonResponse(
         200,
         {
@@ -1568,20 +1772,38 @@ exports.handler =
 
           mode,
 
-          days,
+          part:
+            mode === 'seed'
+              ? part
+              : null,
+
+          seedParts:
+            mode === 'seed'
+              ? SEED_PARTS
+              : null,
+
+          nextPart,
+
+          completed:
+            mode === 'seed'
+              ? part === SEED_PARTS
+              : true,
 
           from:
             iso(
-              start
+              range.start
             ),
 
           to:
             iso(
-              end
+              range.end
             ),
 
-          chunks:
-            ranges.length,
+          days:
+            daysInclusive(
+              range.start,
+              range.end
+            ),
 
           sportmonksFixtures:
             rawFixtures.length,
@@ -1613,9 +1835,16 @@ exports.handler =
             mode ===
             'seed'
 
-              ? 'Historique initial MatchScope synchronisé avec contrôle des états finaux.'
+              ? (
+                  part ===
+                  SEED_PARTS
 
-              : 'Mise à jour MatchScope terminée avec contrôle des états finaux.'
+                    ? 'Dernière partie du seed MatchScope terminée.'
+
+                    : `Seed MatchScope partie ${part}/${SEED_PARTS} terminé.`
+                )
+
+              : 'Mise à jour incrémentale MatchScope terminée.'
         }
       );
 
@@ -1636,6 +1865,24 @@ exports.handler =
 
           success:
             false,
+
+          mode,
+
+          part,
+
+          from:
+            range
+              ? iso(
+                  range.start
+                )
+              : null,
+
+          to:
+            range
+              ? iso(
+                  range.end
+                )
+              : null,
 
           error:
             'Erreur de synchronisation historique.',
