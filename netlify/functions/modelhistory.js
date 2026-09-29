@@ -1,3 +1,8 @@
+const {
+  supabaseRequest
+} = require('./lib/supabase');
+
+
 const API =
   'https://api.sportmonks.com/v3/football';
 
@@ -31,24 +36,42 @@ const TOTAL_DAYS =
   365;
 
 
-/*
- * Sportmonks limite la requête "between"
- * à 100 jours maximum.
- *
- * On utilise donc 90 jours par bloc,
- * volontairement sous la limite.
- */
-
 const CHUNK_DAYS =
   90;
 
 
+/*
+ * On garde volontairement v2 :
+ * le format envoyé à model.js
+ * reste compatible avec V0.7.
+ */
 const ENGINE_VERSION =
   'modelhistory-v2';
 
 
+/*
+ * Supabase peut limiter le nombre
+ * de lignes retournées par requête.
+ */
+const SUPABASE_PAGE_SIZE =
+  1000;
+
+
+/*
+ * Sécurité :
+ * si Supabase est encore trop vide,
+ * V0.7 reste sur Sportmonks.
+ */
+const MIN_SUPABASE_MATCHES =
+  850;
+
+
+const MIN_MATCHES_PER_LEAGUE =
+  180;
+
+
 // =====================================================
-// OUTILS DATE
+// OUTILS
 // =====================================================
 
 function iso(
@@ -89,9 +112,7 @@ function parseKickoff(
   value
 ) {
 
-  if (
-    !value
-  ) {
+  if (!value) {
 
     return null;
   }
@@ -106,9 +127,7 @@ function parseKickoff(
 
   if (
     /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
-      .test(
-        raw
-      )
+      .test(raw)
   ) {
 
     return new Date(
@@ -134,15 +153,41 @@ function parseKickoff(
   return Number.isNaN(
     date.getTime()
   )
-
     ? null
-
     : date;
 }
 
 
+function numberOrNull(
+  value
+) {
+
+  if (
+    value === null ||
+    value === undefined ||
+    value === ''
+  ) {
+
+    return null;
+  }
+
+
+  const number =
+    Number(
+      value
+    );
+
+
+  return Number.isFinite(
+    number
+  )
+    ? number
+    : null;
+}
+
+
 // =====================================================
-// DÉCOUPAGE 365 JOURS
+// RANGES SPORTMONKS
 // =====================================================
 
 function buildRanges(
@@ -172,8 +217,7 @@ function buildRanges(
 
 
     if (
-      rangeEnd >
-      end
+      rangeEnd > end
     ) {
 
       rangeEnd =
@@ -210,7 +254,7 @@ function buildRanges(
 
 
 // =====================================================
-// ÉQUIPES
+// ÉQUIPES SPORTMONKS
 // =====================================================
 
 function getTeam(
@@ -237,7 +281,7 @@ function getTeam(
 
 
 // =====================================================
-// SCORE FINAL
+// SCORE SPORTMONKS
 // =====================================================
 
 function getFinalScore(
@@ -273,7 +317,7 @@ function getFinalScore(
 
 
       const goals =
-        Number(
+        numberOrNull(
           item
             ?.score
             ?.goals
@@ -281,14 +325,8 @@ function getFinalScore(
 
 
       if (
-        side ===
-        'home'
-
-        &&
-
-        Number.isFinite(
-          goals
-        )
+        side === 'home' &&
+        goals !== null
       ) {
 
         result.home =
@@ -297,14 +335,8 @@ function getFinalScore(
 
 
       if (
-        side ===
-        'away'
-
-        &&
-
-        Number.isFinite(
-          goals
-        )
+        side === 'away' &&
+        goals !== null
       ) {
 
         result.away =
@@ -333,8 +365,7 @@ function getResult(
 
 
   if (
-    home >
-    away
+    home > away
   ) {
 
     return '1';
@@ -342,8 +373,7 @@ function getResult(
 
 
   if (
-    away >
-    home
+    away > home
   ) {
 
     return '2';
@@ -355,54 +385,363 @@ function getResult(
 
 
 // =====================================================
-// RÉPONSE NETLIFY
+// COMPTAGE PAR LIGUE
 // =====================================================
 
-function jsonResponse(
-  statusCode,
-  body
+function countLeagues(
+  matches
 ) {
+
+  const leagues =
+    {};
+
+
+  matches.forEach(
+    match => {
+
+      const code =
+        match.competition;
+
+
+      leagues[code] =
+
+        (
+          leagues[code]
+          ||
+          0
+        )
+
+        +
+
+        1;
+    }
+  );
+
+
+  return leagues;
+}
+
+
+// =====================================================
+// TRANSFORMATION SUPABASE
+// =====================================================
+
+function transformSupabaseRow(
+  row
+) {
+
+  const kickoff =
+    parseKickoff(
+      row.starting_at
+    );
+
+
+  const homeScore =
+    numberOrNull(
+      row.home_score
+    );
+
+
+  const awayScore =
+    numberOrNull(
+      row.away_score
+    );
+
+
+  if (
+    !kickoff ||
+    homeScore === null ||
+    awayScore === null
+  ) {
+
+    return null;
+  }
+
+
+  if (
+    ![
+      'PL',
+      'BL',
+      'LL'
+    ].includes(
+      row.league_code
+    )
+  ) {
+
+    return null;
+  }
+
+
+  if (
+    ![
+      '1',
+      'N',
+      '2'
+    ].includes(
+      row.result_1x2
+    )
+  ) {
+
+    return null;
+  }
+
 
   return {
 
-    statusCode,
+    id:
+      String(
+        row.sportmonks_fixture_id
+      ),
 
+    competition:
+      row.league_code,
 
-    headers: {
+    competitionName:
+      row.league_name
+      ||
+      row.league_code,
 
-      'content-type':
-        'application/json; charset=utf-8',
+    home:
+      row.home_team_name
+      ||
+      'Domicile',
 
+    away:
+      row.away_team_name
+      ||
+      'Extérieur',
 
-      /*
-       * Important :
-       * on coupe complètement le cache
-       * pendant nos tests V0.7.
-       */
+    homeId:
+      numberOrNull(
+        row.home_team_id
+      ),
 
-      'cache-control':
-        'no-store, no-cache, must-revalidate, max-age=0',
+    awayId:
+      numberOrNull(
+        row.away_team_id
+      ),
 
+    startingAt:
+      kickoff.toISOString(),
 
-      pragma:
-        'no-cache',
+    kickoffTs:
+      kickoff.getTime(),
 
+    score: {
 
-      expires:
-        '0'
+      home:
+        homeScore,
+
+      away:
+        awayScore
     },
 
-
-    body:
-      JSON.stringify(
-        body
-      )
+    actualResult:
+      row.result_1x2
   };
 }
 
 
 // =====================================================
-// RÉCUPÉRATION D'UN BLOC SPORTMONKS
+// CHARGEMENT SUPABASE
+// =====================================================
+
+async function loadSupabaseHistory(
+  start,
+  end
+) {
+
+  const rows =
+    [];
+
+
+  let offset =
+    0;
+
+
+  while (true) {
+
+    const query =
+
+      '?select='
+
+      +
+
+      [
+        'sportmonks_fixture_id',
+        'league_code',
+        'league_name',
+        'home_team_id',
+        'home_team_name',
+        'away_team_id',
+        'away_team_name',
+        'starting_at',
+        'home_score',
+        'away_score',
+        'result_1x2'
+      ].join(',')
+
+      +
+
+      `&starting_at=gte.${encodeURIComponent(
+        start.toISOString()
+      )}`
+
+      +
+
+      `&starting_at=lte.${encodeURIComponent(
+        end.toISOString()
+      )}`
+
+      +
+
+      '&order=starting_at.asc'
+
+      +
+
+      `&limit=${SUPABASE_PAGE_SIZE}`
+
+      +
+
+      `&offset=${offset}`;
+
+
+    const page =
+      await supabaseRequest(
+        'model_history',
+        {
+
+          method:
+            'GET',
+
+          query
+        }
+      );
+
+
+    if (
+      !Array.isArray(
+        page
+      )
+    ) {
+
+      throw new Error(
+        'Réponse Supabase model_history invalide.'
+      );
+    }
+
+
+    rows.push(
+      ...page
+    );
+
+
+    if (
+      page.length <
+      SUPABASE_PAGE_SIZE
+    ) {
+
+      break;
+    }
+
+
+    offset +=
+      SUPABASE_PAGE_SIZE;
+
+
+    /*
+     * Protection contre une boucle
+     * anormale.
+     */
+
+    if (
+      offset > 10000
+    ) {
+
+      throw new Error(
+        'Pagination Supabase anormalement longue.'
+      );
+    }
+  }
+
+
+  const matches =
+
+    rows
+
+      .map(
+        transformSupabaseRow
+      )
+
+      .filter(
+        Boolean
+      )
+
+      .sort(
+        (
+          first,
+          second
+        ) =>
+
+          first.kickoffTs -
+          second.kickoffTs
+      );
+
+
+  return matches;
+}
+
+
+// =====================================================
+// BASE SUPABASE SUFFISANTE ?
+// =====================================================
+
+function supabaseIsReady(
+  matches
+) {
+
+  if (
+    matches.length <
+    MIN_SUPABASE_MATCHES
+  ) {
+
+    return false;
+  }
+
+
+  const leagues =
+    countLeagues(
+      matches
+    );
+
+
+  for (
+    const code
+    of [
+      'PL',
+      'BL',
+      'LL'
+    ]
+  ) {
+
+    if (
+      Number(
+        leagues[code] || 0
+      ) <
+      MIN_MATCHES_PER_LEAGUE
+    ) {
+
+      return false;
+    }
+  }
+
+
+  return true;
+}
+
+
+// =====================================================
+// SPORTMONKS : UN BLOC
 // =====================================================
 
 async function fetchRange(
@@ -429,7 +768,11 @@ async function fetchRange(
 
     const endpoint =
 
-      `${API}/fixtures/between/${iso(range.start)}/${iso(range.end)}`;
+      `${API}/fixtures/between/${iso(
+        range.start
+      )}/${iso(
+        range.end
+      )}`;
 
 
     const url =
@@ -445,6 +788,7 @@ async function fetchRange(
 
 
     url.searchParams.set(
+
       'filters',
 
       `fixtureLeagues:${LEAGUE_IDS.join(',')}`
@@ -452,6 +796,7 @@ async function fetchRange(
 
 
     url.searchParams.set(
+
       'include',
 
       'league;participants;scores'
@@ -472,23 +817,30 @@ async function fetchRange(
     );
 
 
-    const apiResponse =
+    const response =
       await fetch(
         url
       );
 
 
     const raw =
-      await apiResponse.text();
+      await response.text();
 
 
     if (
-      !apiResponse.ok
+      !response.ok
     ) {
 
       throw new Error(
 
-        `Sportmonks ${apiResponse.status} sur ${iso(range.start)} -> ${iso(range.end)} : ${raw.slice(0, 1000)}`
+        `Sportmonks ${response.status} sur ${iso(
+          range.start
+        )} -> ${iso(
+          range.end
+        )} : ${raw.slice(
+          0,
+          500
+        )}`
       );
     }
 
@@ -503,13 +855,10 @@ async function fetchRange(
           raw
         );
 
-    } catch (
-      error
-    ) {
+    } catch {
 
       throw new Error(
-
-        `Réponse Sportmonks invalide sur ${iso(range.start)} -> ${iso(range.end)}`
+        'Réponse Sportmonks invalide.'
       );
     }
 
@@ -535,8 +884,7 @@ async function fetchRange(
       );
 
 
-    page +=
-      1;
+    page += 1;
   }
 
 
@@ -545,8 +893,7 @@ async function fetchRange(
   ) {
 
     throw new Error(
-
-      `Pagination incomplète sur ${iso(range.start)} -> ${iso(range.end)} après 30 pages.`
+      'Pagination Sportmonks incomplète.'
     );
   }
 
@@ -556,17 +903,17 @@ async function fetchRange(
 
 
 // =====================================================
-// TRANSFORMATION FIXTURE
+// TRANSFORMATION SPORTMONKS
 // =====================================================
 
-function transformFixture(
+function transformSportmonksFixture(
   fixture
 ) {
 
   const participants =
 
     Array.isArray(
-      fixture.participants
+      fixture?.participants
     )
 
       ? fixture.participants
@@ -607,11 +954,10 @@ function transformFixture(
 
 
   const score =
-
     getFinalScore(
 
       Array.isArray(
-        fixture.scores
+        fixture?.scores
       )
 
         ? fixture.scores
@@ -635,9 +981,7 @@ function transformFixture(
     );
 
 
-  if (
-    !kickoff
-  ) {
+  if (!kickoff) {
 
     return null;
   }
@@ -652,9 +996,7 @@ function transformFixture(
     ];
 
 
-  if (
-    !league
-  ) {
+  if (!league) {
 
     return null;
   }
@@ -667,65 +1009,39 @@ function transformFixture(
         fixture.id
       ),
 
-
     competition:
       league.code,
 
-
     competitionName:
-
-      fixture
-        ?.league
-        ?.name
-
+      fixture?.league?.name
       ||
-
       league.name,
 
-
     home:
-
       home?.name
-
       ||
-
       'Domicile',
 
-
     away:
-
       away?.name
-
       ||
-
       'Extérieur',
 
-
     homeId:
-
       home?.id
-
       ||
-
       null,
-
 
     awayId:
-
       away?.id
-
       ||
-
       null,
-
 
     startingAt:
       kickoff.toISOString(),
 
-
     kickoffTs:
       kickoff.getTime(),
-
 
     score: {
 
@@ -736,9 +1052,7 @@ function transformFixture(
         score.away
     },
 
-
     actualResult:
-
       getResult(
         score.home,
         score.away
@@ -748,37 +1062,145 @@ function transformFixture(
 
 
 // =====================================================
-// NETLIFY FUNCTION
+// FALLBACK SPORTMONKS
+// =====================================================
+
+async function loadSportmonksHistory(
+  token,
+  start,
+  end
+) {
+
+  const ranges =
+    buildRanges(
+      start,
+      end
+    );
+
+
+  const results =
+    await Promise.all(
+
+      ranges.map(
+        range =>
+
+          fetchRange(
+            token,
+            range
+          )
+      )
+    );
+
+
+  const rawFixtures =
+    results.flat();
+
+
+  const unique =
+    new Map();
+
+
+  rawFixtures.forEach(
+    fixture => {
+
+      if (
+        fixture?.id !== undefined &&
+        fixture?.id !== null
+      ) {
+
+        unique.set(
+
+          String(
+            fixture.id
+          ),
+
+          fixture
+        );
+      }
+    }
+  );
+
+
+  const matches =
+
+    Array
+      .from(
+        unique.values()
+      )
+
+      .map(
+        transformSportmonksFixture
+      )
+
+      .filter(
+        Boolean
+      )
+
+      .sort(
+        (
+          first,
+          second
+        ) =>
+
+          first.kickoffTs -
+          second.kickoffTs
+      );
+
+
+  return {
+
+    matches,
+
+    rawCount:
+      rawFixtures.length,
+
+    ranges
+  };
+}
+
+
+// =====================================================
+// RÉPONSE NETLIFY
+// =====================================================
+
+function jsonResponse(
+  statusCode,
+  body
+) {
+
+  return {
+
+    statusCode,
+
+    headers: {
+
+      'content-type':
+        'application/json; charset=utf-8',
+
+      'cache-control':
+        'no-store, no-cache, must-revalidate, max-age=0',
+
+      pragma:
+        'no-cache',
+
+      expires:
+        '0'
+    },
+
+    body:
+      JSON.stringify(
+        body
+      )
+  };
+}
+
+
+// =====================================================
+// HANDLER
 // =====================================================
 
 exports.handler =
   async () => {
-
-
-    const token =
-      process
-        .env
-        .SPORTMONKS_API_TOKEN;
-
-
-    if (
-      !token
-    ) {
-
-      return jsonResponse(
-        500,
-        {
-
-          engineVersion:
-            ENGINE_VERSION,
-
-
-          error:
-            'SPORTMONKS_API_TOKEN absent.'
-        }
-      );
-    }
-
 
     const end =
       new Date();
@@ -799,129 +1221,148 @@ exports.handler =
       );
 
 
-    const ranges =
-      buildRanges(
-        start,
-        end
+    let supabaseMatches =
+      [];
+
+
+    let supabaseError =
+      null;
+
+
+    // ---------------------------------
+    // 1. ESSAYER SUPABASE
+    // ---------------------------------
+
+    try {
+
+      supabaseMatches =
+        await loadSupabaseHistory(
+          start,
+          end
+        );
+
+
+      if (
+        supabaseIsReady(
+          supabaseMatches
+        )
+      ) {
+
+        const leagues =
+          countLeagues(
+            supabaseMatches
+          );
+
+
+        return jsonResponse(
+          200,
+          {
+
+            engineVersion:
+              ENGINE_VERSION,
+
+            mode:
+              'model-history',
+
+            source:
+              'supabase',
+
+            days:
+              TOTAL_DAYS,
+
+            chunkDays:
+              0,
+
+            chunks:
+              0,
+
+            from:
+              iso(start),
+
+            to:
+              iso(end),
+
+            rawCount:
+              supabaseMatches.length,
+
+            count:
+              supabaseMatches.length,
+
+            leagues,
+
+            ranges:
+              [],
+
+            matches:
+              supabaseMatches
+          }
+        );
+      }
+
+
+      supabaseError =
+
+        `Base MatchScope insuffisante : ${supabaseMatches.length} matchs.`;
+
+    } catch (
+      error
+    ) {
+
+      supabaseError =
+        error?.message
+        ||
+        String(error);
+    }
+
+
+    // ---------------------------------
+    // 2. FALLBACK SPORTMONKS
+    // ---------------------------------
+
+    const token =
+      process
+        .env
+        .SPORTMONKS_API_TOKEN;
+
+
+    if (!token) {
+
+      return jsonResponse(
+        500,
+        {
+
+          engineVersion:
+            ENGINE_VERSION,
+
+          error:
+            'Historique indisponible.',
+
+          supabaseError,
+
+          details:
+            'Supabase incomplet et SPORTMONKS_API_TOKEN absent.'
+        }
       );
+    }
 
 
     try {
 
-      /*
-       * Chaque bloc fait maximum 90 jours.
-       *
-       * Ils sont récupérés séparément,
-       * donc Sportmonks ne reçoit jamais
-       * une requête de 365 jours.
-       */
+      const fallback =
+        await loadSportmonksHistory(
 
-      const results =
-        await Promise.all(
+          token,
 
-          ranges.map(
-            range =>
+          start,
 
-              fetchRange(
-                token,
-                range
-              )
-          )
+          end
         );
 
 
-      const rawFixtures =
-        results.flat();
-
-
-      /*
-       * Suppression des doublons.
-       */
-
-      const uniqueFixtures =
-        new Map();
-
-
-      rawFixtures.forEach(
-        fixture => {
-
-          if (
-            fixture?.id ===
-            undefined
-
-            ||
-
-            fixture?.id ===
-            null
-          ) {
-
-            return;
-          }
-
-
-          uniqueFixtures.set(
-
-            String(
-              fixture.id
-            ),
-
-            fixture
-          );
-        }
-      );
-
-
-      const matches =
-
-        Array.from(
-          uniqueFixtures.values()
-        )
-
-          .map(
-            transformFixture
-          )
-
-          .filter(
-            Boolean
-          )
-
-          .sort(
-            (
-              first,
-              second
-            ) =>
-
-              first.kickoffTs -
-              second.kickoffTs
-          );
-
-
       const leagues =
-        {};
-
-
-      matches.forEach(
-        match => {
-
-          leagues[
-            match.competition
-          ] =
-
-            (
-              leagues[
-                match.competition
-              ]
-
-              ||
-
-              0
-            )
-
-            +
-
-            1;
-        }
-      );
+        countLeagues(
+          fallback.matches
+        );
 
 
       return jsonResponse(
@@ -931,49 +1372,43 @@ exports.handler =
           engineVersion:
             ENGINE_VERSION,
 
-
           mode:
             'model-history',
 
+          source:
+            'sportmonks-fallback',
 
           days:
             TOTAL_DAYS,
 
-
           chunkDays:
             CHUNK_DAYS,
 
-
           chunks:
-            ranges.length,
-
+            fallback.ranges.length,
 
           from:
-            iso(
-              start
-            ),
-
+            iso(start),
 
           to:
-            iso(
-              end
-            ),
-
+            iso(end),
 
           rawCount:
-            rawFixtures.length,
-
+            fallback.rawCount,
 
           count:
-            matches.length,
-
+            fallback.matches.length,
 
           leagues,
 
+          supabaseCount:
+            supabaseMatches.length,
+
+          supabaseError,
 
           ranges:
 
-            ranges.map(
+            fallback.ranges.map(
               range => ({
 
                 from:
@@ -988,8 +1423,8 @@ exports.handler =
               })
             ),
 
-
-          matches
+          matches:
+            fallback.matches
         }
       );
 
@@ -997,7 +1432,6 @@ exports.handler =
     } catch (
       error
     ) {
-
 
       console.error(
         'MatchScope modelhistory:',
@@ -1012,50 +1446,15 @@ exports.handler =
           engineVersion:
             ENGINE_VERSION,
 
-
           error:
             'Erreur MatchScope model-history',
 
+          supabaseError,
 
           details:
-
             error?.message
-
             ||
-
-            String(
-              error
-            ),
-
-
-          requestedDays:
-            TOTAL_DAYS,
-
-
-          chunkDays:
-            CHUNK_DAYS,
-
-
-          chunks:
-            ranges.length,
-
-
-          ranges:
-
-            ranges.map(
-              range => ({
-
-                from:
-                  iso(
-                    range.start
-                  ),
-
-                to:
-                  iso(
-                    range.end
-                  )
-              })
-            )
+            String(error)
         }
       );
     }
