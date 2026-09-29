@@ -1,412 +1,486 @@
 <!DOCTYPE html>
+
 <html lang="fr">
+
 <head>
-  <meta charset="UTF-8" />
+
+  <meta charset="UTF-8">
 
   <meta
     name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  />
+    content="width=device-width, initial-scale=1"
+  >
 
-  <title>MatchScope — Sync Admin</title>
+  <title>MatchScope Admin</title>
+
 
   <style>
+
     * {
       box-sizing: border-box;
     }
 
+
     body {
       margin: 0;
-      padding: 24px;
-      background: #050806;
-      color: #ffffff;
+      padding: 25px;
+
+      background:
+        #050806;
+
+      color:
+        white;
+
       font-family:
         -apple-system,
         BlinkMacSystemFont,
-        "Segoe UI",
         sans-serif;
     }
 
-    .container {
-      width: 100%;
-      max-width: 650px;
-      margin: 0 auto;
+
+    main {
+      max-width:
+        650px;
+
+      margin:
+        auto;
     }
+
 
     h1 {
-      color: #00e86b;
-      margin-bottom: 6px;
+      color:
+        #00e86b;
     }
 
-    .subtitle {
-      color: #8e9b93;
-      margin-bottom: 30px;
-    }
 
     .card {
-      background: #0b110d;
-      border: 1px solid #1c2a21;
-      border-radius: 14px;
-      padding: 18px;
-      margin-bottom: 18px;
+      margin-top:
+        25px;
+
+      padding:
+        20px;
+
+      border:
+        1px solid #203528;
+
+      border-radius:
+        16px;
+
+      background:
+        #09100c;
     }
 
+
     label {
-      display: block;
-      font-size: 13px;
-      color: #aeb9b2;
-      margin-bottom: 8px;
+      display:
+        block;
+
+      margin-top:
+        15px;
+
+      margin-bottom:
+        7px;
+
+      color:
+        #b0bbb4;
     }
+
 
     input,
     select {
-      width: 100%;
-      padding: 14px;
-      border-radius: 9px;
-      border: 1px solid #26362c;
-      background: #050806;
-      color: white;
-      font-size: 16px;
-      margin-bottom: 18px;
+
+      width:
+        100%;
+
+      padding:
+        15px;
+
+      border:
+        1px solid #294033;
+
+      border-radius:
+        10px;
+
+      background:
+        #020403;
+
+      color:
+        white;
+
+      font-size:
+        16px;
     }
+
 
     button {
-      width: 100%;
-      padding: 15px;
-      border: 0;
-      border-radius: 10px;
-      background: #00e86b;
-      color: #001b0b;
-      font-size: 16px;
-      font-weight: 800;
-      cursor: pointer;
+
+      width:
+        100%;
+
+      margin-top:
+        22px;
+
+      padding:
+        17px;
+
+      border:
+        0;
+
+      border-radius:
+        11px;
+
+      background:
+        #00e86b;
+
+      color:
+        #00190a;
+
+      font-size:
+        17px;
+
+      font-weight:
+        800;
     }
+
 
     button:disabled {
-      opacity: 0.5;
+      opacity:
+        0.5;
     }
 
-    .status {
-      margin-top: 18px;
-      font-size: 14px;
-      line-height: 1.5;
+
+    #status {
+      margin-top:
+        20px;
+
+      font-weight:
+        700;
     }
+
 
     pre {
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-      background: #020403;
-      border: 1px solid #1c2a21;
-      border-radius: 10px;
-      padding: 14px;
-      min-height: 120px;
-      font-size: 12px;
-      color: #d6ffdf;
+
+      min-height:
+        150px;
+
+      padding:
+        15px;
+
+      white-space:
+        pre-wrap;
+
+      overflow-wrap:
+        anywhere;
+
+      background:
+        black;
+
+      border:
+        1px solid #203528;
+
+      border-radius:
+        12px;
+
+      color:
+        #d7ffe1;
     }
 
-    .success {
-      color: #00e86b;
+
+    .ok {
+      color:
+        #00e86b;
     }
+
 
     .error {
-      color: #ff6b6b;
+      color:
+        #ff6b6b;
     }
 
-    .warning {
-      color: #ffd166;
+
+    .waiting {
+      color:
+        #ffd166;
     }
 
-    .small {
-      font-size: 12px;
-      color: #829087;
-      margin-top: 12px;
-    }
   </style>
+
 </head>
+
 
 <body>
 
-  <div class="container">
+<main>
 
-    <h1>MatchScope Admin</h1>
+  <h1>
+    MatchScope Admin
+  </h1>
 
-    <div class="subtitle">
-      Synchronisation de l'historique
-    </div>
-
-
-    <div class="card">
-
-      <label for="secret">
-        MATCHSCOPE_SYNC_SECRET
-      </label>
-
-      <input
-        id="secret"
-        type="password"
-        autocomplete="off"
-        placeholder="Entre ton secret Netlify"
-      />
+  <p>
+    Synchronisation historique
+  </p>
 
 
-      <label for="part">
-        Partie du seed
-      </label>
+  <div class="card">
 
-      <select id="part">
-
-        <option value="99">
-          TEST — part 99
-        </option>
-
-        <option value="1">
-          Partie 1 / 7
-        </option>
-
-        <option value="2">
-          Partie 2 / 7
-        </option>
-
-        <option value="3">
-          Partie 3 / 7
-        </option>
-
-        <option value="4">
-          Partie 4 / 7
-        </option>
-
-        <option value="5">
-          Partie 5 / 7
-        </option>
-
-        <option value="6">
-          Partie 6 / 7
-        </option>
-
-        <option value="7">
-          Partie 7 / 7
-        </option>
-
-      </select>
+    <label>
+      MATCHSCOPE_SYNC_SECRET
+    </label>
 
 
-      <button id="runButton">
-        Lancer la synchronisation
-      </button>
+    <input
+      id="secret"
+      type="password"
+      autocomplete="off"
+      placeholder="Secret Netlify"
+    >
 
 
-      <div
-        id="status"
-        class="status"
-      >
-      </div>
+    <label>
+      Partie
+    </label>
 
 
-      <div class="small">
-        Le secret est envoyé uniquement à la Function Netlify.
-        Il n'est pas enregistré par cette page.
-      </div>
+    <select id="part">
 
-    </div>
+      <option value="99">
+        TEST — part 99
+      </option>
+
+      <option value="1">
+        Partie 1 / 7
+      </option>
+
+      <option value="2">
+        Partie 2 / 7
+      </option>
+
+      <option value="3">
+        Partie 3 / 7
+      </option>
+
+      <option value="4">
+        Partie 4 / 7
+      </option>
+
+      <option value="5">
+        Partie 5 / 7
+      </option>
+
+      <option value="6">
+        Partie 6 / 7
+      </option>
+
+      <option value="7">
+        Partie 7 / 7
+      </option>
+
+    </select>
 
 
-    <div class="card">
+    <button id="run">
+      Lancer
+    </button>
 
-      <strong>
-        Réponse serveur
-      </strong>
 
-      <pre id="result">
-Aucun appel effectué.
-      </pre>
-
+    <div id="status">
     </div>
 
   </div>
 
 
-  <script>
+  <div class="card">
 
-    const secretInput =
-      document.getElementById(
-        'secret'
-      );
-
-
-    const partInput =
-      document.getElementById(
-        'part'
-      );
+    <strong>
+      Réponse serveur
+    </strong>
 
 
-    const button =
-      document.getElementById(
-        'runButton'
-      );
+    <pre id="result">
+Aucun test lancé.
+    </pre>
+
+  </div>
+
+</main>
 
 
-    const status =
-      document.getElementById(
-        'status'
-      );
+<script>
+
+const secret =
+  document.getElementById(
+    'secret'
+  );
 
 
-    const result =
-      document.getElementById(
-        'result'
-      );
+const part =
+  document.getElementById(
+    'part'
+  );
 
 
-    button.addEventListener(
-      'click',
-      async () => {
-
-        const secret =
-          secretInput
-            .value
-            .trim();
+const button =
+  document.getElementById(
+    'run'
+  );
 
 
-        const part =
-          partInput
-            .value;
+const status =
+  document.getElementById(
+    'status'
+  );
 
 
-        if (!secret) {
-
-          status.className =
-            'status error';
-
-          status.textContent =
-            'Entre ton MATCHSCOPE_SYNC_SECRET.';
-
-          return;
-        }
+const result =
+  document.getElementById(
+    'result'
+  );
 
 
-        button.disabled =
-          true;
+button.addEventListener(
+  'click',
 
+  async () => {
+
+    const secretValue =
+      secret
+        .value
+        .trim();
+
+
+    if (!secretValue) {
+
+      status.className =
+        'error';
+
+      status.textContent =
+        'Entre ton secret.';
+
+      return;
+    }
+
+
+    button.disabled =
+      true;
+
+
+    status.className =
+      'waiting';
+
+
+    status.textContent =
+      'Connexion en cours...';
+
+
+    result.textContent =
+      'Attente de Netlify...';
+
+
+    try {
+
+      const response =
+        await fetch(
+          '/.netlify/functions/sync-history',
+          {
+            method:
+              'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json'
+            },
+
+            body:
+              JSON.stringify({
+                secret:
+                  secretValue,
+
+                mode:
+                  'seed',
+
+                part:
+                  Number(
+                    part.value
+                  )
+              })
+          }
+        );
+
+
+      const text =
+        await response.text();
+
+
+      let data;
+
+
+      try {
+
+        data =
+          JSON.parse(text);
+
+      } catch {
+
+        data = {
+          raw:
+            text
+        };
+      }
+
+
+      result.textContent =
+        JSON.stringify(
+          data,
+          null,
+          2
+        );
+
+
+      if (
+        data?.success
+      ) {
 
         status.className =
-          'status warning';
-
+          'ok';
 
         status.textContent =
-          `Appel de la partie ${part} en cours...`;
+          'Synchronisation réussie.';
 
+      } else {
 
-        result.textContent =
-          'Connexion à Netlify...';
+        status.className =
+          'error';
 
-
-        try {
-
-          const response =
-            await fetch(
-
-              `/.netlify/functions/sync-history?mode=seed&part=${encodeURIComponent(
-                part
-              )}`,
-
-              {
-
-                method:
-                  'POST',
-
-                headers: {
-
-                  'X-MatchScope-Secret':
-                    secret,
-
-                  'Content-Type':
-                    'application/json'
-                }
-              }
-            );
-
-
-          const text =
-            await response.text();
-
-
-          let data;
-
-
-          try {
-
-            data =
-              JSON.parse(
-                text
-              );
-
-          } catch {
-
-            data = {
-              raw:
-                text
-            };
-          }
-
-
-          result.textContent =
-            JSON.stringify(
-              data,
-              null,
-              2
-            );
-
-
-          if (
-            response.ok &&
-            data?.success
-          ) {
-
-            status.className =
-              'status success';
-
-
-            status.textContent =
-              'Synchronisation terminée avec succès.';
-
-          } else {
-
-            status.className =
-              'status error';
-
-
-            status.textContent =
-              `Réponse serveur HTTP ${response.status}.`;
-          }
-
-
-        } catch (
-          error
-        ) {
-
-          status.className =
-            'status error';
-
-
-          status.textContent =
-            'Erreur de connexion.';
-
-
-          result.textContent =
-            String(
-              error?.message
-              ||
-              error
-            );
-        }
-
-
-        button.disabled =
-          false;
+        status.textContent =
+          `Réponse HTTP ${response.status}.`;
       }
-    );
 
-  </script>
+
+    } catch (error) {
+
+      status.className =
+        'error';
+
+
+      status.textContent =
+        'Erreur réseau.';
+
+
+      result.textContent =
+        String(
+          error?.message
+          ||
+          error
+        );
+    }
+
+
+    button.disabled =
+      false;
+  }
+);
+
+</script>
 
 </body>
 </html>
