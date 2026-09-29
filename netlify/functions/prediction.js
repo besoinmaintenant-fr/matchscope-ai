@@ -6,7 +6,9 @@ const {
 const {
   savePrediction,
   findPrediction,
-  lineupStatus
+  lineupStatus,
+  saveMatch,
+  saveLineups
 } = require('./lib/memory');
 
 
@@ -1345,7 +1347,36 @@ exports.handler =
 
 
       // =================================================
-      // 4. PRÉDICTION DÉJÀ FIGÉE ?
+      // 4. MÉMORISATION IMMÉDIATE DES XI OFFICIELS
+      // =================================================
+      //
+      // Dès que Sportmonks fournit au moins
+      // 22 titulaires appartenant aux deux équipes,
+      // on stocke le match et les compositions
+      // dans Supabase.
+      //
+      // Cela NE modifie PAS encore V0.7.
+      // Cela NE crée PAS encore une prédiction FINAL.
+      // =================================================
+
+      if (
+        lineup.official
+      ) {
+
+        await saveMatch(
+          fixture,
+          true
+        );
+
+
+        await saveLineups(
+          fixture
+        );
+      }
+
+
+      // =================================================
+      // 5. PRÉDICTION DÉJÀ FIGÉE ?
       // =================================================
 
       const existing =
@@ -1386,6 +1417,12 @@ exports.handler =
             officialLineups:
               lineup.official,
 
+            startersFound:
+              lineup.starters.length,
+
+            lineupsStored:
+              lineup.official,
+
             prediction:
               existing
           }
@@ -1394,7 +1431,7 @@ exports.handler =
 
 
       // =================================================
-      // 5. RUNTIME V0.7
+      // 6. RUNTIME V0.7
       //
       // ICI ON NE RETUNE PLUS LE MODÈLE.
       // =================================================
@@ -1404,7 +1441,7 @@ exports.handler =
 
 
       // =================================================
-      // 6. HISTORIQUE ACTUEL
+      // 7. HISTORIQUE ACTUEL
       // =================================================
 
       const history =
@@ -1444,7 +1481,7 @@ exports.handler =
 
 
       // =================================================
-      // 7. ELO AVEC LES PARAMÈTRES FIGÉS
+      // 8. ELO AVEC LES PARAMÈTRES FIGÉS
       // =================================================
 
       const eloState =
@@ -1457,7 +1494,7 @@ exports.handler =
 
 
       // =================================================
-      // 8. CALCUL RAPIDE DU MATCH
+      // 9. CALCUL RAPIDE DU MATCH
       //
       // Plus de tuneModel()
       // Plus de backtest à chaque clic.
@@ -1481,7 +1518,7 @@ exports.handler =
 
 
       // =================================================
-      // 9. PRELINEUP
+      // 10. PRELINEUP
       // =================================================
 
       if (
@@ -1573,6 +1610,12 @@ exports.handler =
             officialLineups:
               false,
 
+            startersFound:
+              lineup.starters.length,
+
+            lineupsStored:
+              false,
+
             runtime: {
 
               trainedAt:
@@ -1601,9 +1644,13 @@ exports.handler =
 
 
       // =================================================
-      // 10. XI OFFICIELS
+      // 11. XI OFFICIELS
       //
-      // On ne crée toujours PAS de fausse FINAL.
+      // Les compositions sont désormais stockées.
+      //
+      // Mais on ne crée toujours PAS de fausse FINAL :
+      // V0.7 ne sait pas encore mesurer
+      // l'impact réel des titulaires.
       // =================================================
 
       return jsonResponse(
@@ -1633,11 +1680,14 @@ exports.handler =
           startersFound:
             lineup.starters.length,
 
+          lineupsStored:
+            true,
+
           reason:
             'FINAL_LINEUP_MODEL_PENDING',
 
           message:
-            'Les compositions officielles sont disponibles. La base V0.7 est calculée avec le runtime figé, mais aucune prédiction FINAL n’est enregistrée tant que l’effet des compositions n’a pas été validé.',
+            'Les compositions officielles sont enregistrées dans la mémoire MatchScope. La base V0.7 est calculée avec le runtime figé, mais aucune prédiction FINAL n’est enregistrée tant que l’effet des compositions n’a pas été validé.',
 
           runtime: {
 
