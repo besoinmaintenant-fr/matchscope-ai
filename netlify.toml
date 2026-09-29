@@ -5,8 +5,12 @@
 [functions]
   node_bundler = "esbuild"
 
+[functions."collect-lineups"]
+  schedule = "*/15 * * * *"
+
 [[headers]]
   for = "/*"
+
   [headers.values]
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
