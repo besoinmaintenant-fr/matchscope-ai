@@ -1,0 +1,1412 @@
+<!doctype html>
+
+<html lang="fr">
+
+<head>
+
+  <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  >
+
+  <title>
+    MatchScope — Feature Engine
+  </title>
+
+
+  <style>
+
+    body {
+
+      margin: 0;
+
+      padding: 20px;
+
+      background: #06110c;
+
+      color: white;
+
+      font-family:
+        Arial,
+        sans-serif;
+    }
+
+
+    .box {
+
+      max-width: 620px;
+
+      margin: 25px auto;
+
+      background: #0d1d15;
+
+      border:
+        1px solid #244a35;
+
+      border-radius: 18px;
+
+      padding: 22px;
+    }
+
+
+    h1 {
+
+      margin-top: 0;
+
+      margin-bottom: 8px;
+
+      font-size: 25px;
+    }
+
+
+    .subtitle {
+
+      color: #9fb4a7;
+
+      line-height: 1.5;
+
+      margin-bottom: 20px;
+    }
+
+
+    .version {
+
+      display: inline-block;
+
+      padding: 6px 10px;
+
+      border-radius: 999px;
+
+      background: #163523;
+
+      color: #57ec94;
+
+      font-size: 13px;
+
+      font-weight: bold;
+
+      margin-bottom: 18px;
+    }
+
+
+    input,
+    button {
+
+      width: 100%;
+
+      box-sizing:
+        border-box;
+
+      padding: 15px;
+
+      border-radius: 12px;
+
+      font-size: 16px;
+    }
+
+
+    input {
+
+      margin-bottom: 12px;
+
+      background: #07100b;
+
+      color: white;
+
+      border:
+        1px solid #315641;
+    }
+
+
+    button {
+
+      border: 0;
+
+      background: #37e481;
+
+      color: #00190b;
+
+      font-weight: bold;
+
+      margin-top: 8px;
+    }
+
+
+    button.secondary {
+
+      background: #25372d;
+
+      color: white;
+    }
+
+
+    button:disabled {
+
+      opacity: .45;
+    }
+
+
+    .global-progress {
+
+      margin-top: 24px;
+    }
+
+
+    .progress-shell {
+
+      height: 14px;
+
+      background: #07100b;
+
+      border-radius: 999px;
+
+      overflow: hidden;
+
+      border:
+        1px solid #244a35;
+
+      margin-top: 8px;
+    }
+
+
+    .progress-bar {
+
+      height: 100%;
+
+      width: 0%;
+
+      background: #37e481;
+
+      transition:
+        width .3s ease;
+    }
+
+
+    .progress-number {
+
+      font-size: 29px;
+
+      font-weight: bold;
+
+      color: #57ec94;
+    }
+
+
+    .cards {
+
+      display: grid;
+
+      grid-template-columns:
+        1fr 1fr;
+
+      gap: 12px;
+
+      margin-top: 18px;
+    }
+
+
+    .card {
+
+      background: #07100b;
+
+      border:
+        1px solid #243f30;
+
+      border-radius: 14px;
+
+      padding: 15px;
+    }
+
+
+    .card span {
+
+      display: block;
+
+      color: #8da495;
+
+      font-size: 12px;
+
+      text-transform: uppercase;
+
+      margin-bottom: 8px;
+    }
+
+
+    .card strong {
+
+      display: block;
+
+      font-size: 21px;
+    }
+
+
+    .card small {
+
+      display: block;
+
+      color: #9eb0a4;
+
+      margin-top: 6px;
+
+      line-height: 1.4;
+    }
+
+
+    .league-box {
+
+      margin-top: 18px;
+
+      background: #07100b;
+
+      border:
+        1px solid #243f30;
+
+      border-radius: 14px;
+
+      padding: 15px;
+    }
+
+
+    .league-row {
+
+      display: grid;
+
+      grid-template-columns:
+        45px 1fr 1fr;
+
+      gap: 8px;
+
+      align-items: center;
+
+      padding: 8px 0;
+
+      border-bottom:
+        1px solid #173022;
+    }
+
+
+    .league-row:last-child {
+
+      border-bottom: 0;
+    }
+
+
+    .league-row span {
+
+      color: #94aa9b;
+
+      font-size: 13px;
+    }
+
+
+    #status {
+
+      margin-top: 18px;
+
+      background: #07100b;
+
+      padding: 15px;
+
+      border-radius: 12px;
+
+      min-height: 90px;
+
+      white-space:
+        pre-wrap;
+
+      line-height: 1.5;
+    }
+
+
+    .warning {
+
+      margin-top: 18px;
+
+      padding: 14px;
+
+      border-radius: 12px;
+
+      background: #19180b;
+
+      border:
+        1px solid #5b5621;
+
+      color: #ded797;
+
+      line-height: 1.45;
+
+      font-size: 13px;
+    }
+
+
+    @media (
+      max-width: 520px
+    ) {
+
+      .cards {
+
+        grid-template-columns:
+          1fr;
+      }
+    }
+
+  </style>
+
+</head>
+
+
+<body>
+
+
+  <div class="box">
+
+
+    <h1>
+      MatchScope Feature Engine
+    </h1>
+
+
+    <div class="version">
+      features-v1
+    </div>
+
+
+    <div class="subtitle">
+
+      Construction des variables mathématiques
+      PRELINEUP et FINAL à partir de la mémoire
+      historique MatchScope.
+
+    </div>
+
+
+    <input
+      id="secret"
+      type="password"
+      placeholder="MATCHSCOPE_SYNC_SECRET"
+      autocomplete="off"
+    >
+
+
+    <button id="launch">
+
+      Construire automatiquement les features
+
+    </button>
+
+
+    <button
+      id="stop"
+      class="secondary"
+      disabled
+    >
+
+      Arrêter après le lot en cours
+
+    </button>
+
+
+    <!-- ============================================= -->
+    <!-- PROGRESSION GLOBALE -->
+    <!-- ============================================= -->
+
+    <div class="global-progress">
+
+      <span>
+        Progression globale
+      </span>
+
+      <div
+        id="progressNumber"
+        class="progress-number"
+      >
+        —
+      </div>
+
+      <div class="progress-shell">
+
+        <div
+          id="progressBar"
+          class="progress-bar"
+        ></div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ============================================= -->
+    <!-- PRELINEUP / FINAL -->
+    <!-- ============================================= -->
+
+    <div class="cards">
+
+
+      <div class="card">
+
+        <span>
+          PRELINEUP
+        </span>
+
+        <strong id="preCount">
+          —
+        </strong>
+
+        <small id="preCoverage">
+          Couverture : —
+        </small>
+
+      </div>
+
+
+      <div class="card">
+
+        <span>
+          FINAL
+        </span>
+
+        <strong id="finalCount">
+          —
+        </strong>
+
+        <small id="finalCoverage">
+          Couverture : —
+        </small>
+
+      </div>
+
+
+    </div>
+
+
+    <!-- ============================================= -->
+    <!-- LIGUES -->
+    <!-- ============================================= -->
+
+    <div class="league-box">
+
+      <strong>
+        Par championnat
+      </strong>
+
+
+      <div
+        class="league-row"
+        style="margin-top:12px"
+      >
+
+        <b>
+          PL
+        </b>
+
+        <span id="plPre">
+          PRE —
+        </span>
+
+        <span id="plFinal">
+          FINAL —
+        </span>
+
+      </div>
+
+
+      <div class="league-row">
+
+        <b>
+          BL
+        </b>
+
+        <span id="blPre">
+          PRE —
+        </span>
+
+        <span id="blFinal">
+          FINAL —
+        </span>
+
+      </div>
+
+
+      <div class="league-row">
+
+        <b>
+          LL
+        </b>
+
+        <span id="llPre">
+          PRE —
+        </span>
+
+        <span id="llFinal">
+          FINAL —
+        </span>
+
+      </div>
+
+
+    </div>
+
+
+    <div id="status">
+
+      Chargement de l'état…
+
+    </div>
+
+
+    <div class="warning">
+
+      V0.7 reste inchangée.
+
+      Les données générées ici servent uniquement
+      à préparer et tester le futur modèle challenger
+      avant toute modification des probabilités
+      affichées dans MatchScope.
+
+    </div>
+
+
+  </div>
+
+
+  <script>
+
+
+    // =================================================
+    // ÉLÉMENTS
+    // =================================================
+
+    const secretInput =
+      document.querySelector(
+        '#secret'
+      );
+
+
+    const launchButton =
+      document.querySelector(
+        '#launch'
+      );
+
+
+    const stopButton =
+      document.querySelector(
+        '#stop'
+      );
+
+
+    const statusBox =
+      document.querySelector(
+        '#status'
+      );
+
+
+    const progressBar =
+      document.querySelector(
+        '#progressBar'
+      );
+
+
+    const progressNumber =
+      document.querySelector(
+        '#progressNumber'
+      );
+
+
+    const preCount =
+      document.querySelector(
+        '#preCount'
+      );
+
+
+    const finalCount =
+      document.querySelector(
+        '#finalCount'
+      );
+
+
+    const preCoverage =
+      document.querySelector(
+        '#preCoverage'
+      );
+
+
+    const finalCoverage =
+      document.querySelector(
+        '#finalCoverage'
+      );
+
+
+    let running =
+      false;
+
+
+    let stopRequested =
+      false;
+
+
+    // =================================================
+    // OUTILS
+    // =================================================
+
+    function sleep(
+      milliseconds
+    ) {
+
+      return new Promise(
+
+        resolve =>
+          setTimeout(
+            resolve,
+            milliseconds
+          )
+      );
+    }
+
+
+    function value(
+      input,
+      fallback = '—'
+    ) {
+
+      if (
+        input === null ||
+        input === undefined
+      ) {
+
+        return fallback;
+      }
+
+
+      return input;
+    }
+
+
+    // =================================================
+    // AFFICHAGE DE L'ÉTAT
+    // =================================================
+
+    function renderState(
+      data
+    ) {
+
+      const progress =
+        Number(
+          data
+            ?.total
+            ?.progress
+          ||
+          0
+        );
+
+
+      progressNumber.textContent =
+        `${progress}%`;
+
+
+      progressBar
+        .style
+        .width =
+
+          `${Math.max(
+            0,
+            Math.min(
+              100,
+              progress
+            )
+          )}%`;
+
+
+      // -----------------------------------------------
+      // PRELINEUP
+      // -----------------------------------------------
+
+      const pre =
+        data?.prelineup
+        ||
+        {};
+
+
+      preCount.textContent =
+
+        `${value(
+          pre.generated,
+          0
+        )} / ${value(
+          pre.target,
+          0
+        )}`;
+
+
+      preCoverage.textContent =
+
+        `Couverture moyenne : ${
+          pre.averageCoverage ===
+          null
+
+            ? '—'
+
+            : `${pre.averageCoverage}%`
+        }`;
+
+
+      // -----------------------------------------------
+      // FINAL
+      // -----------------------------------------------
+
+      const final =
+        data?.final
+        ||
+        {};
+
+
+      finalCount.textContent =
+
+        `${value(
+          final.generated,
+          0
+        )} / ${value(
+          final.target,
+          0
+        )}`;
+
+
+      finalCoverage.textContent =
+
+        `Couverture moyenne : ${
+          final.averageCoverage ===
+          null
+
+            ? '—'
+
+            : `${final.averageCoverage}%`
+        }`;
+
+
+      // -----------------------------------------------
+      // LIGUES
+      // -----------------------------------------------
+
+      const leagues =
+        data?.leagues
+        ||
+        {};
+
+
+      renderLeague(
+        'pl',
+        leagues.PL
+      );
+
+
+      renderLeague(
+        'bl',
+        leagues.BL
+      );
+
+
+      renderLeague(
+        'll',
+        leagues.LL
+      );
+    }
+
+
+    function renderLeague(
+      prefix,
+      league
+    ) {
+
+      const data =
+        league
+        ||
+        {};
+
+
+      const pre =
+        document.querySelector(
+          `#${prefix}Pre`
+        );
+
+
+      const final =
+        document.querySelector(
+          `#${prefix}Final`
+        );
+
+
+      if (
+        pre
+      ) {
+
+        pre.textContent =
+
+          `PRE ${
+            value(
+              data.prelineup,
+              0
+            )
+          } / ${
+            value(
+              data.targets,
+              0
+            )
+          }`;
+      }
+
+
+      if (
+        final
+      ) {
+
+        final.textContent =
+
+          `FINAL ${
+            value(
+              data.final,
+              0
+            )
+          } / ${
+            value(
+              data.finalEligible,
+              0
+            )
+          }`;
+      }
+    }
+
+
+    // =================================================
+    // LIRE L'ÉTAT
+    // =================================================
+
+    async function getState() {
+
+      const response =
+        await fetch(
+
+          `/.netlify/functions/features-status?t=${Date.now()}`,
+
+          {
+
+            method:
+              'GET',
+
+            cache:
+              'no-store'
+          }
+        );
+
+
+      let data =
+        {};
+
+
+      try {
+
+        data =
+          await response.json();
+
+      } catch {
+
+        throw new Error(
+          'Réponse features-status illisible.'
+        );
+      }
+
+
+      if (
+        !response.ok ||
+        data.success !== true
+      ) {
+
+        throw new Error(
+
+          data?.error
+
+          ||
+
+          `HTTP ${response.status}`
+        );
+      }
+
+
+      renderState(
+        data
+      );
+
+
+      return data;
+    }
+
+
+    // =================================================
+    // LANCER UN LOT
+    // =================================================
+
+    async function launchBatch(
+      secret
+    ) {
+
+      const response =
+        await fetch(
+          '/.netlify/functions/build-features-background',
+          {
+
+            method:
+              'POST',
+
+            headers: {
+
+              'Content-Type':
+                'application/json'
+            },
+
+            body:
+              JSON.stringify({
+
+                secret
+              })
+          }
+        );
+
+
+      /*
+       * Netlify Background Function :
+       * 202 = lancement accepté.
+       */
+
+      if (
+        !(
+          response.status ===
+          202
+
+          ||
+
+          response.ok
+        )
+      ) {
+
+        const text =
+          await response.text();
+
+
+        throw new Error(
+
+          `Erreur HTTP ${response.status}\n${text}`
+        );
+      }
+    }
+
+
+    // =================================================
+    // ATTENDRE LA FIN DU LOT
+    // =================================================
+
+    async function waitForProgress(
+      before
+    ) {
+
+      /*
+       * Jusqu'à environ 16 minutes.
+       */
+
+      const maxAttempts =
+        190;
+
+
+      for (
+        let attempt = 0;
+        attempt < maxAttempts;
+        attempt += 1
+      ) {
+
+        await sleep(
+          5000
+        );
+
+
+        const state =
+          await getState();
+
+
+        const generated =
+          Number(
+            state
+              ?.total
+              ?.generated
+            ||
+            0
+          );
+
+
+        const target =
+          Number(
+            state
+              ?.total
+              ?.target
+            ||
+            0
+          );
+
+
+        statusBox.textContent =
+
+`Lot en cours…
+
+${generated} / ${target} features générées
+
+${state.total.remaining} restantes
+
+Progression : ${state.total.progress}%`;
+
+
+        if (
+          state.done
+        ) {
+
+          return state;
+        }
+
+
+        if (
+          generated >
+          before
+        ) {
+
+          return state;
+        }
+      }
+
+
+      throw new Error(
+        'Le lot n’a pas confirmé sa fin dans le délai prévu.'
+      );
+    }
+
+
+    // =================================================
+    // CONSTRUCTION AUTOMATIQUE
+    // =================================================
+
+    async function runAll() {
+
+      const secret =
+        secretInput
+          .value
+          .trim();
+
+
+      if (
+        !secret
+      ) {
+
+        statusBox.textContent =
+          'Entre ton MATCHSCOPE_SYNC_SECRET.';
+
+
+        return;
+      }
+
+
+      running =
+        true;
+
+
+      stopRequested =
+        false;
+
+
+      launchButton.disabled =
+        true;
+
+
+      stopButton.disabled =
+        false;
+
+
+      secretInput.disabled =
+        true;
+
+
+      try {
+
+        let state =
+          await getState();
+
+
+        // ---------------------------------------------
+        // DÉJÀ TERMINÉ
+        // ---------------------------------------------
+
+        if (
+          state.done
+        ) {
+
+          statusBox.textContent =
+
+`✅ FEATURE ENGINE DÉJÀ TERMINÉ
+
+PRELINEUP :
+${state.prelineup.generated} / ${state.prelineup.target}
+
+FINAL :
+${state.final.generated} / ${state.final.target}
+
+Couverture PRELINEUP :
+${state.prelineup.averageCoverage ?? '—'} %
+
+Couverture FINAL :
+${state.final.averageCoverage ?? '—'} %`;
+
+
+          return;
+        }
+
+
+        // ---------------------------------------------
+        // BOUCLE
+        // ---------------------------------------------
+
+        while (
+          !state.done
+
+          &&
+
+          !stopRequested
+        ) {
+
+          const before =
+            Number(
+              state
+                ?.total
+                ?.generated
+              ||
+              0
+            );
+
+
+          statusBox.textContent =
+
+`Lancement d'un nouveau lot…
+
+${before} / ${state.total.target}
+
+Restantes :
+${state.total.remaining}`;
+
+
+          await launchBatch(
+            secret
+          );
+
+
+          /*
+           * Laisse le temps à Netlify
+           * de démarrer la Background Function.
+           */
+
+          await sleep(
+            4000
+          );
+
+
+          state =
+            await waitForProgress(
+              before
+            );
+
+
+          if (
+            state.done ||
+            stopRequested
+          ) {
+
+            break;
+          }
+
+
+          statusBox.textContent =
+
+`✅ Lot terminé.
+
+${state.total.generated} / ${state.total.target}
+
+Lancement automatique du lot suivant…`;
+
+
+          await sleep(
+            3000
+          );
+        }
+
+
+        // ---------------------------------------------
+        // ÉTAT FINAL
+        // ---------------------------------------------
+
+        state =
+          await getState();
+
+
+        if (
+          state.done
+        ) {
+
+          statusBox.textContent =
+
+`✅ DATASET FEATURES-V1 TERMINÉ
+
+PRELINEUP
+${state.prelineup.generated} / ${state.prelineup.target}
+
+Couverture moyenne :
+${state.prelineup.averageCoverage ?? '—'} %
+
+FINAL
+${state.final.generated} / ${state.final.target}
+
+Couverture moyenne :
+${state.final.averageCoverage ?? '—'} %
+
+Total :
+${state.total.generated} features
+
+MatchScope dispose maintenant du premier dataset destiné au modèle probabiliste challenger.`;
+
+        } else if (
+          stopRequested
+        ) {
+
+          statusBox.textContent =
+
+`⏸️ ARRÊT DEMANDÉ
+
+Le lot lancé a été laissé terminer.
+
+Progression actuelle :
+${state.total.generated} / ${state.total.target}
+
+Tu peux reprendre plus tard sans perdre les données.`;
+        }
+
+
+      } catch (
+        error
+      ) {
+
+        statusBox.textContent =
+
+`❌ FEATURE ENGINE INTERROMPU
+
+${error.message}
+
+Les features déjà générées restent enregistrées dans Supabase.
+
+Recharge la page avant de reprendre.`;
+
+      } finally {
+
+        running =
+          false;
+
+
+        launchButton.disabled =
+          false;
+
+
+        stopButton.disabled =
+          true;
+
+
+        secretInput.disabled =
+          false;
+      }
+    }
+
+
+    // =================================================
+    // ÉVÉNEMENTS
+    // =================================================
+
+    launchButton.addEventListener(
+      'click',
+      runAll
+    );
+
+
+    stopButton.addEventListener(
+      'click',
+      () => {
+
+        if (
+          !running
+        ) {
+
+          return;
+        }
+
+
+        stopRequested =
+          true;
+
+
+        stopButton.disabled =
+          true;
+
+
+        statusBox.textContent =
+
+          'Arrêt demandé. Le lot déjà lancé finira, puis aucun nouveau lot ne sera lancé.';
+      }
+    );
+
+
+    // =================================================
+    // CHARGEMENT INITIAL
+    // =================================================
+
+    getState()
+
+      .then(
+        state => {
+
+          if (
+            state.done
+          ) {
+
+            statusBox.textContent =
+
+              '✅ Toutes les features disponibles sont déjà construites.';
+
+          } else {
+
+            statusBox.textContent =
+
+`Feature Engine prêt.
+
+${state.total.generated} / ${state.total.target} déjà générées.
+
+${state.total.remaining} restantes.`;
+          }
+        }
+      )
+
+      .catch(
+        error => {
+
+          statusBox.textContent =
+
+`Impossible de lire l'état du Feature Engine.
+
+${error.message}`;
+        }
+      );
+
+  </script>
+
+
+</body>
+
+</html>
