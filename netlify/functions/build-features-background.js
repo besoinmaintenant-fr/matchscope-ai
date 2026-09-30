@@ -210,10 +210,6 @@ async function loadTargets() {
 
     +
 
-    '&lineups_confirmed=eq.true'
-
-    +
-
     '&order=starting_at.asc';
 
 
