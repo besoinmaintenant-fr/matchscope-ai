@@ -2,17 +2,14 @@ const {
   supabaseRequest
 } = require('./lib/supabase');
 
-
 const {
   saveMatch,
   saveLineups,
   lineupStatus
 } = require('./lib/memory');
 
-
 const API =
   'https://api.sportmonks.com/v3/football';
-
 
 const LEAGUE_IDS = [
   8,    // Premier League
@@ -20,73 +17,58 @@ const LEAGUE_IDS = [
   564   // La Liga
 ];
 
+const LEAGUE_CODES = {
+  8: 'PL',
+  82: 'BL',
+  564: 'LL'
+};
 
-// On commence à surveiller 1 heure avant le match.
-const LOOKAHEAD_MINUTES =
-  60;
+// Surveillance des XI à partir de H-60.
+const LOOKAHEAD_MINUTES = 60;
 
-
-// On continue jusqu'à 30 minutes après le coup d'envoi
-// uniquement si aucune composition n'a encore été trouvée.
-const AFTER_KICKOFF_MINUTES =
-  30;
+// On continue 30 min après le coup d'envoi
+// si les XI n'ont toujours pas été mémorisés.
+const AFTER_KICKOFF_MINUTES = 30;
 
 
 // =====================================================
 // OUTILS
 // =====================================================
 
-function isoDate(
-  date
-) {
-
-  return date
-    .toISOString()
-    .slice(
-      0,
-      10
-    );
+function array(value) {
+  return Array.isArray(value)
+    ? value
+    : [];
 }
 
 
-function parseKickoff(
-  value
-) {
+function isoDate(date) {
+  return date
+    .toISOString()
+    .slice(0, 10);
+}
+
+
+function parseKickoff(value) {
 
   if (!value) {
-
     return null;
   }
 
-
   const raw =
-    String(
-      value
-    )
-      .trim();
-
+    String(value).trim();
 
   if (
     /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
-      .test(
-        raw
-      )
+      .test(raw)
   ) {
-
     return new Date(
-      raw.replace(
-        ' ',
-        'T'
-      ) + 'Z'
+      raw.replace(' ', 'T') + 'Z'
     );
   }
 
-
   const date =
-    new Date(
-      raw
-    );
-
+    new Date(raw);
 
   return Number.isNaN(
     date.getTime()
@@ -96,39 +78,90 @@ function parseKickoff(
 }
 
 
-function numberOrNull(
-  value
-) {
+function numberOrNull(value) {
 
   if (
     value === null ||
     value === undefined ||
     value === ''
   ) {
-
     return null;
   }
 
-
   const number =
-    Number(
-      value
-    );
+    Number(value);
 
-
-  return Number.isFinite(
-    number
-  )
+  return Number.isFinite(number)
     ? number
     : null;
 }
 
 
+function getTeam(
+  fixture,
+  location
+) {
+
+  return array(
+    fixture?.participants
+  ).find(
+    participant =>
+      participant
+        ?.meta
+        ?.location === location
+  ) || null;
+}
+
+
+function firstDefined(
+  object,
+  names
+) {
+
+  for (
+    const name
+    of names
+  ) {
+
+    if (
+      object?.[name] !==
+      undefined
+    ) {
+      return object[name];
+    }
+  }
+
+  return null;
+}
+
+
+function coverage(values) {
+
+  const list =
+    Object.values(values);
+
+  if (!list.length) {
+    return 0;
+  }
+
+  const available =
+    list.filter(
+      value =>
+        value !== null &&
+        value !== undefined
+    ).length;
+
+  return Math.round(
+    (
+      available /
+      list.length
+    ) * 1000
+  ) / 10;
+}
+
+
 // =====================================================
-// 1. LISTE LÉGÈRE DES MATCHS
-//
-// IMPORTANT :
-// ici on NE demande PAS encore les compositions.
+// LISTE LÉGÈRE DES MATCHS
 // =====================================================
 
 async function fetchFixtureList(
@@ -138,29 +171,16 @@ async function fetchFixtureList(
   const now =
     new Date();
 
-
   const tomorrow =
     new Date(
-      now.getTime()
-      +
-      24 *
-      60 *
-      60 *
-      1000
+      now.getTime() +
+      24 * 60 * 60 * 1000
     );
 
+  const fixtures = [];
 
-  const fixtures =
-    [];
-
-
-  let page =
-    1;
-
-
-  let hasMore =
-    true;
-
+  let page = 1;
+  let hasMore = true;
 
   while (
     hasMore &&
@@ -169,7 +189,6 @@ async function fetchFixtureList(
 
     const url =
       new URL(
-
         `${API}/fixtures/between/${isoDate(
           now
         )}/${isoDate(
@@ -177,64 +196,47 @@ async function fetchFixtureList(
         )}`
       );
 
-
     url.searchParams.set(
       'api_token',
       token
     );
-
 
     url.searchParams.set(
       'filters',
       `fixtureLeagues:${LEAGUE_IDS.join(',')}`
     );
 
-
     /*
-     * Requête volontairement légère.
-     *
-     * Pas de lineups ici.
+     * Requête légère.
+     * Pas encore de compositions.
      */
-
     url.searchParams.set(
       'include',
       'league;participants;state'
     );
-
 
     url.searchParams.set(
       'per_page',
       '100'
     );
 
-
     url.searchParams.set(
       'page',
-      String(
-        page
-      )
+      String(page)
     );
 
-
     const response =
-      await fetch(
-        url
-      );
-
+      await fetch(url);
 
     const raw =
       await response.text();
 
-
     let payload;
-
 
     try {
 
       payload =
-        JSON.parse(
-          raw
-        );
+        JSON.parse(raw);
 
     } catch {
 
@@ -243,37 +245,24 @@ async function fetchFixtureList(
       );
     }
 
-
-    if (
-      !response.ok
-    ) {
+    if (!response.ok) {
 
       throw new Error(
-
-        payload?.message
-
-        ||
-
-        payload?.error
-
-        ||
-
+        payload?.message ||
+        payload?.error ||
         `Sportmonks ${response.status}`
       );
     }
-
 
     if (
       Array.isArray(
         payload?.data
       )
     ) {
-
       fixtures.push(
         ...payload.data
       );
     }
-
 
     hasMore =
       Boolean(
@@ -282,18 +271,15 @@ async function fetchFixtureList(
           ?.has_more
       );
 
-
-    page +=
-      1;
+    page += 1;
   }
-
 
   return fixtures;
 }
 
 
 // =====================================================
-// 2. MATCHS DANS LA FENÊTRE DE SURVEILLANCE
+// MATCH PROCHE DU COUP D'ENVOI
 // =====================================================
 
 function isCandidate(
@@ -305,173 +291,158 @@ function isCandidate(
       fixture?.starting_at
     );
 
-
   if (!kickoff) {
-
     return false;
   }
 
-
-  const now =
-    Date.now();
-
-
   const differenceMinutes =
-
     (
-      kickoff.getTime()
-      -
-      now
+      kickoff.getTime() -
+      Date.now()
     )
-
-    /
-
-    60000;
-
-
-  /*
-   * Exemple :
-   *
-   * +180 = match dans 3 heures
-   * +60  = match dans 1 heure
-   * 0    = coup d'envoi
-   * -15  = match commencé depuis 15 min
-   */
-
+    / 60000;
 
   if (
     differenceMinutes >
     LOOKAHEAD_MINUTES
   ) {
-
     return false;
   }
-
 
   if (
     differenceMinutes <
     -AFTER_KICKOFF_MINUTES
   ) {
-
     return false;
   }
-
 
   return true;
 }
 
 
 // =====================================================
-// 3. VÉRIFICATION SUPABASE
-//
-// On regarde quels matchs possèdent déjà
-// lineups_confirmed = true.
-//
-// Ceux-là seront définitivement ignorés.
+// MATCHS AYANT DÉJÀ LE XI
 // =====================================================
 
 async function getConfirmedFixtureIds(
   fixtureIds
 ) {
 
-  if (
-    !fixtureIds.length
-  ) {
-
+  if (!fixtureIds.length) {
     return new Set();
   }
 
-
   const cleanIds =
-
     fixtureIds
-
-      .map(
-        numberOrNull
-      )
-
+      .map(numberOrNull)
       .filter(
         value =>
           value !== null
       );
 
-
-  if (
-    !cleanIds.length
-  ) {
-
+  if (!cleanIds.length) {
     return new Set();
   }
-
-
-  const query =
-
-    '?select='
-
-    +
-
-    [
-      'sportmonks_fixture_id',
-      'lineups_confirmed'
-    ].join(',')
-
-    +
-
-    `&sportmonks_fixture_id=in.(${cleanIds.join(',')})`;
-
 
   const rows =
     await supabaseRequest(
       'matches',
       {
+        method: 'GET',
 
-        method:
-          'GET',
-
-        query
+        query:
+          '?select=' +
+          [
+            'sportmonks_fixture_id',
+            'lineups_confirmed'
+          ].join(',')
+          +
+          `&sportmonks_fixture_id=in.(${cleanIds.join(',')})`
       }
     );
 
-
-  if (
-    !Array.isArray(
-      rows
-    )
-  ) {
-
+  if (!Array.isArray(rows)) {
     return new Set();
   }
 
-
   return new Set(
-
     rows
-
       .filter(
         row =>
-          row.lineups_confirmed ===
-          true
+          row.lineups_confirmed === true
       )
-
       .map(
         row =>
           Number(
             row.sportmonks_fixture_id
           )
       )
-
-      .filter(
-        Number.isFinite
-      )
+      .filter(Number.isFinite)
   );
 }
 
 
 // =====================================================
-// 4. MATCH DÉTAILLÉ
+// FINAL SNAPSHOTS DÉJÀ ENREGISTRÉS
+// =====================================================
+
+async function getFinalSnapshotIds(
+  fixtureIds
+) {
+
+  if (!fixtureIds.length) {
+    return new Set();
+  }
+
+  const cleanIds =
+    fixtureIds
+      .map(numberOrNull)
+      .filter(
+        value =>
+          value !== null
+      );
+
+  if (!cleanIds.length) {
+    return new Set();
+  }
+
+  const rows =
+    await supabaseRequest(
+      'prematch_snapshots',
+      {
+        method: 'GET',
+
+        query:
+          '?select=sportmonks_fixture_id'
+          +
+          '&snapshot_stage=eq.FINAL'
+          +
+          `&sportmonks_fixture_id=in.(${cleanIds.join(',')})`
+      }
+    );
+
+  return new Set(
+    array(rows)
+      .map(
+        row =>
+          Number(
+            row.sportmonks_fixture_id
+          )
+      )
+      .filter(Number.isFinite)
+  );
+}
+
+
+// =====================================================
+// MATCH DÉTAILLÉ
 //
-// Cette requête n'est exécutée QUE si
-// la composition n'est pas encore enregistrée.
+// Une seule requête Sportmonks.
+//
+// Cette même réponse sert :
+// - à enregistrer les XI,
+// - à enregistrer le match,
+// - à créer le snapshot FINAL.
 // =====================================================
 
 async function fetchFixtureDetails(
@@ -481,53 +452,45 @@ async function fetchFixtureDetails(
 
   const url =
     new URL(
-
       `${API}/fixtures/${encodeURIComponent(
         fixtureId
       )}`
     );
-
 
   url.searchParams.set(
     'api_token',
     token
   );
 
-
   url.searchParams.set(
-
     'include',
-
     [
       'league',
       'participants',
       'venue',
       'state',
+      'metadata',
       'lineups.player',
-      'formations'
+      'formations',
+      'weatherReport',
+      'sidelined.sideline',
+      'statistics.type',
+      'odds.bookmaker'
     ].join(';')
   );
 
-
   const response =
-    await fetch(
-      url
-    );
-
+    await fetch(url);
 
   const raw =
     await response.text();
 
-
   let payload;
-
 
   try {
 
     payload =
-      JSON.parse(
-        raw
-      );
+      JSON.parse(raw);
 
   } catch {
 
@@ -536,42 +499,295 @@ async function fetchFixtureDetails(
     );
   }
 
-
-  if (
-    !response.ok
-  ) {
+  if (!response.ok) {
 
     throw new Error(
-
-      payload?.message
-
-      ||
-
-      payload?.error
-
-      ||
-
+      payload?.message ||
+      payload?.error ||
       `Sportmonks ${response.status}`
     );
   }
 
-
-  if (
-    !payload?.data
-  ) {
+  if (!payload?.data) {
 
     throw new Error(
       'Match Sportmonks introuvable.'
     );
   }
 
-
   return payload.data;
 }
 
 
 // =====================================================
-// 5. TRAITEMENT D'UN MATCH
+// CONSTRUCTION SNAPSHOT FINAL
+// =====================================================
+
+function buildFinalSnapshot(
+  fixture
+) {
+
+  const kickoff =
+    parseKickoff(
+      fixture?.starting_at
+    );
+
+  if (!kickoff) {
+
+    throw new Error(
+      'Kickoff invalide pour snapshot FINAL.'
+    );
+  }
+
+  const lineup =
+    lineupStatus(
+      fixture
+    );
+
+  if (!lineup.official) {
+
+    throw new Error(
+      'Impossible de créer FINAL sans XI officiels.'
+    );
+  }
+
+  const leagueId =
+    numberOrNull(
+      fixture?.league_id
+    );
+
+  const home =
+    getTeam(
+      fixture,
+      'home'
+    );
+
+  const away =
+    getTeam(
+      fixture,
+      'away'
+    );
+
+  const venue =
+    firstDefined(
+      fixture,
+      ['venue']
+    );
+
+  const metadata =
+    firstDefined(
+      fixture,
+      ['metadata']
+    );
+
+  const weather =
+    firstDefined(
+      fixture,
+      [
+        'weatherreport',
+        'weatherReport',
+        'weather_report'
+      ]
+    );
+
+  const formations =
+    firstDefined(
+      fixture,
+      ['formations']
+    );
+
+  const sidelined =
+    firstDefined(
+      fixture,
+      ['sidelined']
+    );
+
+  const lineups =
+    firstDefined(
+      fixture,
+      ['lineups']
+    );
+
+  const statistics =
+    firstDefined(
+      fixture,
+      ['statistics']
+    );
+
+  const odds =
+    firstDefined(
+      fixture,
+      ['odds']
+    );
+
+  const capturedAt =
+    new Date()
+      .toISOString();
+
+  const minutesToKickoff =
+    Math.round(
+      (
+        kickoff.getTime() -
+        Date.now()
+      )
+      /
+      60000
+    );
+
+  const dataCoverage =
+    coverage({
+      venue,
+      metadata,
+      weather,
+      formations,
+      sidelined,
+      lineups,
+      statistics,
+      odds
+    });
+
+  return {
+
+    sportmonks_fixture_id:
+      Number(
+        fixture.id
+      ),
+
+    league_code:
+      LEAGUE_CODES[
+        leagueId
+      ] || null,
+
+    snapshot_stage:
+      'FINAL',
+
+    captured_at:
+      capturedAt,
+
+    kickoff_at:
+      kickoff.toISOString(),
+
+    minutes_to_kickoff:
+      minutesToKickoff,
+
+    lineups_official:
+      true,
+
+    starters_found:
+      lineup.starters.length,
+
+    data_coverage:
+      dataCoverage,
+
+    home_team_id:
+      numberOrNull(
+        home?.id
+      ),
+
+    away_team_id:
+      numberOrNull(
+        away?.id
+      ),
+
+    venue,
+
+    state:
+      fixture?.state ?? null,
+
+    metadata,
+
+    weather_report:
+      weather,
+
+    formations,
+
+    sidelined,
+
+    lineups,
+
+    statistics,
+
+    odds,
+
+    optional_status: {
+
+      source:
+        'collect-lineups',
+
+      final_snapshot:
+        true,
+
+      sportmonks_single_request:
+        true,
+
+      captured_at:
+        capturedAt
+    },
+
+    /*
+     * Photographie brute de la réponse reçue
+     * au moment réel où les XI ont été détectés.
+     */
+    raw_fixture:
+      fixture,
+
+    updated_at:
+      capturedAt
+  };
+}
+
+
+// =====================================================
+// SAUVEGARDE FINAL IMMUTABLE
+// =====================================================
+
+async function saveFinalSnapshot(
+  fixture
+) {
+
+  const row =
+    buildFinalSnapshot(
+      fixture
+    );
+
+  const saved =
+    await supabaseRequest(
+      'prematch_snapshots',
+      {
+        method: 'POST',
+
+        query:
+          '?on_conflict=sportmonks_fixture_id,snapshot_stage',
+
+        body:
+          row,
+
+        /*
+         * Le premier FINAL authentique gagne.
+         * Les passages suivants ne l'écrasent jamais.
+         */
+        prefer:
+          'resolution=ignore-duplicates,return=representation'
+      }
+    );
+
+  return {
+
+    saved:
+      Array.isArray(saved)
+      &&
+      saved.length > 0,
+
+    snapshot:
+      Array.isArray(saved)
+        ? saved[0] || null
+        : saved
+  };
+}
+
+
+// =====================================================
+// TRAITEMENT D'UN MATCH
 // =====================================================
 
 async function processFixture(
@@ -584,7 +800,6 @@ async function processFixture(
       lightFixture?.id
     );
 
-
   if (
     !Number.isFinite(
       fixtureId
@@ -592,27 +807,19 @@ async function processFixture(
   ) {
 
     return {
-
-      fixtureId:
-        null,
-
-      status:
-        'INVALID_FIXTURE'
+      fixtureId: null,
+      status: 'INVALID_FIXTURE'
     };
   }
 
-
   /*
-   * Seulement maintenant on demande
-   * la version détaillée à Sportmonks.
+   * Une seule requête détaillée.
    */
-
   const fixture =
     await fetchFixtureDetails(
       fixtureId,
       token
     );
-
 
   const lineup =
     lineupStatus(
@@ -620,13 +827,11 @@ async function processFixture(
     );
 
 
-  // -----------------------------------------------
+  // ---------------------------------------------------
   // XI PAS ENCORE OFFICIELS
-  // -----------------------------------------------
+  // ---------------------------------------------------
 
-  if (
-    !lineup.official
-  ) {
+  if (!lineup.official) {
 
     return {
 
@@ -641,9 +846,9 @@ async function processFixture(
   }
 
 
-  // -----------------------------------------------
-  // XI OFFICIELS TROUVÉS
-  // -----------------------------------------------
+  // ---------------------------------------------------
+  // XI OFFICIELS
+  // ---------------------------------------------------
 
   await saveMatch(
     fixture,
@@ -653,6 +858,12 @@ async function processFixture(
 
   const savedLineups =
     await saveLineups(
+      fixture
+    );
+
+
+  const finalSnapshot =
+    await saveFinalSnapshot(
       fixture
     );
 
@@ -672,13 +883,16 @@ async function processFixture(
         savedLineups
       )
         ? savedLineups.length
-        : null
+        : null,
+
+    finalSnapshotSaved:
+      finalSnapshot.saved
   };
 }
 
 
 // =====================================================
-// 6. FONCTION PLANIFIÉE NETLIFY
+// HANDLER NETLIFY
 // =====================================================
 
 exports.handler =
@@ -689,31 +903,30 @@ exports.handler =
         .env
         .SPORTMONKS_API_TOKEN;
 
-
     if (!token) {
 
       console.error(
         'collect-lineups : SPORTMONKS_API_TOKEN absent.'
       );
 
-
       return {
 
-        statusCode:
-          500,
+        statusCode: 500,
 
         body:
-          'SPORTMONKS_API_TOKEN absent.'
+          JSON.stringify({
+            success: false,
+            error:
+              'SPORTMONKS_API_TOKEN absent.'
+          })
       };
     }
 
-
     try {
 
-      // ---------------------------------------------
-      // ÉTAPE A
-      // Liste légère des matchs
-      // ---------------------------------------------
+      // =================================================
+      // A. LISTE LÉGÈRE
+      // =================================================
 
       const fixtures =
         await fetchFixtureList(
@@ -721,10 +934,9 @@ exports.handler =
         );
 
 
-      // ---------------------------------------------
-      // ÉTAPE B
-      // Seulement les matchs proches
-      // ---------------------------------------------
+      // =================================================
+      // B. MATCHS À H-60 / +30
+      // =================================================
 
       const candidates =
         fixtures.filter(
@@ -734,41 +946,67 @@ exports.handler =
 
       const fixtureIds =
         candidates
-
           .map(
             fixture =>
               Number(
                 fixture.id
               )
           )
-
           .filter(
             Number.isFinite
           );
 
 
-      // ---------------------------------------------
-      // ÉTAPE C
-      // Vérification mémoire Supabase
-      // ---------------------------------------------
+      // =================================================
+      // C. MÉMOIRE
+      // =================================================
 
-      const confirmedIds =
-        await getConfirmedFixtureIds(
-          fixtureIds
+      const [
+        confirmedIds,
+        finalSnapshotIds
+      ] =
+        await Promise.all([
+
+          getConfirmedFixtureIds(
+            fixtureIds
+          ),
+
+          getFinalSnapshotIds(
+            fixtureIds
+          )
+        ]);
+
+
+      /*
+       * Un match n'est réellement terminé pour ce
+       * collecteur QUE si :
+       *
+       * 1. XI enregistrés
+       * 2. snapshot FINAL enregistré
+       *
+       * Cela permet de réparer automatiquement
+       * un ancien match qui aurait XI=true mais
+       * pas encore de snapshot FINAL.
+       */
+      const completed =
+        new Set(
+          fixtureIds.filter(
+            fixtureId =>
+              confirmedIds.has(
+                fixtureId
+              )
+              &&
+              finalSnapshotIds.has(
+                fixtureId
+              )
+          )
         );
 
-
-      // ---------------------------------------------
-      // ÉTAPE D
-      // On supprime les matchs déjà terminés
-      // côté collecte des compositions.
-      // ---------------------------------------------
 
       const unresolved =
         candidates.filter(
           fixture =>
-
-            !confirmedIds.has(
+            !completed.has(
               Number(
                 fixture.id
               )
@@ -776,14 +1014,12 @@ exports.handler =
         );
 
 
-      const results =
-        [];
+      const results = [];
 
 
-      /*
-       * Les matchs ayant déjà une composition
-       * ne sont PAS rechargés en détail.
-       */
+      // =================================================
+      // D. MATCHS DÉJÀ COMPLETS
+      // =================================================
 
       candidates.forEach(
         fixture => {
@@ -793,9 +1029,8 @@ exports.handler =
               fixture.id
             );
 
-
           if (
-            confirmedIds.has(
+            completed.has(
               fixtureId
             )
           ) {
@@ -805,17 +1040,16 @@ exports.handler =
               fixtureId,
 
               status:
-                'ALREADY_CONFIRMED_SKIPPED'
+                'ALREADY_COMPLETE_SKIPPED'
             });
           }
         }
       );
 
 
-      // ---------------------------------------------
-      // ÉTAPE E
-      // Seulement les matchs restant à surveiller
-      // ---------------------------------------------
+      // =================================================
+      // E. MATCHS RESTANTS
+      // =================================================
 
       for (
         const fixture
@@ -830,40 +1064,36 @@ exports.handler =
               token
             );
 
-
           results.push(
             result
           );
 
-
-        } catch (
-          error
-        ) {
+        } catch (error) {
 
           results.push({
 
             fixtureId:
-              fixture?.id
-              ||
-              null,
+              fixture?.id || null,
 
             status:
               'ERROR',
 
             error:
-              error?.message
-              ||
+              error?.message ||
               String(error)
           });
         }
       }
 
 
-      // ---------------------------------------------
-      // LOG SERVEUR
-      // ---------------------------------------------
+      // =================================================
+      // F. RÉSUMÉ
+      // =================================================
 
       const summary = {
+
+        success:
+          true,
 
         function:
           'collect-lineups',
@@ -878,8 +1108,8 @@ exports.handler =
         candidates:
           candidates.length,
 
-        alreadyConfirmed:
-          confirmedIds.size,
+        alreadyComplete:
+          completed.size,
 
         checkedForLineups:
           unresolved.length,
@@ -896,6 +1126,20 @@ exports.handler =
             item =>
               item.status ===
               'WAITING'
+          ).length,
+
+        errors:
+          results.filter(
+            item =>
+              item.status ===
+              'ERROR'
+          ).length,
+
+        finalSnapshotsSaved:
+          results.filter(
+            item =>
+              item.finalSnapshotSaved ===
+              true
           ).length,
 
         results
@@ -916,27 +1160,36 @@ exports.handler =
         statusCode:
           200,
 
+        headers: {
+          'content-type':
+            'application/json; charset=utf-8',
+
+          'cache-control':
+            'no-store'
+        },
+
         body:
           JSON.stringify(
             summary
           )
       };
 
-
-    } catch (
-      error
-    ) {
+    } catch (error) {
 
       console.error(
         'collect-lineups :',
         error
       );
 
-
       return {
 
         statusCode:
           500,
+
+        headers: {
+          'content-type':
+            'application/json; charset=utf-8'
+        },
 
         body:
           JSON.stringify({
@@ -945,8 +1198,7 @@ exports.handler =
               false,
 
             error:
-              error?.message
-              ||
+              error?.message ||
               String(error)
           })
       };
