@@ -46,7 +46,7 @@ const LOOKBACK_HOURS =
 // Maximum de matchs traités pendant
 // une seule exécution.
 const MAX_MATCHES_PER_RUN =
-  20;
+  8;
 
 
 // V0.7 et la mémoire probabiliste
