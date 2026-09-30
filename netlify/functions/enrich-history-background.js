@@ -646,7 +646,11 @@ async function loadTargetFixtures() {
       +
 
       '&lineups_confirmed=eq.true'
+        
+      +
 
+     '&status=in.(FT,AET,AP)'
+      
       +
 
       '&order=starting_at.desc'
