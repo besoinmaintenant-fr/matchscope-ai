@@ -1363,12 +1363,14 @@ function topExactScores(
   // ===================================================
 
   function buildModel(
-    history,
-    target,
-    beforeTime,
-    config,
-    eloState,
-    calibration = null
+  history,
+  target,
+  beforeTime,
+  config,
+  eloState,
+  calibration = null,
+  includeScores = false
+) {
   ) {
     const referenceTimestamp =
       Number.isFinite(beforeTime)
