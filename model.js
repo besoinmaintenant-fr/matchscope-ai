@@ -570,113 +570,412 @@
   }
 
   function dixonColesMarkets(
-    lambdaHome,
-    lambdaAway,
-    rho
+  lambdaHome,
+  lambdaAway,
+  rho,
+  includeScores = false
+) {
+  let home = 0;
+  let draw = 0;
+  let away = 0;
+
+  let over15 = 0;
+  let over25 = 0;
+  let btts = 0;
+
+  let probabilityMass = 0;
+
+  const rawScores =
+    [];
+
+  for (
+    let homeGoals = 0;
+    homeGoals <= 8;
+    homeGoals += 1
   ) {
-    let home = 0;
-    let draw = 0;
-    let away = 0;
-
-    let over15 = 0;
-    let over25 = 0;
-    let btts = 0;
-
-    let probabilityMass = 0;
 
     for (
-      let homeGoals = 0;
-      homeGoals <= 8;
-      homeGoals += 1
+      let awayGoals = 0;
+      awayGoals <= 8;
+      awayGoals += 1
     ) {
-      for (
-        let awayGoals = 0;
-        awayGoals <= 8;
-        awayGoals += 1
-      ) {
-        const probability =
-          poisson(
-            lambdaHome,
-            homeGoals
-          )
-          *
-          poisson(
-            lambdaAway,
-            awayGoals
-          )
-          *
-          dcTau(
-            homeGoals,
-            awayGoals,
-            lambdaHome,
-            lambdaAway,
-            rho
-          );
 
-        probabilityMass += probability;
-
-        if (
-          homeGoals >
+      const probability =
+        poisson(
+          lambdaHome,
+          homeGoals
+        )
+        *
+        poisson(
+          lambdaAway,
           awayGoals
-        ) {
-          home += probability;
-        } else if (
-          homeGoals === awayGoals
-        ) {
-          draw += probability;
-        } else {
-          away += probability;
-        }
+        )
+        *
+        dcTau(
+          homeGoals,
+          awayGoals,
+          lambdaHome,
+          lambdaAway,
+          rho
+        );
 
-        if (
-          homeGoals +
-          awayGoals >= 2
-        ) {
-          over15 += probability;
-        }
 
-        if (
-          homeGoals +
-          awayGoals >= 3
-        ) {
-          over25 += probability;
-        }
+      probabilityMass +=
+        probability;
 
-        if (
-          homeGoals > 0 &&
-          awayGoals > 0
-        ) {
-          btts += probability;
-        }
+
+      if (
+        includeScores
+      ) {
+
+        rawScores.push({
+
+          homeGoals,
+
+          awayGoals,
+
+          probability
+        });
+      }
+
+
+      if (
+        homeGoals >
+        awayGoals
+      ) {
+
+        home +=
+          probability;
+
+      } else if (
+        homeGoals ===
+        awayGoals
+      ) {
+
+        draw +=
+          probability;
+
+      } else {
+
+        away +=
+          probability;
+      }
+
+
+      if (
+        homeGoals +
+        awayGoals >= 2
+      ) {
+
+        over15 +=
+          probability;
+      }
+
+
+      if (
+        homeGoals +
+        awayGoals >= 3
+      ) {
+
+        over25 +=
+          probability;
+      }
+
+
+      if (
+        homeGoals > 0 &&
+        awayGoals > 0
+      ) {
+
+        btts +=
+          probability;
       }
     }
-
-    return {
-      home:
-        home /
-        probabilityMass,
-
-      draw:
-        draw /
-        probabilityMass,
-
-      away:
-        away /
-        probabilityMass,
-
-      over15:
-        over15 /
-        probabilityMass,
-
-      over25:
-        over25 /
-        probabilityMass,
-
-      btts:
-        btts /
-        probabilityMass
-    };
   }
+
+
+  const scoreDistribution =
+
+    includeScores
+
+      ? rawScores.map(
+          score => ({
+
+            homeGoals:
+              score.homeGoals,
+
+            awayGoals:
+              score.awayGoals,
+
+            probability:
+
+              score.probability
+
+              /
+
+              probabilityMass
+          })
+        )
+
+      : [];
+
+
+  return {
+
+    home:
+      home /
+      probabilityMass,
+
+    draw:
+      draw /
+      probabilityMass,
+
+    away:
+      away /
+      probabilityMass,
+
+    over15:
+      over15 /
+      probabilityMass,
+
+    over25:
+      over25 /
+      probabilityMass,
+
+    btts:
+      btts /
+      probabilityMass,
+
+    scoreDistribution
+  };
+}
+
+
+// ===================================================
+// SCORES EXACTS
+//
+// Dixon-Coles construit la forme des scores.
+//
+// Ensuite nous réalignons chaque famille de scores
+// sur les probabilités 1N2 finales de V0.7.
+//
+// Ainsi :
+//
+// somme des scores domicile = P(1)
+// somme des scores nuls     = P(N)
+// somme des scores extérieur= P(2)
+//
+// Cela ne modifie PAS V0.7.
+// ===================================================
+
+function scoreOutcome(
+  score
+) {
+
+  if (
+    score.homeGoals >
+    score.awayGoals
+  ) {
+
+    return 'home';
+  }
+
+
+  if (
+    score.homeGoals ===
+    score.awayGoals
+  ) {
+
+    return 'draw';
+  }
+
+
+  return 'away';
+}
+
+
+function alignScoreDistribution(
+  scores,
+  dcProbability,
+  finalProbability
+) {
+
+  if (
+    !Array.isArray(
+      scores
+    )
+    ||
+    !scores.length
+  ) {
+
+    return [];
+  }
+
+
+  const ratios = {
+
+    home:
+
+      finalProbability.home
+
+      /
+
+      Math.max(
+        1e-12,
+        dcProbability.home
+      ),
+
+
+    draw:
+
+      finalProbability.draw
+
+      /
+
+      Math.max(
+        1e-12,
+        dcProbability.draw
+      ),
+
+
+    away:
+
+      finalProbability.away
+
+      /
+
+      Math.max(
+        1e-12,
+        dcProbability.away
+      )
+  };
+
+
+  const adjusted =
+    scores.map(
+      score => {
+
+        const outcome =
+          scoreOutcome(
+            score
+          );
+
+
+        return {
+
+          homeGoals:
+            score.homeGoals,
+
+          awayGoals:
+            score.awayGoals,
+
+          probability:
+
+            score.probability
+
+            *
+
+            ratios[
+              outcome
+            ]
+        };
+      }
+    );
+
+
+  const total =
+    adjusted.reduce(
+      (
+        sum,
+        score
+      ) =>
+
+        sum +
+        score.probability,
+
+      0
+    );
+
+
+  if (
+    !Number.isFinite(
+      total
+    )
+    ||
+    total <= 0
+  ) {
+
+    return [];
+  }
+
+
+  return adjusted.map(
+    score => ({
+
+      homeGoals:
+        score.homeGoals,
+
+      awayGoals:
+        score.awayGoals,
+
+      probability:
+
+        score.probability
+
+        /
+
+        total
+    })
+  );
+}
+
+
+function topExactScores(
+  distribution,
+  limit = 5
+) {
+
+  return [
+
+    ...distribution
+
+  ]
+
+    .sort(
+      (
+        first,
+        second
+      ) =>
+
+        second.probability
+
+        -
+
+        first.probability
+    )
+
+    .slice(
+      0,
+      limit
+    )
+
+    .map(
+      score => ({
+
+        score:
+          `${score.homeGoals}-${score.awayGoals}`,
+
+        homeGoals:
+          score.homeGoals,
+
+        awayGoals:
+          score.awayGoals,
+
+        probability:
+          score.probability
+      })
+    );
+}
 
   // ===================================================
   // ELO
