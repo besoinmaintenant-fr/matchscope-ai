@@ -15,15 +15,15 @@ const {
 // =====================================================
 // MATCHSCOPE — V0.8 SHADOW LAB
 //
-// OBJECTIF
+// AUCUNE MODIFICATION DE V0.7 EN PRODUCTION.
 //
-// 1. Reconstruire V0.7 sur l'historique.
-// 2. Ajouter des corrections issues de features-v1.
-// 3. Apprendre uniquement sur les matchs anciens.
-// 4. Tester uniquement sur les matchs récents.
-// 5. Comparer systématiquement au Brier de V0.7.
+// PRELINEUP :
+// split chronologique global historique.
 //
-// AUCUNE PRÉDICTION DE PRODUCTION N'EST MODIFIÉE.
+// FINAL :
+// split chronologique propre au dataset FINAL.
+// Cela évite l'ancien problème :
+// 88 training / 190 holdout.
 // =====================================================
 
 
@@ -280,7 +280,7 @@ const EXPERIMENTS = [
 
 
 // =====================================================
-// RÉGULARISATION TESTÉE
+// RÉGULARISATION
 // =====================================================
 
 const L2_VALUES = [
@@ -318,8 +318,10 @@ function numberOrNull(
 ) {
 
   if (
-    value === null ||
-    value === undefined ||
+    value === null
+    ||
+    value === undefined
+    ||
     value === ''
   ) {
 
@@ -386,11 +388,14 @@ function round(
 
 
   return (
+
     Math.round(
       number *
       factor
     )
+
     /
+
     factor
   );
 }
@@ -422,10 +427,15 @@ function parseKickoff(
   ) {
 
     return new Date(
+
       raw.replace(
         ' ',
         'T'
-      ) + 'Z'
+      )
+
+      +
+
+      'Z'
     );
   }
 
@@ -457,7 +467,7 @@ function safeProbability(
 
 
 // =====================================================
-// HISTORIQUE V0.7
+// HISTORIQUE
 // =====================================================
 
 async function loadHistory() {
@@ -590,11 +600,13 @@ async function loadHistory() {
 
           ||
 
-          homeScore === null
+          homeScore ===
+          null
 
           ||
 
-          awayScore === null
+          awayScore ===
+          null
         ) {
 
           return null;
@@ -690,14 +702,16 @@ async function loadHistory() {
         first,
         second
       ) =>
-        first.kickoffTs -
+
+        first.kickoffTs
+        -
         second.kickoffTs
     );
 }
 
 
 // =====================================================
-// FEATURES-V1
+// FEATURES
 // =====================================================
 
 async function loadFeatures() {
@@ -868,22 +882,43 @@ async function loadFeatures() {
 
 
 // =====================================================
-// TRANSFORMATION DES FEATURES
-//
-// Les variables sont exprimées en avantage domicile.
-//
-// Exemple :
-//
-// form_ppg_adv
-// = PPG domicile - PPG extérieur.
-//
-// Un nombre positif signifie donc
-// avantage statistique domicile.
+// VARIABLES DÉRIVÉES
 // =====================================================
 
 function derivedFeatures(
   row
 ) {
+
+  function difference(
+    first,
+    second
+  ) {
+
+    const a =
+      numberOrNull(
+        first
+      );
+
+
+    const b =
+      numberOrNull(
+        second
+      );
+
+
+    if (
+      a === null
+      ||
+      b === null
+    ) {
+
+      return null;
+    }
+
+
+    return a - b;
+  }
+
 
   const homeRest =
     numberOrNull(
@@ -904,8 +939,11 @@ function derivedFeatures(
       ? null
 
       : Math.min(
-          homeRest,
-          30
+          30,
+          Math.max(
+            0,
+            homeRest
+          )
         );
 
 
@@ -916,39 +954,12 @@ function derivedFeatures(
       ? null
 
       : Math.min(
-          awayRest,
-          30
+          30,
+          Math.max(
+            0,
+            awayRest
+          )
         );
-
-
-  function difference(
-    first,
-    second
-  ) {
-
-    const a =
-      numberOrNull(
-        first
-      );
-
-
-    const b =
-      numberOrNull(
-        second
-      );
-
-
-    if (
-      a === null ||
-      b === null
-    ) {
-
-      return null;
-    }
-
-
-    return a - b;
-  }
 
 
   return {
@@ -975,15 +986,6 @@ function derivedFeatures(
       ),
 
 
-    /*
-     * Ici :
-     *
-     * away GA - home GA
-     *
-     * Plus la valeur est élevée,
-     * plus la défense domicile
-     * semble avantageuse.
-     */
     form_defence_adv:
       difference(
 
@@ -1030,21 +1032,21 @@ function derivedFeatures(
 
     rest_adv:
 
-      cappedHomeRest === null
+      cappedHomeRest ===
+      null
+
       ||
-      cappedAwayRest === null
+
+      cappedAwayRest ===
+      null
 
         ? null
 
-        : cappedHomeRest -
+        : cappedHomeRest
+          -
           cappedAwayRest,
 
 
-    /*
-     * Plus l'adversaire a joué de matchs
-     * dans les 14 jours, plus cette valeur
-     * devient positive pour le domicile.
-     */
     congestion_adv:
       difference(
 
@@ -1055,7 +1057,7 @@ function derivedFeatures(
 
 
     // -------------------------------------------------
-    // COMPOSITION
+    // XI
     // -------------------------------------------------
 
     xi_continuity_adv:
@@ -1067,11 +1069,6 @@ function derivedFeatures(
       ),
 
 
-    /*
-     * Plus l'extérieur effectue de changements
-     * par rapport au domicile,
-     * plus la valeur est positive domicile.
-     */
     changes_adv:
       difference(
 
@@ -1185,7 +1182,7 @@ function derivedFeatures(
 
 
 // =====================================================
-// CONSTRUIRE LE DATASET
+// CONSTRUCTION DU DATASET
 // =====================================================
 
 function buildRows(
@@ -1256,10 +1253,6 @@ function buildRows(
       );
 
 
-    /*
-     * Match futur ou sans résultat :
-     * jamais utilisé dans le laboratoire.
-     */
     if (
       !match
     ) {
@@ -1365,7 +1358,9 @@ function buildRows(
       first,
       second
     ) =>
-      first.kickoffTs -
+
+      first.kickoffTs
+      -
       second.kickoffTs
   );
 }
@@ -1436,7 +1431,9 @@ function fitStandardizer(
             total,
             value
           ) =>
+
             total + value,
+
           0
         )
 
@@ -1520,9 +1517,6 @@ function standardizedVector(
   scaler
 ) {
 
-  /*
-   * Premier élément = intercept.
-   */
   const vector =
     [
       1
@@ -1534,19 +1528,13 @@ function standardizedVector(
 
       const raw =
         numberOrNull(
+
           row.feature[
             variable
           ]
         );
 
 
-      /*
-       * Valeur manquante :
-       * imputation par moyenne training.
-       *
-       * Après standardisation,
-       * cela revient exactement à 0.
-       */
       const value =
 
         raw === null
@@ -1588,12 +1576,7 @@ function standardizedVector(
 
 
 // =====================================================
-// SOFTMAX AVEC V0.7 COMME OFFSET
-//
-// On ne remplace PAS V0.7.
-//
-// On apprend uniquement une correction
-// des log-odds de V0.7.
+// CORRECTION DES PROBABILITÉS V0.7
 // =====================================================
 
 function correctedProbability(
@@ -1664,7 +1647,8 @@ function correctedProbability(
   const homeLogit =
 
     Math.log(
-      home / draw
+      home /
+      draw
     )
 
     +
@@ -1675,7 +1659,8 @@ function correctedProbability(
   const awayLogit =
 
     Math.log(
-      away / draw
+      away /
+      draw
     )
 
     +
@@ -1683,9 +1668,6 @@ function correctedProbability(
     awayCorrection;
 
 
-  /*
-   * Le nul est la classe de référence.
-   */
   const maximum =
     Math.max(
       homeLogit,
@@ -1738,7 +1720,7 @@ function correctedProbability(
 
 
 // =====================================================
-// APPRENTISSAGE DE LA COUCHE DE CORRECTION
+// APPRENTISSAGE
 // =====================================================
 
 function trainCorrector(
@@ -1852,12 +1834,14 @@ function trainCorrector(
 
 
       const errorHome =
-        probability.home -
+        probability.home
+        -
         actualHome;
 
 
       const errorAway =
-        probability.away -
+        probability.away
+        -
         actualAway;
 
 
@@ -1871,7 +1855,10 @@ function trainCorrector(
           index
         ] +=
 
-          errorHome *
+          errorHome
+
+          *
+
           vector[
             index
           ];
@@ -1881,7 +1868,10 @@ function trainCorrector(
           index
         ] +=
 
-          errorAway *
+          errorAway
+
+          *
+
           vector[
             index
           ];
@@ -1895,12 +1885,10 @@ function trainCorrector(
       index += 1
     ) {
 
-      /*
-       * L'intercept est faiblement régularisé.
-       */
       const penalty =
 
-        index === 0
+        index ===
+        0
 
           ? lambda *
             0.1
@@ -1922,7 +1910,10 @@ function trainCorrector(
 
         +
 
-        penalty *
+        penalty
+
+        *
+
         parameters.home[
           index
         ];
@@ -1942,7 +1933,10 @@ function trainCorrector(
 
         +
 
-        penalty *
+        penalty
+
+        *
+
         parameters.away[
           index
         ];
@@ -1952,7 +1946,10 @@ function trainCorrector(
         index
       ] -=
 
-        learningRate *
+        learningRate
+
+        *
+
         gradientHome[
           index
         ];
@@ -1962,7 +1959,10 @@ function trainCorrector(
         index
       ] -=
 
-        learningRate *
+        learningRate
+
+        *
+
         gradientAway[
           index
         ];
@@ -2044,7 +2044,9 @@ function evaluate(
       10
     )
 
-      .fill(null)
+      .fill(
+        null
+      )
 
       .map(
         () => ({
@@ -2145,7 +2147,7 @@ function evaluate(
 
 
       // -----------------------------------------------
-      // CALIBRATION SIMPLE
+      // CALIBRATION
       // -----------------------------------------------
 
       const confidence =
@@ -2169,21 +2171,21 @@ function evaluate(
         );
 
 
-      const bucket =
+      const calibrationBucket =
         calibrationBuckets[
           bucketIndex
         ];
 
 
-      bucket.count +=
+      calibrationBucket.count +=
         1;
 
 
-      bucket.confidence +=
+      calibrationBucket.confidence +=
         confidence;
 
 
-      bucket.correct +=
+      calibrationBucket.correct +=
 
         challengerPick ===
         row.actualResult
@@ -2276,23 +2278,25 @@ function evaluate(
     .forEach(
       (
         [
-          league,
+          leagueCode,
           bucket
         ]
       ) => {
 
         const baseline =
-          bucket.baselineBrier /
+          bucket.baselineBrier
+          /
           bucket.count;
 
 
         const challenger =
-          bucket.challengerBrier /
+          bucket.challengerBrier
+          /
           bucket.count;
 
 
         byLeague[
-          league
+          leagueCode
         ] = {
 
           tested:
@@ -2310,17 +2314,24 @@ function evaluate(
 
           gainPct:
 
-            baseline > 0
+            baseline >
+            0
 
               ? round(
+
                   (
                     baseline -
                     challenger
                   )
+
                   /
+
                   baseline
+
                   *
+
                   100,
+
                   3
                 )
 
@@ -2328,15 +2339,21 @@ function evaluate(
 
           baselineAccuracy:
             round(
-              bucket.baselineCorrect /
+
+              bucket.baselineCorrect
+              /
               bucket.count,
+
               5
             ),
 
           challengerAccuracy:
             round(
-              bucket.challengerCorrect /
+
+              bucket.challengerCorrect
+              /
               bucket.count,
+
               5
             )
         };
@@ -2364,24 +2381,29 @@ function evaluate(
 
 
       const averageConfidence =
-        bucket.confidence /
+        bucket.confidence
+        /
         bucket.count;
 
 
       const averageAccuracy =
-        bucket.correct /
+        bucket.correct
+        /
         bucket.count;
 
 
       calibrationError +=
 
-        bucket.count /
+        bucket.count
+        /
         rows.length
 
         *
 
         Math.abs(
-          averageConfidence -
+
+          averageConfidence
+          -
           averageAccuracy
         );
     }
@@ -2394,19 +2416,23 @@ function evaluate(
       rows.length,
 
     baselineBrier:
-      baselineBrier /
+      baselineBrier
+      /
       rows.length,
 
     challengerBrier:
-      challengerBrier /
+      challengerBrier
+      /
       rows.length,
 
     baselineAccuracy:
-      baselineCorrect /
+      baselineCorrect
+      /
       rows.length,
 
     challengerAccuracy:
-      challengerCorrect /
+      challengerCorrect
+      /
       rows.length,
 
     calibrationError,
@@ -2417,13 +2443,7 @@ function evaluate(
 
 
 // =====================================================
-// CHOISIR LA RÉGULARISATION
-//
-// On ne touche jamais au vrai holdout.
-//
-// Le choix du lambda se fait
-// sur une petite validation interne
-// contenue dans la partie training.
+// CHOIX DE LA RÉGULARISATION
 // =====================================================
 
 function chooseLambda(
@@ -2452,7 +2472,11 @@ function chooseLambda(
       1,
 
       Math.floor(
-        trainingRows.length *
+
+        trainingRows.length
+
+        *
+
         INNER_SPLIT
       )
     );
@@ -2566,7 +2590,7 @@ function chooseLambda(
 
 
 // =====================================================
-// SAUVEGARDE EXPÉRIENCE
+// SAUVEGARDE
 // =====================================================
 
 async function saveExperiment(
@@ -2577,7 +2601,8 @@ async function saveExperiment(
   lambdaChoice,
   result,
   tuning,
-  cutoff
+  cutoff,
+  splitType
 ) {
 
   const baseline =
@@ -2590,11 +2615,13 @@ async function saveExperiment(
 
   const gain =
 
-    baseline !== null
+    baseline !==
+    null
 
     &&
 
-    challenger !== null
+    challenger !==
+    null
 
     &&
 
@@ -2602,12 +2629,18 @@ async function saveExperiment(
     0
 
       ? (
+
           baseline -
           challenger
+
         )
+
         /
+
         baseline
+
         *
+
         100
 
       : null;
@@ -2616,7 +2649,6 @@ async function saveExperiment(
   const row = {
 
     experiment_name:
-
       `${experiment.stage}_${experiment.family}`,
 
 
@@ -2684,22 +2716,15 @@ async function saveExperiment(
       ),
 
 
-    /*
-     * "improved" signifie seulement :
-     *
-     * Brier challenger < Brier baseline
-     * sur ce holdout.
-     *
-     * Cela NE signifie PAS encore
-     * promotion en production.
-     */
     improved:
 
-      challenger !== null
+      challenger !==
+      null
 
       &&
 
-      baseline !== null
+      baseline !==
+      null
 
       &&
 
@@ -2712,16 +2737,23 @@ async function saveExperiment(
       lambda:
         lambdaChoice.lambda,
 
+
       intercept: {
 
         home:
-          model.parameters.home[0],
+          model.parameters.home[
+            0
+          ],
 
         away:
-          model.parameters.away[0]
+          model.parameters.away[
+            0
+          ]
       },
 
+
       home:
+
         experiment.variables.reduce(
           (
             output,
@@ -2742,7 +2774,9 @@ async function saveExperiment(
           {}
         ),
 
+
       away:
+
         experiment.variables.reduce(
           (
             output,
@@ -2762,6 +2796,7 @@ async function saveExperiment(
           },
           {}
         ),
+
 
       standardization: {
 
@@ -2789,6 +2824,8 @@ async function saveExperiment(
 
       referenceClass:
         'DRAW',
+
+      splitType,
 
       globalSplit:
         GLOBAL_SPLIT,
@@ -2856,11 +2893,18 @@ async function saveExperiment(
     family:
       experiment.family,
 
+    splitType,
+
     training:
       trainingRows.length,
 
     holdout:
       holdoutRows.length,
+
+    cutoff:
+      new Date(
+        cutoff
+      ).toISOString(),
 
     baselineBrier:
       row.brier_baseline,
@@ -2900,12 +2944,14 @@ async function runExperiment(
   experiment,
   rows,
   cutoff,
-  tuning
+  tuning,
+  splitType
 ) {
 
   const trainingRows =
     rows.filter(
       row =>
+
         row.kickoffTs <
         cutoff
     );
@@ -2914,6 +2960,7 @@ async function runExperiment(
   const holdoutRows =
     rows.filter(
       row =>
+
         row.kickoffTs >=
         cutoff
     );
@@ -2928,6 +2975,12 @@ async function runExperiment(
 
       experiment:
         `${experiment.stage}_${experiment.family}`,
+
+      stage:
+        experiment.stage,
+
+      family:
+        experiment.family,
 
       skipped:
         true,
@@ -2954,6 +3007,12 @@ async function runExperiment(
       experiment:
         `${experiment.stage}_${experiment.family}`,
 
+      stage:
+        experiment.stage,
+
+      family:
+        experiment.family,
+
       skipped:
         true,
 
@@ -2970,7 +3029,7 @@ async function runExperiment(
 
 
   // ===================================================
-  // 1. LAMBDA CHOISI SANS TOUCHER AU HOLDOUT
+  // 1. CHOIX LAMBDA SUR TRAINING UNIQUEMENT
   // ===================================================
 
   const lambdaChoice =
@@ -2983,7 +3042,7 @@ async function runExperiment(
 
 
   // ===================================================
-  // 2. APPRENTISSAGE SUR TOUT LE TRAINING
+  // 2. APPRENTISSAGE
   // ===================================================
 
   const model =
@@ -2998,7 +3057,7 @@ async function runExperiment(
 
 
   // ===================================================
-  // 3. UNIQUE ÉVALUATION SUR LE HOLDOUT
+  // 3. TEST HOLDOUT
   // ===================================================
 
   const result =
@@ -3013,7 +3072,7 @@ async function runExperiment(
 
 
   // ===================================================
-  // 4. MÉMORISATION
+  // 4. SAUVEGARDE
   // ===================================================
 
   return saveExperiment(
@@ -3032,7 +3091,9 @@ async function runExperiment(
 
     tuning,
 
-    cutoff
+    cutoff,
+
+    splitType
   );
 }
 
@@ -3169,18 +3230,14 @@ exports.handler =
       ) {
 
         throw new Error(
+
           `Historique insuffisant : ${history.length} matchs.`
         );
       }
 
 
       // =================================================
-      // 2. V0.7
-      //
-      // Cette calibration reproduit le protocole
-      // existant de V0.7 :
-      // ancien historique = tuning
-      // derniers 22 % = holdout.
+      // 2. BASE V0.7
       // =================================================
 
       resetTuningCache();
@@ -3211,39 +3268,43 @@ exports.handler =
 
 
       // =================================================
-      // 3. CUTOFF CHRONOLOGIQUE GLOBAL
+      // 3. CUTOFF GLOBAL PRELINEUP
       // =================================================
 
-      const splitIndex =
+      const preSplitIndex =
         Math.max(
 
           1,
 
           Math.floor(
-            history.length *
+
+            history.length
+
+            *
+
             GLOBAL_SPLIT
           )
         );
 
 
-      const holdoutFirstMatch =
+      const preHoldoutFirstMatch =
         history[
-          splitIndex
+          preSplitIndex
         ];
 
 
       if (
-        !holdoutFirstMatch
+        !preHoldoutFirstMatch
       ) {
 
         throw new Error(
-          'Impossible de déterminer le début du holdout.'
+          'Impossible de déterminer le holdout PRELINEUP.'
         );
       }
 
 
-      const cutoff =
-        holdoutFirstMatch
+      const preCutoff =
+        preHoldoutFirstMatch
           .kickoffTs;
 
 
@@ -3285,6 +3346,69 @@ exports.handler =
         );
 
 
+      // =================================================
+      // 6. CUTOFF PROPRE AU FINAL
+      //
+      // C'est la correction essentielle.
+      //
+      // Auparavant le FINAL utilisait le cutoff global
+      // du dataset historique, ce qui produisait :
+      //
+      // 88 training / 190 holdout.
+      //
+      // Maintenant le split est calculé directement
+      // sur le dataset FINAL disponible.
+      // =================================================
+
+      if (
+        finalRows.length <
+        60
+      ) {
+
+        throw new Error(
+
+          `Dataset FINAL insuffisant : ${finalRows.length} matchs.`
+        );
+      }
+
+
+      const finalSplitIndex =
+        Math.max(
+
+          1,
+
+          Math.floor(
+
+            finalRows.length
+
+            *
+
+            GLOBAL_SPLIT
+          )
+        );
+
+
+      const finalHoldoutFirstMatch =
+        finalRows[
+          finalSplitIndex
+        ];
+
+
+      if (
+        !finalHoldoutFirstMatch
+      ) {
+
+        throw new Error(
+          'Impossible de déterminer le holdout FINAL.'
+        );
+      }
+
+
+      const finalCutoff =
+        finalHoldoutFirstMatch
+          .kickoffTs;
+
+
       console.log(
 
         'MatchScope Challenger Lab datasets:',
@@ -3300,16 +3424,49 @@ exports.handler =
           final:
             finalRows.length,
 
-          cutoff:
-            new Date(
-              cutoff
-            ).toISOString()
+          prelineupSplit: {
+
+            cutoff:
+              new Date(
+                preCutoff
+              ).toISOString(),
+
+            expectedTraining:
+              preRows.filter(
+                row =>
+                  row.kickoffTs <
+                  preCutoff
+              ).length,
+
+            expectedHoldout:
+              preRows.filter(
+                row =>
+                  row.kickoffTs >=
+                  preCutoff
+              ).length
+          },
+
+          finalSplit: {
+
+            cutoff:
+              new Date(
+                finalCutoff
+              ).toISOString(),
+
+            expectedTraining:
+              finalSplitIndex,
+
+            expectedHoldout:
+              finalRows.length
+              -
+              finalSplitIndex
+          }
         })
       );
 
 
       // =================================================
-      // 6. EXPÉRIENCES
+      // 7. EXPÉRIENCES
       // =================================================
 
       const results =
@@ -3321,14 +3478,37 @@ exports.handler =
         of EXPERIMENTS
       ) {
 
-        const rows =
+        const isFinal =
 
           experiment.stage ===
-          'FINAL'
+          'FINAL';
+
+
+        const rows =
+
+          isFinal
 
             ? finalRows
 
             : preRows;
+
+
+        const experimentCutoff =
+
+          isFinal
+
+            ? finalCutoff
+
+            : preCutoff;
+
+
+        const splitType =
+
+          isFinal
+
+            ? 'STAGE_SPECIFIC_FINAL_78_22'
+
+            : 'GLOBAL_HISTORY_PRELINEUP_78_22';
 
 
         try {
@@ -3340,9 +3520,11 @@ exports.handler =
 
               rows,
 
-              cutoff,
+              experimentCutoff,
 
-              tuning
+              tuning,
+
+              splitType
             );
 
 
@@ -3370,6 +3552,12 @@ exports.handler =
             experiment:
               `${experiment.stage}_${experiment.family}`,
 
+            stage:
+              experiment.stage,
+
+            family:
+              experiment.family,
+
             error:
               error?.message
               ||
@@ -3382,7 +3570,7 @@ exports.handler =
 
 
       // =================================================
-      // 7. FIN
+      // 8. FIN
       // =================================================
 
       return jsonResponse(
@@ -3401,6 +3589,7 @@ exports.handler =
           historyMatches:
             history.length,
 
+
           datasets: {
 
             prelineup:
@@ -3410,16 +3599,64 @@ exports.handler =
               finalRows.length
           },
 
+
           split: {
 
-            trainingUntil:
-              new Date(
-                cutoff
-              ).toISOString(),
+            prelineup: {
 
-            globalRatio:
-              GLOBAL_SPLIT
+              trainingUntil:
+                new Date(
+                  preCutoff
+                ).toISOString(),
+
+              ratio:
+                GLOBAL_SPLIT,
+
+              training:
+                preRows.filter(
+                  row =>
+                    row.kickoffTs <
+                    preCutoff
+                ).length,
+
+              holdout:
+                preRows.filter(
+                  row =>
+                    row.kickoffTs >=
+                    preCutoff
+                ).length
+            },
+
+
+            final: {
+
+              trainingUntil:
+                new Date(
+                  finalCutoff
+                ).toISOString(),
+
+              ratio:
+                GLOBAL_SPLIT,
+
+              datasetMatches:
+                finalRows.length,
+
+              training:
+                finalRows.filter(
+                  row =>
+                    row.kickoffTs <
+                    finalCutoff
+                ).length,
+
+              holdout:
+                finalRows.filter(
+                  row =>
+                    row.kickoffTs >=
+                    finalCutoff
+                ).length
+            }
           },
+
 
           v07: {
 
@@ -3434,10 +3671,13 @@ exports.handler =
               null
           },
 
+
           experiments:
             results.length,
 
+
           results,
+
 
           productionChanged:
             false
@@ -3450,7 +3690,9 @@ exports.handler =
     ) {
 
       console.error(
+
         'challenger-lab-background:',
+
         error
       );
 
