@@ -119,6 +119,541 @@ function numberOrNull(
 }
 
 
+// =====================================================
+// SCORES EXACTS — COMPATIBILITÉ PRÉDICTIONS FIGÉES
+// =====================================================
+
+function poissonScore(
+  lambda,
+  goals
+) {
+
+  let factorial =
+    1;
+
+
+  for (
+    let index = 2;
+    index <= goals;
+    index += 1
+  ) {
+
+    factorial *=
+      index;
+  }
+
+
+  return (
+
+    Math.exp(
+      -lambda
+    )
+
+    *
+
+    Math.pow(
+      lambda,
+      goals
+    )
+
+    /
+
+    factorial
+  );
+}
+
+
+function dcTauScore(
+  homeGoals,
+  awayGoals,
+  lambdaHome,
+  lambdaAway,
+  rho
+) {
+
+  if (
+    homeGoals === 0 &&
+    awayGoals === 0
+  ) {
+
+    return Math.max(
+      0.01,
+      1
+      -
+      lambdaHome *
+      lambdaAway *
+      rho
+    );
+  }
+
+
+  if (
+    homeGoals === 1 &&
+    awayGoals === 0
+  ) {
+
+    return Math.max(
+      0.01,
+      1
+      +
+      lambdaAway *
+      rho
+    );
+  }
+
+
+  if (
+    homeGoals === 0 &&
+    awayGoals === 1
+  ) {
+
+    return Math.max(
+      0.01,
+      1
+      +
+      lambdaHome *
+      rho
+    );
+  }
+
+
+  if (
+    homeGoals === 1 &&
+    awayGoals === 1
+  ) {
+
+    return Math.max(
+      0.01,
+      1 -
+      rho
+    );
+  }
+
+
+  return 1;
+}
+
+
+function scoreOutcome(
+  score
+) {
+
+  if (
+    score.homeGoals >
+    score.awayGoals
+  ) {
+
+    return 'home';
+  }
+
+
+  if (
+    score.homeGoals ===
+    score.awayGoals
+  ) {
+
+    return 'draw';
+  }
+
+
+  return 'away';
+}
+
+
+/*
+ * Reconstitue uniquement le score exact
+ * pour les anciennes prédictions PRELINEUP
+ * qui étaient déjà figées avant l'ajout
+ * du module de scores exacts.
+ *
+ * IMPORTANT :
+ * les probabilités 1 / N / 2 sauvegardées
+ * ne sont jamais modifiées.
+ */
+function exactScoreFromFrozenPrediction(
+  row,
+  rho = -0.08
+) {
+
+  const lambdaHome =
+    numberOrNull(
+      row?.lambda_home
+    );
+
+
+  const lambdaAway =
+    numberOrNull(
+      row?.lambda_away
+    );
+
+
+  const finalProbability = {
+
+    home:
+      numberOrNull(
+        row?.probability_home
+      ),
+
+    draw:
+      numberOrNull(
+        row?.probability_draw
+      ),
+
+    away:
+      numberOrNull(
+        row?.probability_away
+      )
+  };
+
+
+  if (
+    lambdaHome === null ||
+    lambdaAway === null ||
+    finalProbability.home === null ||
+    finalProbability.draw === null ||
+    finalProbability.away === null
+  ) {
+
+    return null;
+  }
+
+
+  const finalTotal =
+
+    finalProbability.home +
+    finalProbability.draw +
+    finalProbability.away;
+
+
+  if (
+    !Number.isFinite(
+      finalTotal
+    ) ||
+    finalTotal <= 0
+  ) {
+
+    return null;
+  }
+
+
+  finalProbability.home /=
+    finalTotal;
+
+
+  finalProbability.draw /=
+    finalTotal;
+
+
+  finalProbability.away /=
+    finalTotal;
+
+
+  const rawScores =
+    [];
+
+
+  const dcProbability = {
+
+    home: 0,
+
+    draw: 0,
+
+    away: 0
+  };
+
+
+  let probabilityMass =
+    0;
+
+
+  const safeRho =
+
+    Number.isFinite(
+      Number(
+        rho
+      )
+    )
+
+      ? Number(
+          rho
+        )
+
+      : -0.08;
+
+
+  for (
+    let homeGoals = 0;
+    homeGoals <= 8;
+    homeGoals += 1
+  ) {
+
+    for (
+      let awayGoals = 0;
+      awayGoals <= 8;
+      awayGoals += 1
+    ) {
+
+      const probability =
+
+        poissonScore(
+          lambdaHome,
+          homeGoals
+        )
+
+        *
+
+        poissonScore(
+          lambdaAway,
+          awayGoals
+        )
+
+        *
+
+        dcTauScore(
+          homeGoals,
+          awayGoals,
+          lambdaHome,
+          lambdaAway,
+          safeRho
+        );
+
+
+      const score = {
+
+        homeGoals,
+
+        awayGoals,
+
+        probability
+      };
+
+
+      rawScores.push(
+        score
+      );
+
+
+      probabilityMass +=
+        probability;
+
+
+      dcProbability[
+        scoreOutcome(
+          score
+        )
+      ] +=
+        probability;
+    }
+  }
+
+
+  if (
+    !Number.isFinite(
+      probabilityMass
+    ) ||
+    probabilityMass <= 0
+  ) {
+
+    return null;
+  }
+
+
+  dcProbability.home /=
+    probabilityMass;
+
+
+  dcProbability.draw /=
+    probabilityMass;
+
+
+  dcProbability.away /=
+    probabilityMass;
+
+
+  const ratios = {
+
+    home:
+
+      finalProbability.home
+
+      /
+
+      Math.max(
+        1e-12,
+        dcProbability.home
+      ),
+
+
+    draw:
+
+      finalProbability.draw
+
+      /
+
+      Math.max(
+        1e-12,
+        dcProbability.draw
+      ),
+
+
+    away:
+
+      finalProbability.away
+
+      /
+
+      Math.max(
+        1e-12,
+        dcProbability.away
+      )
+  };
+
+
+  const adjusted =
+
+    rawScores.map(
+      score => ({
+
+        homeGoals:
+          score.homeGoals,
+
+        awayGoals:
+          score.awayGoals,
+
+        probability:
+
+          (
+            score.probability /
+            probabilityMass
+          )
+
+          *
+
+          ratios[
+            scoreOutcome(
+              score
+            )
+          ]
+      })
+    );
+
+
+  const adjustedTotal =
+
+    adjusted.reduce(
+      (
+        sum,
+        score
+      ) =>
+
+        sum +
+        score.probability,
+
+      0
+    );
+
+
+  if (
+    !Number.isFinite(
+      adjustedTotal
+    ) ||
+    adjustedTotal <= 0
+  ) {
+
+    return null;
+  }
+
+
+  const scoreDistribution =
+
+    adjusted.map(
+      score => ({
+
+        homeGoals:
+          score.homeGoals,
+
+        awayGoals:
+          score.awayGoals,
+
+        probability:
+
+          score.probability
+
+          /
+
+          adjustedTotal
+      })
+    );
+
+
+  const topScores =
+
+    [...scoreDistribution]
+
+      .sort(
+        (
+          first,
+          second
+        ) =>
+
+          second.probability
+
+          -
+
+          first.probability
+      )
+
+      .slice(
+        0,
+        5
+      )
+
+      .map(
+        score => ({
+
+          score:
+
+            `${score.homeGoals}-${score.awayGoals}`,
+
+          homeGoals:
+            score.homeGoals,
+
+          awayGoals:
+            score.awayGoals,
+
+          probability:
+            score.probability
+        })
+      );
+
+
+  return {
+
+    mostLikelyScore:
+      topScores[0]
+      ||
+      null,
+
+    topScores,
+
+    scoreDistribution,
+
+    scoreModel: {
+
+      method:
+        'DIXON_COLES_ALIGNED_TO_V07_1N2',
+
+      maxGoalsPerTeam:
+        8
+    }
+  };
+}
+
+
+// =====================================================
+// DATE / HEURE
+// =====================================================
+
 function parseKickoff(
   value
 ) {
@@ -863,9 +1398,6 @@ async function loadRuntime() {
 
 // =====================================================
 // RECONSTRUCTION ELO
-//
-// Même logique que V0.7,
-// mais sans refaire le tuning.
 // =====================================================
 
 function buildEloTimeline(
@@ -1349,15 +1881,6 @@ exports.handler =
       // =================================================
       // 4. MÉMORISATION IMMÉDIATE DES XI OFFICIELS
       // =================================================
-      //
-      // Dès que Sportmonks fournit au moins
-      // 22 titulaires appartenant aux deux équipes,
-      // on stocke le match et les compositions
-      // dans Supabase.
-      //
-      // Cela NE modifie PAS encore V0.7.
-      // Cela NE crée PAS encore une prédiction FINAL.
-      // =================================================
 
       if (
         lineup.official
@@ -1394,6 +1917,81 @@ exports.handler =
         existing
       ) {
 
+        /*
+         * Les nouvelles PRELINEUP enregistrent
+         * directement le score exact dans snapshot.
+         */
+        let exactScore =
+
+          existing
+            ?.snapshot
+            ?.exactScore
+
+          ||
+
+          null;
+
+
+        /*
+         * Pour les anciennes PRELINEUP déjà figées,
+         * on reconstitue le score exact sans toucher
+         * aux probabilités 1/N/2 historiques.
+         */
+        if (
+          !exactScore
+        ) {
+
+          let rho =
+            -0.08;
+
+
+          try {
+
+            const runtimeForScore =
+              await loadRuntime();
+
+
+            if (
+              Number.isFinite(
+                Number(
+                  runtimeForScore
+                    ?.config
+                    ?.rho
+                )
+              )
+            ) {
+
+              rho =
+                Number(
+                  runtimeForScore
+                    .config
+                    .rho
+                );
+            }
+
+          } catch (
+            runtimeError
+          ) {
+
+            console.warn(
+
+              'MatchScope exact score : rho runtime indisponible, valeur de secours utilisée.',
+
+              runtimeError?.message
+              ||
+              runtimeError
+            );
+          }
+
+
+          exactScore =
+            exactScoreFromFrozenPrediction(
+              existing,
+              rho
+            );
+        }
+
+
         return jsonResponse(
           200,
           {
@@ -1424,7 +2022,9 @@ exports.handler =
               lineup.official,
 
             prediction:
-              existing
+              existing,
+
+            exactScore
           }
         );
       }
@@ -1432,8 +2032,6 @@ exports.handler =
 
       // =================================================
       // 6. RUNTIME V0.7
-      //
-      // ICI ON NE RETUNE PLUS LE MODÈLE.
       // =================================================
 
       const runtime =
@@ -1494,10 +2092,11 @@ exports.handler =
 
 
       // =================================================
-      // 9. CALCUL RAPIDE DU MATCH
+      // 9. CALCUL DU MATCH
       //
-      // Plus de tuneModel()
-      // Plus de backtest à chaque clic.
+      // beforeTime = Infinity :
+      // model.js active automatiquement la matrice
+      // de scores exacts pour le match affiché.
       // =================================================
 
       const model =
@@ -1581,7 +2180,49 @@ exports.handler =
                 null,
 
               lineupEffectApplied:
-                false
+                false,
+
+              /*
+               * Le score exact est maintenant conservé
+               * avec la PRELINEUP figée.
+               */
+              exactScore:
+
+                model
+                  ?.mostLikelyScore
+
+                  ? {
+
+                      mostLikelyScore:
+                        model.mostLikelyScore,
+
+                      topScores:
+
+                        Array.isArray(
+                          model.topScores
+                        )
+
+                          ? model.topScores
+
+                          : [],
+
+                      scoreDistribution:
+
+                        Array.isArray(
+                          model.scoreDistribution
+                        )
+
+                          ? model.scoreDistribution
+
+                          : [],
+
+                      scoreModel:
+                        model.scoreModel
+                        ||
+                        null
+                    }
+
+                  : null
             }
           });
 
@@ -1632,6 +2273,15 @@ exports.handler =
             history:
               historyInfo,
 
+            /*
+             * Pour une nouvelle prédiction,
+             * model contient directement :
+             *
+             * mostLikelyScore
+             * topScores
+             * scoreDistribution
+             * scoreModel
+             */
             model,
 
             validation:
@@ -1646,11 +2296,9 @@ exports.handler =
       // =================================================
       // 11. XI OFFICIELS
       //
-      // Les compositions sont désormais stockées.
-      //
-      // Mais on ne crée toujours PAS de fausse FINAL :
-      // V0.7 ne sait pas encore mesurer
-      // l'impact réel des titulaires.
+      // Les XI sont mémorisés mais aucun faux modèle
+      // FINAL n'est créé tant que leur impact n'a pas
+      // été validé.
       // =================================================
 
       return jsonResponse(
