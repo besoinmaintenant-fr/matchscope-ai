@@ -7,8 +7,11 @@ const API =
   'https://api.sportmonks.com/v3/football';
 
 
-const BATCH_SIZE =
-  50;
+// Petit lot volontaire.
+// La page admin lancera automatiquement
+// le lot suivant.
+const RUN_SIZE =
+  10;
 
 
 const DB_PAGE_SIZE =
@@ -19,8 +22,12 @@ const WRITE_BATCH_SIZE =
   500;
 
 
+const ID_QUERY_CHUNK =
+  100;
+
+
 // =====================================================
-// DONNÉES PRINCIPALES
+// DONNÉES PRINCIPALES SPORTMONKS
 // =====================================================
 
 const CORE_INCLUDE = [
@@ -77,10 +84,7 @@ const CORE_INCLUDE = [
 
 
 // =====================================================
-// GROUPES OPTIONNELS
-//
-// Si ton abonnement n'autorise pas un groupe,
-// le reste du backfill continue.
+// DONNÉES OPTIONNELLES
 // =====================================================
 
 const OPTIONAL_GROUPS = [
@@ -238,11 +242,8 @@ function chunks(
     output.push(
 
       data.slice(
-
         index,
-
-        index +
-        size
+        index + size
       )
     );
   }
@@ -280,11 +281,7 @@ function relation(
 
 
 // =====================================================
-// FUSION DES LINEUPS
-//
-// Certaines données arrivent dans
-// lineups.details et d'autres dans
-// lineups.xGLineup.
+// FUSION LINEUPS
 // =====================================================
 
 function lineupKey(
@@ -394,6 +391,10 @@ function mergeLineups(
 
           ??
 
+          item?.xGLineup
+
+          ??
+
           previous?.xGLineup
 
           ??
@@ -408,6 +409,10 @@ function mergeLineups(
           ??
 
           previous?.xGLineup
+
+          ??
+
+          item?.expected
 
           ??
 
@@ -460,9 +465,7 @@ function mergeFixture(
 
 
 // =====================================================
-// SPORTMONKS MULTI FIXTURES
-//
-// 50 fixtures maximum par appel.
+// SPORTMONKS
 // =====================================================
 
 async function fetchMulti(
@@ -606,10 +609,7 @@ async function fetchMulti(
 
 
 // =====================================================
-// MATCHS À ENRICHIR
-//
-// On utilise les matchs dont nous avons déjà
-// une composition confirmée.
+// MATCHS CIBLES
 // =====================================================
 
 async function loadTargetFixtures() {
@@ -727,55 +727,78 @@ async function loadExistingEnrichmentIds(
   ids
 ) {
 
-  if (
-    !ids.length
+  const found =
+    new Set();
+
+
+  for (
+    const part
+    of chunks(
+      ids,
+      ID_QUERY_CHUNK
+    )
   ) {
 
-    return new Set();
+    if (
+      !part.length
+    ) {
+
+      continue;
+    }
+
+
+    const rows =
+      await supabaseRequest(
+        'fixture_enrichment',
+        {
+
+          method:
+            'GET',
+
+          query:
+
+            '?select=sportmonks_fixture_id'
+
+            +
+
+            `&sportmonks_fixture_id=in.(${part.join(',')})`
+        }
+      );
+
+
+    for (
+      const row
+      of array(
+        rows
+      )
+    ) {
+
+      const id =
+        Number(
+          row?.sportmonks_fixture_id
+        );
+
+
+      if (
+        Number.isFinite(
+          id
+        )
+      ) {
+
+        found.add(
+          id
+        );
+      }
+    }
   }
 
 
-  const rows =
-    await supabaseRequest(
-      'fixture_enrichment',
-      {
-
-        method:
-          'GET',
-
-        query:
-
-          '?select=sportmonks_fixture_id'
-
-          +
-
-          `&sportmonks_fixture_id=in.(${ids.join(',')})`
-      }
-    );
-
-
-  return new Set(
-
-    array(
-      rows
-    )
-
-      .map(
-        row =>
-          Number(
-            row.sportmonks_fixture_id
-          )
-      )
-
-      .filter(
-        Number.isFinite
-      )
-  );
+  return found;
 }
 
 
 // =====================================================
-// UPSERT GÉNÉRIQUE
+// UPSERT
 // =====================================================
 
 async function upsertRows(
@@ -808,6 +831,7 @@ async function upsertRows(
           'POST',
 
         query:
+
           `?on_conflict=${encodeURIComponent(
             conflict
           )}`,
@@ -824,7 +848,7 @@ async function upsertRows(
 
 
 // =====================================================
-// STATISTIQUES ÉQUIPE
+// STATS ÉQUIPES
 // =====================================================
 
 function buildTeamStatistics(
@@ -926,7 +950,7 @@ function buildTeamStatistics(
 
 
 // =====================================================
-// STATISTIQUES JOUEURS
+// STATS JOUEURS
 // =====================================================
 
 function buildPlayerStatistics(
@@ -1079,7 +1103,7 @@ function buildPlayerXg(
       ).length
 
         ? array(
-            lineup.expected
+            lineup?.expected
           )
 
         : array(
@@ -1293,7 +1317,7 @@ function buildEvents(
 
 
 // =====================================================
-// ABSENCES / BLESSURES / SUSPENSIONS
+// ABSENCES
 // =====================================================
 
 function buildAbsences(
@@ -1372,10 +1396,7 @@ function buildAbsences(
           type_name:
             item?.type?.name
             ||
-            item
-              ?.sideline
-              ?.type
-              ?.name
+            item?.sideline?.type?.name
             ||
             null,
 
@@ -1442,7 +1463,7 @@ function buildAbsences(
 
 
 // =====================================================
-// LIGNE D'ENRICHISSEMENT GLOBALE
+// FIXTURE GLOBALE
 // =====================================================
 
 function enrichmentRow(
@@ -1745,7 +1766,7 @@ function enrichmentRow(
 
 
 // =====================================================
-// ENRICHISSEMENT D'UN LOT
+// ENRICHIR UN LOT
 // =====================================================
 
 async function enrichBatch(
@@ -1958,15 +1979,14 @@ async function enrichBatch(
   }
 
 
-  await upsertRows(
-
-    'fixture_enrichment',
-
-    'sportmonks_fixture_id',
-
-    enrichment
-  );
-
+  /*
+   * IMPORTANT :
+   *
+   * fixture_enrichment est enregistré EN DERNIER.
+   *
+   * La page admin utilise cette table pour savoir
+   * que tout le lot est réellement terminé.
+   */
 
   await upsertRows(
 
@@ -2015,6 +2035,16 @@ async function enrichBatch(
     'sportmonks_sidelined_id',
 
     absences
+  );
+
+
+  await upsertRows(
+
+    'fixture_enrichment',
+
+    'sportmonks_fixture_id',
+
+    enrichment
   );
 
 
@@ -2101,25 +2131,20 @@ exports.handler =
     }
 
 
-    const force =
-      body?.force ===
-      true;
-
-
     try {
 
       const targets =
         await loadTargetFixtures();
 
 
-      const ids =
+      const targetIds =
         targets
 
           .map(
             row =>
               Number(
                 row
-                  .sportmonks_fixture_id
+                  ?.sportmonks_fixture_id
               )
           )
 
@@ -2128,167 +2153,63 @@ exports.handler =
           );
 
 
-      const batches =
-        chunks(
-          ids,
-          BATCH_SIZE
+      const existing =
+        await loadExistingEnrichmentIds(
+          targetIds
         );
 
 
-      const totals = {
-
-        targetFixtures:
-          ids.length,
-
-        skippedExisting:
-          0,
-
-        enrichedFixtures:
-          0,
-
-        teamStats:
-          0,
-
-        playerStats:
-          0,
-
-        playerXg:
-          0,
-
-        events:
-          0,
-
-        absences:
-          0,
-
-        batchErrors:
-          []
-      };
+      const remaining =
+        targetIds.filter(
+          id =>
+            !existing.has(
+              id
+            )
+        );
 
 
-      for (
-        let index = 0;
-        index < batches.length;
-        index += 1
+      if (
+        !remaining.length
       ) {
 
-        const batch =
-          batches[
-            index
-          ];
+        console.log(
+
+          JSON.stringify({
+
+            job:
+              'enrich-history-background',
+
+            status:
+              'DONE',
+
+            targetFixtures:
+              targetIds.length,
+
+            enrichedFixtures:
+              existing.size,
+
+            remaining:
+              0
+          })
+        );
 
 
-        let work =
-          batch;
-
-
-        if (
-          !force
-        ) {
-
-          const existing =
-            await loadExistingEnrichmentIds(
-              batch
-            );
-
-
-          totals.skippedExisting +=
-            existing.size;
-
-
-          work =
-            batch.filter(
-              id =>
-                !existing.has(
-                  id
-                )
-            );
-        }
-
-
-        if (
-          !work.length
-        ) {
-
-          continue;
-        }
-
-
-        try {
-
-          const result =
-            await enrichBatch(
-              work,
-              token
-            );
-
-
-          totals.enrichedFixtures +=
-            result.fixtures;
-
-
-          totals.teamStats +=
-            result.teamStats;
-
-
-          totals.playerStats +=
-            result.playerStats;
-
-
-          totals.playerXg +=
-            result.playerXg;
-
-
-          totals.events +=
-            result.events;
-
-
-          totals.absences +=
-            result.absences;
-
-
-          console.log(
-
-            JSON.stringify({
-
-              job:
-                'enrich-history-background',
-
-              batch:
-                index + 1,
-
-              batches:
-                batches.length,
-
-              requested:
-                work.length,
-
-              result
-            })
-          );
-
-
-        } catch (
-          error
-        ) {
-
-          totals
-            .batchErrors
-            .push({
-
-              batch:
-                index + 1,
-
-              ids:
-                work,
-
-              error:
-                error?.message
-                ||
-                String(error)
-            });
-        }
+        return;
       }
+
+
+      const work =
+        remaining.slice(
+          0,
+          RUN_SIZE
+        );
+
+
+      const result =
+        await enrichBatch(
+          work,
+          token
+        );
 
 
       console.log(
@@ -2299,13 +2220,29 @@ exports.handler =
             job:
               'enrich-history-background',
 
+            status:
+              'BATCH_DONE',
+
+            runSize:
+              RUN_SIZE,
+
+            requested:
+              work.length,
+
+            targetFixtures:
+              targetIds.length,
+
+            enrichedBefore:
+              existing.size,
+
+            remainingBefore:
+              remaining.length,
+
+            result,
+
             finishedAt:
               new Date()
-                .toISOString(),
-
-            force,
-
-            ...totals
+                .toISOString()
           },
           null,
           2
