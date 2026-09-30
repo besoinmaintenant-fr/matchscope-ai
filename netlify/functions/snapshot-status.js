@@ -3,13 +3,22 @@ const {
 } = require('./lib/supabase');
 
 
-// =====================================================
-// MATCHSCOPE — SNAPSHOT STATUS
-//
-// Cet endpoint ne renvoie PAS les raw_fixture complets.
-// Il expose seulement un résumé permettant de vérifier
-// la mémoire pré-match.
-// =====================================================
+const API =
+  'https://api.sportmonks.com/v3/football';
+
+
+const LEAGUE_IDS = [
+  8,    // Premier League
+  82,   // Bundesliga
+  564   // La Liga
+];
+
+
+const LEAGUE_CODES = {
+  8: 'PL',
+  82: 'BL',
+  564: 'LL'
+};
 
 
 const STAGES = [
@@ -21,8 +30,44 @@ const STAGES = [
 ];
 
 
+const STAGE_WINDOWS = {
+
+  D1: {
+    targetMinutes: 1440,
+    minMinutes: 1380,
+    maxMinutes: 1500
+  },
+
+  H6: {
+    targetMinutes: 360,
+    minMinutes: 330,
+    maxMinutes: 390
+  },
+
+  H3: {
+    targetMinutes: 180,
+    minMinutes: 150,
+    maxMinutes: 210
+  },
+
+  H90: {
+    targetMinutes: 90,
+    minMinutes: 75,
+    maxMinutes: 105
+  }
+};
+
+
 const MAX_FIXTURES =
   30;
+
+
+const MAX_UPCOMING =
+  12;
+
+
+const UPCOMING_DAYS =
+  14;
 
 
 // =====================================================
@@ -66,8 +111,26 @@ function parseDate(value) {
   }
 
 
+  const raw =
+    String(value).trim();
+
+
+  if (
+    /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
+      .test(raw)
+  ) {
+
+    return new Date(
+      raw.replace(
+        ' ',
+        'T'
+      ) + 'Z'
+    );
+  }
+
+
   const date =
-    new Date(value);
+    new Date(raw);
 
 
   return Number.isNaN(
@@ -75,6 +138,17 @@ function parseDate(value) {
   )
     ? null
     : date;
+}
+
+
+function isoDate(date) {
+
+  return date
+    .toISOString()
+    .slice(
+      0,
+      10
+    );
 }
 
 
@@ -99,11 +173,30 @@ function getTeamName(
     );
 
 
-  return (
-    team?.name
+  return team?.name || null;
+}
+
+
+function getTeam(
+  fixture,
+  location
+) {
+
+  return array(
+    fixture?.participants
+  )
+
+    .find(
+      participant =>
+        participant
+          ?.meta
+          ?.location ===
+        location
+    )
+
     ||
-    null
-  );
+
+    null;
 }
 
 
@@ -163,7 +256,7 @@ function jsonResponse(
 
 
 // =====================================================
-// CHARGEMENT
+// MÉMOIRE SUPABASE
 // =====================================================
 
 async function loadSnapshots() {
@@ -214,7 +307,7 @@ async function loadSnapshots() {
 
 
 // =====================================================
-// GROUPEMENT PAR MATCH
+// GROUPEMENT SNAPSHOTS
 // =====================================================
 
 function buildFixtures(
@@ -293,10 +386,6 @@ function buildFixtures(
       );
 
 
-    /*
-     * Si un snapshot plus récent contient enfin
-     * les noms d'équipes, on les récupère.
-     */
     const homeName =
       getTeamName(
         row.raw_fixture,
@@ -488,6 +577,561 @@ function buildFixtures(
 
 
 // =====================================================
+// PROCHAINS MATCHS SPORTMONKS
+// =====================================================
+
+async function fetchUpcomingFixtures(
+  token
+) {
+
+  if (!token) {
+
+    throw new Error(
+      'SPORTMONKS_API_TOKEN absent.'
+    );
+  }
+
+
+  const now =
+    new Date();
+
+
+  const end =
+    new Date(
+      now.getTime()
+      +
+      UPCOMING_DAYS *
+      24 *
+      60 *
+      60 *
+      1000
+    );
+
+
+  const fixtures =
+    [];
+
+
+  let page =
+    1;
+
+
+  let hasMore =
+    true;
+
+
+  while (
+    hasMore &&
+    page <= 5
+  ) {
+
+    const url =
+      new URL(
+
+        `${API}/fixtures/between/${isoDate(
+          now
+        )}/${isoDate(
+          end
+        )}`
+      );
+
+
+    url.searchParams.set(
+      'api_token',
+      token
+    );
+
+
+    url.searchParams.set(
+      'filters',
+      `fixtureLeagues:${LEAGUE_IDS.join(',')}`
+    );
+
+
+    url.searchParams.set(
+      'include',
+      'league;participants;state'
+    );
+
+
+    url.searchParams.set(
+      'per_page',
+      '100'
+    );
+
+
+    url.searchParams.set(
+      'page',
+      String(page)
+    );
+
+
+    const response =
+      await fetch(url);
+
+
+    const raw =
+      await response.text();
+
+
+    let payload =
+      {};
+
+
+    try {
+
+      payload =
+        JSON.parse(raw);
+
+    } catch {
+
+      throw new Error(
+        'Réponse Sportmonks upcoming illisible.'
+      );
+    }
+
+
+    if (!response.ok) {
+
+      throw new Error(
+        payload?.message
+        ||
+        payload?.error
+        ||
+        `Sportmonks ${response.status}`
+      );
+    }
+
+
+    fixtures.push(
+      ...array(
+        payload?.data
+      )
+    );
+
+
+    hasMore =
+      Boolean(
+        payload
+          ?.pagination
+          ?.has_more
+      );
+
+
+    page += 1;
+  }
+
+
+  const nowTimestamp =
+    Date.now();
+
+
+  return fixtures
+
+    .map(
+      fixture => {
+
+        const kickoff =
+          parseDate(
+            fixture?.starting_at
+          );
+
+
+        if (!kickoff) {
+          return null;
+        }
+
+
+        if (
+          kickoff.getTime() <=
+          nowTimestamp
+        ) {
+
+          return null;
+        }
+
+
+        const home =
+          getTeam(
+            fixture,
+            'home'
+          );
+
+
+        const away =
+          getTeam(
+            fixture,
+            'away'
+          );
+
+
+        return {
+
+          fixtureId:
+            String(
+              fixture.id
+            ),
+
+          league:
+            LEAGUE_CODES[
+              Number(
+                fixture.league_id
+              )
+            ]
+            ||
+            fixture?.league?.name
+            ||
+            '—',
+
+          kickoff:
+            kickoff.toISOString(),
+
+          home:
+            home?.name
+            ||
+            'Domicile',
+
+          away:
+            away?.name
+            ||
+            'Extérieur'
+        };
+      }
+    )
+
+    .filter(Boolean)
+
+    .sort(
+      (
+        first,
+        second
+      ) =>
+
+        new Date(
+          first.kickoff
+        ).getTime()
+
+        -
+
+        new Date(
+          second.kickoff
+        ).getTime()
+    )
+
+    .slice(
+      0,
+      MAX_UPCOMING
+    );
+}
+
+
+// =====================================================
+// PLAN DE CAPTURE
+// =====================================================
+
+function buildStagePlan(
+  fixture,
+  capturedStages
+) {
+
+  const kickoff =
+    parseDate(
+      fixture.kickoff
+    );
+
+
+  if (!kickoff) {
+    return [];
+  }
+
+
+  const kickoffTimestamp =
+    kickoff.getTime();
+
+
+  const now =
+    Date.now();
+
+
+  const stages =
+    [];
+
+
+  for (
+    const stage
+    of [
+      'D1',
+      'H6',
+      'H3',
+      'H90'
+    ]
+  ) {
+
+    const window =
+      STAGE_WINDOWS[
+        stage
+      ];
+
+
+    const captured =
+      capturedStages?.[
+        stage
+      ]
+      ||
+      null;
+
+
+    const windowStart =
+      kickoffTimestamp
+      -
+      window.maxMinutes *
+      60000;
+
+
+    const windowEnd =
+      kickoffTimestamp
+      -
+      window.minMinutes *
+      60000;
+
+
+    const targetAt =
+      kickoffTimestamp
+      -
+      window.targetMinutes *
+      60000;
+
+
+    let status;
+
+
+    if (captured) {
+
+      status =
+        'CAPTURED';
+
+    } else if (
+      now <
+      windowStart
+    ) {
+
+      status =
+        'WAITING';
+
+    } else if (
+      now <=
+      windowEnd
+    ) {
+
+      status =
+        'DUE_NOW';
+
+    } else {
+
+      status =
+        'MISSED';
+    }
+
+
+    stages.push({
+
+      stage,
+
+      status,
+
+      captured:
+        Boolean(
+          captured
+        ),
+
+      capturedAt:
+        captured?.capturedAt
+        ||
+        null,
+
+      targetAt:
+        new Date(
+          targetAt
+        ).toISOString(),
+
+      windowStart:
+        new Date(
+          windowStart
+        ).toISOString(),
+
+      windowEnd:
+        new Date(
+          windowEnd
+        ).toISOString(),
+
+      minutesUntilWindow:
+
+        status ===
+        'WAITING'
+
+          ? Math.ceil(
+              (
+                windowStart -
+                now
+              )
+              /
+              60000
+            )
+
+          : 0
+    });
+  }
+
+
+  const finalCaptured =
+    capturedStages
+      ?.FINAL
+    ||
+    null;
+
+
+  stages.push({
+
+    stage:
+      'FINAL',
+
+    status:
+
+      finalCaptured
+
+        ? 'CAPTURED'
+
+        : now <
+          kickoffTimestamp
+
+          ? 'WAITING_XI'
+
+          : 'MISSED',
+
+    captured:
+      Boolean(
+        finalCaptured
+      ),
+
+    capturedAt:
+      finalCaptured
+        ?.capturedAt
+      ||
+      null,
+
+    targetAt:
+      null,
+
+    windowStart:
+      null,
+
+    windowEnd:
+      null,
+
+    minutesUntilWindow:
+      null
+  });
+
+
+  return stages;
+}
+
+
+// =====================================================
+// PROCHAINS MATCHS + MÉMOIRE
+// =====================================================
+
+function attachCapturePlan(
+  upcoming,
+  memoryFixtures
+) {
+
+  const memoryById =
+    new Map(
+
+      memoryFixtures.map(
+        fixture => [
+
+          String(
+            fixture.fixtureId
+          ),
+
+          fixture
+        ]
+      )
+    );
+
+
+  return upcoming.map(
+    fixture => {
+
+      const memory =
+        memoryById.get(
+          String(
+            fixture.fixtureId
+          )
+        );
+
+
+      const plan =
+        buildStagePlan(
+
+          fixture,
+
+          memory?.stages
+          ||
+          {}
+        );
+
+
+      const nextDue =
+        plan.find(
+          item =>
+            item.status ===
+            'DUE_NOW'
+        )
+
+        ||
+
+        plan.find(
+          item =>
+            item.status ===
+            'WAITING'
+        )
+
+        ||
+
+        plan.find(
+          item =>
+            item.status ===
+            'WAITING_XI'
+        )
+
+        ||
+
+        null;
+
+
+      return {
+
+        ...fixture,
+
+        capturedCount:
+          plan.filter(
+            item =>
+              item.captured
+          ).length,
+
+        plan,
+
+        nextDue
+      };
+    }
+  );
+}
+
+
+// =====================================================
 // SYNTHÈSE
 // =====================================================
 
@@ -578,6 +1222,39 @@ exports.handler =
         );
 
 
+      let upcoming =
+        [];
+
+
+      let upcomingError =
+        null;
+
+
+      try {
+
+        const futureFixtures =
+          await fetchUpcomingFixtures(
+            process
+              .env
+              .SPORTMONKS_API_TOKEN
+          );
+
+
+        upcoming =
+          attachCapturePlan(
+            futureFixtures,
+            fixtures
+          );
+
+      } catch (error) {
+
+        upcomingError =
+          error?.message
+          ||
+          String(error);
+      }
+
+
       return jsonResponse(
         200,
         {
@@ -596,6 +1273,36 @@ exports.handler =
             buildSummary(
               fixtures
             ),
+
+          upcomingSummary: {
+
+            count:
+              upcoming.length,
+
+            dueNow:
+              upcoming.filter(
+                fixture =>
+                  fixture.plan.some(
+                    stage =>
+                      stage.status ===
+                      'DUE_NOW'
+                  )
+              ).length,
+
+            waitingFinal:
+              upcoming.filter(
+                fixture =>
+                  fixture.plan.some(
+                    stage =>
+                      stage.status ===
+                      'WAITING_XI'
+                  )
+              ).length
+          },
+
+          upcomingError,
+
+          upcoming,
 
           fixtures
         }
