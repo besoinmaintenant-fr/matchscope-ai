@@ -1824,7 +1824,47 @@ function topExactScores(
           )
         );
     }
+    const scoreDistribution =
 
+  includeScores
+
+    ? alignScoreDistribution(
+        dc.scoreDistribution,
+        {
+          home:
+            dc.home,
+
+          draw:
+            dc.draw,
+
+          away:
+            dc.away
+        },
+        probability
+      )
+
+    : [];
+
+
+const topScores =
+
+  includeScores
+
+    ? topExactScores(
+        scoreDistribution,
+        5
+      )
+
+    : [];
+
+
+const mostLikelyScore =
+
+  topScores.length
+
+    ? topScores[0]
+
+    : null;
     return {
       ...probability,
 
