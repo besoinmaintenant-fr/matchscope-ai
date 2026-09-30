@@ -2,10 +2,64 @@
   publish = "."
   functions = "netlify/functions"
 
+
 [functions]
   node_bundler = "esbuild"
 
 
+# =====================================================
+# MATCHSCOPE — AUTOMATISATIONS
+# =====================================================
+
+
+# -----------------------------------------------------
+# COMPOSITIONS OFFICIELLES
+#
+# Vérification toutes les 15 minutes
+# entre 10h00 et 22h45 UTC.
+#
+# collect-lineups ne télécharge les compos détaillées
+# que pour les matchs proches du coup d'envoi.
+# -----------------------------------------------------
+
+[functions."collect-lineups"]
+  schedule = "*/15 10-22 * * *"
+
+
+# -----------------------------------------------------
+# FIN DES MATCHS
+#
+# Vérification toutes les 15 minutes
+# entre 12h00 et 23h45 UTC.
+#
+# Cette fonction :
+# - détecte FT / AET / AP
+# - enregistre le score
+# - enregistre le résultat 1/N/2
+# - calcule les Brier Scores
+# -----------------------------------------------------
+
+[functions."postmatch-auto"]
+  schedule = "*/15 12-23 * * *"
+
+
+# -----------------------------------------------------
+# ENRICHISSEMENT HISTORIQUE
+#
+# Toutes les 3 heures.
+#
+# Le déclencheur est léger.
+# Le vrai travail est effectué par
+# enrich-history-background.
+# -----------------------------------------------------
+
+[functions."trigger-enrichment"]
+  schedule = "20 */3 * * *"
+
+
+# =====================================================
+# HEADERS
+# =====================================================
 
 [[headers]]
   for = "/*"
