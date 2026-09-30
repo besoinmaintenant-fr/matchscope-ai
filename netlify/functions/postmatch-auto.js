@@ -8,33 +8,55 @@ const {
 } = require('./finalize-match');
 
 
-const {
-  handler: enrichHistory
-} = require('./enrich-history-background');
+// =====================================================
+// MATCHSCOPE
+// AUTOMATISATION POST-MATCH
+//
+// RÔLE :
+// - détecter les matchs récents
+// - vérifier s'ils sont terminés
+// - enregistrer le score final
+// - enregistrer le résultat 1 / N / 2
+// - évaluer les prédictions existantes
+// - calculer leur Brier Score
+//
+// IMPORTANT :
+// Cette fonction NE lance PAS l'enrichissement lourd.
+// Celui-ci sera géré séparément.
+// =====================================================
 
 
 // =====================================================
 // CONFIGURATION
 // =====================================================
 
-// On regarde les matchs ayant commencé
+
+// On contrôle les matchs ayant commencé
 // au cours des 8 dernières heures.
 //
-// Cela couvre largement :
-// match + prolongations + retard API.
+// C'est volontairement large pour couvrir :
+// - retard de match
+// - prolongations
+// - retard de mise à jour Sportmonks
+// - éventuel passage Netlify manqué
 const LOOKBACK_HOURS =
   8;
 
 
-// Maximum de matchs finalisés
-// lors d'un passage.
+// Maximum de matchs traités pendant
+// une seule exécution.
 const MAX_MATCHES_PER_RUN =
   20;
 
 
+// V0.7 et la mémoire probabiliste
+// concernent actuellement ces ligues.
 const MODEL_LEAGUES = [
+
   'PL',
+
   'BL',
+
   'LL'
 ];
 
@@ -63,11 +85,15 @@ function uniqueNumbers(
 
     new Set(
 
-      array(values)
+      array(
+        values
+      )
 
         .map(
           value =>
-            Number(value)
+            Number(
+              value
+            )
         )
 
         .filter(
@@ -109,11 +135,17 @@ async function loadRecentMatches() {
     +
 
     [
+
       'sportmonks_fixture_id',
+
       'league_code',
+
       'starting_at',
+
       'status',
+
       'lineups_confirmed'
+
     ].join(',')
 
     +
@@ -141,6 +173,7 @@ async function loadRecentMatches() {
     await supabaseRequest(
       'matches',
       {
+
         method:
           'GET',
 
@@ -184,6 +217,7 @@ async function loadExistingResults(
     await supabaseRequest(
       'results',
       {
+
         method:
           'GET',
 
@@ -194,12 +228,15 @@ async function loadExistingResults(
 
   return new Set(
 
-    array(rows)
+    array(
+      rows
+    )
 
       .map(
         row =>
           Number(
-            row.sportmonks_fixture_id
+            row
+              .sportmonks_fixture_id
           )
       )
 
@@ -243,6 +280,7 @@ async function loadUnevaluatedPredictions(
     await supabaseRequest(
       'predictions',
       {
+
         method:
           'GET',
 
@@ -253,12 +291,15 @@ async function loadUnevaluatedPredictions(
 
   return new Set(
 
-    array(rows)
+    array(
+      rows
+    )
 
       .map(
         row =>
           Number(
-            row.sportmonks_fixture_id
+            row
+              .sportmonks_fixture_id
           )
       )
 
@@ -270,16 +311,18 @@ async function loadUnevaluatedPredictions(
 
 
 // =====================================================
-// FINALISER UN MATCH
+// FINALISATION D'UN MATCH
 //
-// On réutilise directement finalize-match.js.
-// Donc :
-// - score final
-// - résultat 1/N/2
-// - Brier
-// - mise à jour Supabase
+// On réutilise finalize-match.js.
 //
-// restent gérés par le moteur existant.
+// Donc toute la logique existante reste centralisée :
+//
+// Sportmonks
+// → état du match
+// → score final
+// → résultat 1/N/2
+// → Supabase results
+// → Brier Score des prédictions
 // =====================================================
 
 async function finalizeOne(
@@ -321,7 +364,8 @@ async function finalizeOne(
 
   } catch {
 
-    body = {};
+    body =
+      {};
   }
 
 
@@ -336,40 +380,6 @@ async function finalizeOne(
 
     body
   };
-}
-
-
-// =====================================================
-// ENRICHISSEMENT
-//
-// On réutilise le moteur déjà construit.
-//
-// Il ajoutera aux matchs encore non enrichis :
-// - stats équipes
-// - stats joueurs
-// - événements
-// - absences
-// - formations
-// - contexte disponible
-//
-// sans retraiter ceux déjà présents.
-// =====================================================
-
-async function runEnrichment(
-  secret
-) {
-
-  await enrichHistory({
-
-    httpMethod:
-      'POST',
-
-    body:
-      JSON.stringify({
-
-        secret
-      })
-  });
 }
 
 
@@ -416,7 +426,7 @@ exports.handler =
     try {
 
       // =================================================
-      // 1. MATCHS RÉCENTS
+      // 1. CHARGEMENT DES MATCHS RÉCENTS
       // =================================================
 
       const recentMatches =
@@ -434,6 +444,10 @@ exports.handler =
         );
 
 
+      // =================================================
+      // 2. AUCUN MATCH À CONTRÔLER
+      // =================================================
+
       if (
         !fixtureIds.length
       ) {
@@ -443,6 +457,9 @@ exports.handler =
           success:
             true,
 
+          function:
+            'postmatch-auto',
+
           checkedAt:
             new Date()
               .toISOString(),
@@ -450,7 +467,7 @@ exports.handler =
           recentMatches:
             0,
 
-          processed:
+          candidates:
             0,
 
           finalized:
@@ -459,12 +476,16 @@ exports.handler =
           waiting:
             0,
 
+          failed:
+            0,
+
           message:
             'Aucun match récent à contrôler.'
         };
 
 
         console.log(
+
           JSON.stringify(
             summary,
             null,
@@ -487,12 +508,15 @@ exports.handler =
 
 
       // =================================================
-      // 2. CE QUI EST DÉJÀ TERMINÉ
+      // 3. ÉTAT SUPABASE
       // =================================================
 
       const [
+
         existingResults,
+
         unevaluatedPredictions
+
       ] =
         await Promise.all([
 
@@ -506,17 +530,22 @@ exports.handler =
         ]);
 
 
-      /*
-       * On rappelle Sportmonks seulement si :
-       *
-       * - le résultat n'existe pas encore
-       *
-       * OU
-       *
-       * - une prédiction du match attend encore
-       *   son Brier Score.
-       */
-
+      // =================================================
+      // 4. SÉLECTION DES MATCHS À CONTRÔLER
+      // =================================================
+      //
+      // On rappelle Sportmonks seulement si :
+      //
+      // A. le résultat n'existe pas encore
+      //
+      // OU
+      //
+      // B. une prédiction existe mais son Brier
+      //    n'a pas encore été calculé.
+      //
+      // Un match complètement terminé dans Supabase
+      // est donc ignoré.
+      // =================================================
 
       const candidates =
         recentMatches
@@ -524,7 +553,7 @@ exports.handler =
           .filter(
             match => {
 
-              const id =
+              const fixtureId =
                 Number(
                   match
                     .sportmonks_fixture_id
@@ -533,7 +562,7 @@ exports.handler =
 
               if (
                 !Number.isFinite(
-                  id
+                  fixtureId
                 )
               ) {
 
@@ -543,13 +572,13 @@ exports.handler =
 
               const resultMissing =
                 !existingResults.has(
-                  id
+                  fixtureId
                 );
 
 
               const evaluationMissing =
                 unevaluatedPredictions.has(
-                  id
+                  fixtureId
                 );
 
 
@@ -571,7 +600,7 @@ exports.handler =
 
 
       // =================================================
-      // 3. FINALISATION
+      // 5. TRAITEMENT
       // =================================================
 
       const results =
@@ -639,15 +668,34 @@ exports.handler =
                 'FINALIZED',
 
               score:
-                result.body.score,
-
-              result:
-                result.body.result,
-
-              predictionsEvaluated:
                 result
                   .body
-                  .predictionsEvaluated
+                  .score
+                ||
+                null,
+
+              result:
+                result
+                  .body
+                  .result
+                ||
+                null,
+
+              predictionsFound:
+                Number(
+                  result
+                    .body
+                    .predictionsFound
+                )
+                ||
+                0,
+
+              predictionsEvaluated:
+                Number(
+                  result
+                    .body
+                    .predictionsEvaluated
+                )
                 ||
                 0
             });
@@ -691,7 +739,7 @@ exports.handler =
 
 
           // ---------------------------------------------
-          // AUTRE ERREUR
+          // AUTRE RÉPONSE SERVEUR
           // ---------------------------------------------
 
           failed +=
@@ -744,68 +792,16 @@ exports.handler =
             error:
               error?.message
               ||
-              String(error)
+              String(
+                error
+              )
           });
         }
       }
 
 
       // =================================================
-      // 4. ENRICHISSEMENT DES NOUVEAUX MATCHS
-      // =================================================
-
-      let enrichmentStarted =
-        false;
-
-
-      /*
-       * Une fois qu'au moins un match vient
-       * d'être finalisé, on demande au moteur
-       * d'enrichissement de récupérer les
-       * nouveaux matchs non encore enrichis.
-       */
-
-
-      if (
-        finalized >
-        0
-      ) {
-
-        try {
-
-          await runEnrichment(
-            secret
-          );
-
-
-          enrichmentStarted =
-            true;
-
-
-        } catch (
-          error
-        ) {
-
-          /*
-           * Une erreur d'enrichissement
-           * ne doit jamais annuler
-           * la finalisation du match.
-           */
-
-          console.error(
-
-            'postmatch-auto enrichment :',
-
-            error?.message
-            ||
-            error
-          );
-        }
-      }
-
-
-      // =================================================
-      // 5. RÉSUMÉ
+      // 6. RÉSUMÉ
       // =================================================
 
       const summary = {
@@ -837,8 +833,6 @@ exports.handler =
         waiting,
 
         failed,
-
-        enrichmentStarted,
 
         results
       };
@@ -892,7 +886,9 @@ exports.handler =
             error:
               error?.message
               ||
-              String(error)
+              String(
+                error
+              )
           })
       };
     }
