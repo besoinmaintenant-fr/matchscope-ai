@@ -4,7 +4,6 @@
 // CommonJS / Netlify Functions
 // + distribution des scores exacts (0-0 à 8-8)
 // =============================================================
-
 const MODEL_VERSION = 'v0.7';
 const TARGET_BRIER = 0.620;
 const MODEL_LEAGUES = new Set(['BL', 'LL', 'PL']);
@@ -1664,7 +1663,9 @@ function eloProbability(
 
       (
         0.88
+
         +
+
         0.24 *
         closeness
       ),
@@ -1676,6 +1677,7 @@ function eloProbability(
 
 
   const remainder =
+
     1 -
     draw;
 
@@ -1727,10 +1729,12 @@ function temperatureScale(
   const home =
 
     Math.pow(
+
       Math.max(
         1e-9,
         probability.home
       ),
+
       1 /
       temp
     );
@@ -1739,10 +1743,12 @@ function temperatureScale(
   const draw =
 
     Math.pow(
+
       Math.max(
         1e-9,
         probability.draw
       ),
+
       1 /
       temp
     );
@@ -1751,16 +1757,19 @@ function temperatureScale(
   const away =
 
     Math.pow(
+
       Math.max(
         1e-9,
         probability.away
       ),
+
       1 /
       temp
     );
 
 
   const total =
+
     home +
     draw +
     away;
@@ -1769,14 +1778,19 @@ function temperatureScale(
   return {
 
     home:
+
       home /
       total,
 
+
     draw:
+
       draw /
       total,
 
+
     away:
+
       away /
       total
   };
@@ -1789,21 +1803,25 @@ function applyClassCalibration(
 ) {
 
   const home =
+
     probability.home *
     factors.home;
 
 
   const draw =
+
     probability.draw *
     factors.draw;
 
 
   const away =
+
     probability.away *
     factors.away;
 
 
   const total =
+
     home +
     draw +
     away;
@@ -1812,14 +1830,19 @@ function applyClassCalibration(
   return {
 
     home:
+
       home /
       total,
 
+
     draw:
+
       draw /
       total,
 
+
     away:
+
       away /
       total
   };
@@ -1870,15 +1893,16 @@ function buildModel(
   calibration = null,
 
   /*
-   * TRUE par défaut :
-   * prediction.js recevra les scores exacts.
-   *
-   * Le backtest passe explicitement FALSE,
-   * afin de ne pas alourdir les milliers
-   * de calculs de calibration.
+   * FALSE par défaut : les backtests/labs restent légers.
+   * Les vrais matchs utilisent beforeTime = Infinity.
    */
-  includeScores = true
+  includeScores = false
 ) {
+
+  const shouldIncludeScores =
+    includeScores ||
+    beforeTime === Infinity;
+
 
   const referenceTimestamp =
 
@@ -2228,7 +2252,7 @@ function buildModel(
       lambdaHome,
       lambdaAway,
       config.rho,
-      includeScores
+      shouldIncludeScores
     );
 
 
@@ -2532,7 +2556,7 @@ function buildModel(
 
   const scoreDistribution =
 
-    includeScores
+    shouldIncludeScores
 
       ? alignScoreDistribution(
           dc.scoreDistribution,
@@ -2555,7 +2579,7 @@ function buildModel(
 
   const topScores =
 
-    includeScores
+    shouldIncludeScores
 
       ? topExactScores(
           scoreDistribution,
@@ -2656,270 +2680,109 @@ function buildModel(
 // =============================================================
 
 function candidateConfigs() {
-
   return [
-
     {
-      halfLife:
-        55,
-
-      rho:
-        -0.10,
-
-      temperature:
-        1.04,
-
-      venueShare:
-        0.52,
-
-      shrink:
-        4,
-
-      formImpact:
-        0.04,
-
-      priorBlend:
-        0.14,
-
-      eloBlend:
-        0.15,
-
-      eloHomeAdv:
-        60,
-
-      eloK:
-        20
+      halfLife: 55,
+      rho: -0.10,
+      temperature: 1.04,
+      venueShare: 0.52,
+      shrink: 4,
+      formImpact: 0.04,
+      priorBlend: 0.14,
+      eloBlend: 0.15,
+      eloHomeAdv: 60,
+      eloK: 20
     },
 
-
     {
-      halfLife:
-        55,
-
-      rho:
-        -0.06,
-
-      temperature:
-        1.06,
-
-      venueShare:
-        0.58,
-
-      shrink:
-        4,
-
-      formImpact:
-        0.05,
-
-      priorBlend:
-        0.14,
-
-      eloBlend:
-        0.20,
-
-      eloHomeAdv:
-        60,
-
-      eloK:
-        20
+      halfLife: 55,
+      rho: -0.06,
+      temperature: 1.06,
+      venueShare: 0.58,
+      shrink: 4,
+      formImpact: 0.05,
+      priorBlend: 0.14,
+      eloBlend: 0.20,
+      eloHomeAdv: 60,
+      eloK: 20
     },
 
-
     {
-      halfLife:
-        75,
-
-      rho:
-        -0.10,
-
-      temperature:
-        1.04,
-
-      venueShare:
-        0.52,
-
-      shrink:
-        4,
-
-      formImpact:
-        0.04,
-
-      priorBlend:
-        0.16,
-
-      eloBlend:
-        0.20,
-
-      eloHomeAdv:
-        60,
-
-      eloK:
-        20
+      halfLife: 75,
+      rho: -0.10,
+      temperature: 1.04,
+      venueShare: 0.52,
+      shrink: 4,
+      formImpact: 0.04,
+      priorBlend: 0.16,
+      eloBlend: 0.20,
+      eloHomeAdv: 60,
+      eloK: 20
     },
 
-
     {
-      halfLife:
-        75,
-
-      rho:
-        -0.06,
-
-      temperature:
-        1.06,
-
-      venueShare:
-        0.58,
-
-      shrink:
-        4,
-
-      formImpact:
-        0.05,
-
-      priorBlend:
-        0.16,
-
-      eloBlend:
-        0.25,
-
-      eloHomeAdv:
-        65,
-
-      eloK:
-        20
+      halfLife: 75,
+      rho: -0.06,
+      temperature: 1.06,
+      venueShare: 0.58,
+      shrink: 4,
+      formImpact: 0.05,
+      priorBlend: 0.16,
+      eloBlend: 0.25,
+      eloHomeAdv: 65,
+      eloK: 20
     },
 
-
     {
-      halfLife:
-        90,
-
-      rho:
-        -0.08,
-
-      temperature:
-        1.04,
-
-      venueShare:
-        0.50,
-
-      shrink:
-        5,
-
-      formImpact:
-        0.04,
-
-      priorBlend:
-        0.16,
-
-      eloBlend:
-        0.20,
-
-      eloHomeAdv:
-        65,
-
-      eloK:
-        18
+      halfLife: 90,
+      rho: -0.08,
+      temperature: 1.04,
+      venueShare: 0.50,
+      shrink: 5,
+      formImpact: 0.04,
+      priorBlend: 0.16,
+      eloBlend: 0.20,
+      eloHomeAdv: 65,
+      eloK: 18
     },
 
-
     {
-      halfLife:
-        90,
-
-      rho:
-        -0.04,
-
-      temperature:
-        1.08,
-
-      venueShare:
-        0.58,
-
-      shrink:
-        5,
-
-      formImpact:
-        0.05,
-
-      priorBlend:
-        0.18,
-
-      eloBlend:
-        0.25,
-
-      eloHomeAdv:
-        65,
-
-      eloK:
-        18
+      halfLife: 90,
+      rho: -0.04,
+      temperature: 1.08,
+      venueShare: 0.58,
+      shrink: 5,
+      formImpact: 0.05,
+      priorBlend: 0.18,
+      eloBlend: 0.25,
+      eloHomeAdv: 65,
+      eloK: 18
     },
 
-
     {
-      halfLife:
-        120,
-
-      rho:
-        -0.08,
-
-      temperature:
-        1.05,
-
-      venueShare:
-        0.50,
-
-      shrink:
-        5,
-
-      formImpact:
-        0.04,
-
-      priorBlend:
-        0.18,
-
-      eloBlend:
-        0.25,
-
-      eloHomeAdv:
-        70,
-
-      eloK:
-        18
+      halfLife: 120,
+      rho: -0.08,
+      temperature: 1.05,
+      venueShare: 0.50,
+      shrink: 5,
+      formImpact: 0.04,
+      priorBlend: 0.18,
+      eloBlend: 0.25,
+      eloHomeAdv: 70,
+      eloK: 18
     },
 
-
     {
-      halfLife:
-        120,
-
-      rho:
-        -0.04,
-
-      temperature:
-        1.08,
-
-      venueShare:
-        0.56,
-
-      shrink:
-        5,
-
-      formImpact:
-        0.05,
-
-      priorBlend:
-        0.18,
-
-      eloBlend:
-        0.30,
-
-      eloHomeAdv:
-        70,
-
-      eloK:
-        18
+      halfLife: 120,
+      rho: -0.04,
+      temperature: 1.08,
+      venueShare: 0.56,
+      shrink: 5,
+      formImpact: 0.05,
+      priorBlend: 0.18,
+      eloBlend: 0.30,
+      eloHomeAdv: 70,
+      eloK: 18
     }
   ];
 }
@@ -2936,10 +2799,8 @@ function predictionRows(
   eloState,
   calibration = null
 ) {
-
   const rows =
     [];
-
 
   matchesToPredict.forEach(
     match => {
