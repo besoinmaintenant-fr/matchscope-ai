@@ -15,73 +15,172 @@
     MatchScope — Enrichissement historique
   </title>
 
+
   <style>
 
     body {
+
       margin: 0;
+
       padding: 24px;
+
       background: #06110c;
+
       color: white;
-      font-family: Arial, sans-serif;
+
+      font-family:
+        Arial,
+        sans-serif;
     }
 
+
     .box {
+
       max-width: 560px;
+
       margin: 40px auto;
+
       background: #0d1d15;
-      border: 1px solid #244a35;
+
+      border:
+        1px solid #244a35;
+
       border-radius: 18px;
+
       padding: 22px;
     }
 
+
     h1 {
+
       margin-top: 0;
     }
 
+
     p {
+
       color: #b9c9bf;
+
       line-height: 1.5;
     }
+
 
     input,
     button {
+
       width: 100%;
-      box-sizing: border-box;
+
+      box-sizing:
+        border-box;
+
       padding: 15px;
+
       border-radius: 12px;
+
       font-size: 16px;
     }
 
+
     input {
+
       margin: 15px 0;
+
       background: #07100b;
+
       color: white;
-      border: 1px solid #315641;
+
+      border:
+        1px solid #315641;
     }
+
 
     button {
+
       border: 0;
+
       background: #37e481;
+
       color: #00190b;
+
       font-weight: bold;
+
+      margin-top: 10px;
     }
 
+
+    button.secondary {
+
+      background: #24372c;
+
+      color: white;
+    }
+
+
     button:disabled {
+
       opacity: .5;
     }
 
-    #status {
+
+    .progress-shell {
+
       margin-top: 20px;
-      padding: 15px;
+
+      height: 14px;
+
       background: #07100b;
+
+      border-radius: 999px;
+
+      overflow: hidden;
+
+      border:
+        1px solid #244a35;
+    }
+
+
+    .progress-bar {
+
+      width: 0%;
+
+      height: 100%;
+
+      background: #37e481;
+
+      transition:
+        width .3s ease;
+    }
+
+
+    #summary {
+
+      margin-top: 12px;
+
+      font-weight: bold;
+    }
+
+
+    #status {
+
+      margin-top: 20px;
+
+      padding: 15px;
+
+      background: #07100b;
+
       border-radius: 12px;
+
       white-space: pre-wrap;
+
       line-height: 1.5;
+
+      min-height: 90px;
     }
 
   </style>
 
 </head>
+
 
 <body>
 
@@ -91,13 +190,17 @@
       Enrichissement MatchScope
     </h1>
 
+
     <p>
-      Récupération des données Sportmonks
-      disponibles sur les matchs historiques :
-      statistiques équipes et joueurs,
-      événements, xG, absences, formations,
-      cotes et contexte.
+
+      Cette page traite automatiquement les
+      matchs restants par petits lots afin
+      d'éviter les coupures Netlify.
+
+      Les matchs déjà enrichis sont ignorés.
+
     </p>
+
 
     <input
       id="secret"
@@ -106,12 +209,47 @@
       autocomplete="off"
     >
 
+
     <button id="launch">
-      Enrichir la base historique
+
+      Continuer automatiquement
+      l'enrichissement
+
     </button>
 
+
+    <button
+      id="stop"
+      class="secondary"
+      disabled
+    >
+
+      Arrêter après le lot en cours
+
+    </button>
+
+
+    <div class="progress-shell">
+
+      <div
+        id="progressBar"
+        class="progress-bar"
+      ></div>
+
+    </div>
+
+
+    <div id="summary">
+
+      Chargement de l'état…
+
+    </div>
+
+
     <div id="status">
+
       En attente.
+
     </div>
 
   </div>
@@ -125,113 +263,519 @@
       );
 
 
+    const stopButton =
+      document.querySelector(
+        '#stop'
+      );
+
+
     const secretInput =
       document.querySelector(
         '#secret'
       );
 
 
-    const status =
+    const statusBox =
       document.querySelector(
         '#status'
       );
 
 
-    button.addEventListener(
-      'click',
-      async () => {
-
-        const secret =
-          secretInput.value.trim();
+    const summary =
+      document.querySelector(
+        '#summary'
+      );
 
 
-        if (!secret) {
+    const progressBar =
+      document.querySelector(
+        '#progressBar'
+      );
 
-          status.textContent =
-            'Entre ton MATCHSCOPE_SYNC_SECRET.';
+
+    let running =
+      false;
+
+
+    let stopRequested =
+      false;
+
+
+    function sleep(
+      ms
+    ) {
+
+      return new Promise(
+
+        resolve =>
+          setTimeout(
+            resolve,
+            ms
+          )
+      );
+    }
+
+
+    function renderState(
+      data
+    ) {
+
+      const progress =
+        Number(
+          data?.progress
+          ||
+          0
+        );
+
+
+      const target =
+        Number(
+          data?.target
+          ||
+          0
+        );
+
+
+      const enriched =
+        Number(
+          data?.enriched
+          ||
+          0
+        );
+
+
+      const remaining =
+        Number(
+          data?.remaining
+          ||
+          0
+        );
+
+
+      progressBar
+        .style
+        .width =
+
+          `${
+            Math.max(
+              0,
+              Math.min(
+                100,
+                progress
+              )
+            )
+          }%`;
+
+
+      summary.textContent =
+
+        `${enriched} / ${target} matchs enrichis — ${remaining} restants — ${progress}%`;
+    }
+
+
+    async function getState() {
+
+      const response =
+        await fetch(
+
+          `/.netlify/functions/enrichment-status?t=${Date.now()}`,
+
+          {
+
+            method:
+              'GET',
+
+            cache:
+              'no-store'
+          }
+        );
+
+
+      const data =
+        await response.json();
+
+
+      if (
+        !response.ok
+      ) {
+
+        throw new Error(
+
+          data?.error
+
+          ||
+
+          `HTTP ${response.status}`
+        );
+      }
+
+
+      renderState(
+        data
+      );
+
+
+      return data;
+    }
+
+
+    async function launchOneBatch(
+      secret
+    ) {
+
+      const response =
+        await fetch(
+
+          '/.netlify/functions/enrich-history-background',
+
+          {
+
+            method:
+              'POST',
+
+            headers: {
+
+              'Content-Type':
+                'application/json'
+            },
+
+            body:
+              JSON.stringify({
+
+                secret
+              })
+          }
+        );
+
+
+      if (
+        !(
+          response.status === 202
+          ||
+          response.ok
+        )
+      ) {
+
+        const text =
+          await response.text();
+
+
+        throw new Error(
+
+          `HTTP ${response.status}\n${text}`
+        );
+      }
+    }
+
+
+    async function waitForBatchCompletion(
+      beforeEnriched
+    ) {
+
+      /*
+       * 190 × 5 secondes
+       * ≈ 15 min 50
+       */
+
+      const maxPolls =
+        190;
+
+
+      for (
+        let attempt = 0;
+        attempt < maxPolls;
+        attempt += 1
+      ) {
+
+        await sleep(
+          5000
+        );
+
+
+        const state =
+          await getState();
+
+
+        statusBox.textContent =
+
+`Lot en cours…
+
+${state.enriched} / ${state.target} matchs enrichis
+${state.remaining} restants`;
+
+
+        if (
+          state.done
+        ) {
+
+          return state;
+        }
+
+
+        /*
+         * fixture_enrichment est écrite
+         * en dernier côté serveur.
+         *
+         * Donc si le compteur augmente,
+         * le lot entier est terminé.
+         */
+
+        if (
+          state.enriched >
+          beforeEnriched
+        ) {
+
+          return state;
+        }
+      }
+
+
+      throw new Error(
+
+        'Le lot n’a pas confirmé sa fin dans le délai prévu. Recharge la page avant de relancer.'
+      );
+    }
+
+
+    async function runAll() {
+
+      const secret =
+        secretInput
+          .value
+          .trim();
+
+
+      if (
+        !secret
+      ) {
+
+        statusBox.textContent =
+
+          'Entre ton MATCHSCOPE_SYNC_SECRET.';
+
+
+        return;
+      }
+
+
+      running =
+        true;
+
+
+      stopRequested =
+        false;
+
+
+      button.disabled =
+        true;
+
+
+      stopButton.disabled =
+        false;
+
+
+      secretInput.disabled =
+        true;
+
+
+      try {
+
+        let state =
+          await getState();
+
+
+        if (
+          state.done
+        ) {
+
+          statusBox.textContent =
+
+            '✅ La base historique est déjà entièrement enrichie.';
+
 
           return;
         }
 
 
-        button.disabled =
-          true;
+        while (
+          !state.done
+          &&
+          !stopRequested
+        ) {
+
+          const before =
+            state.enriched;
 
 
-        status.textContent =
-          'Lancement de l’enrichissement…';
+          statusBox.textContent =
+
+`Lancement d’un lot…
+
+État actuel : ${state.enriched} / ${state.target}
+
+Restants : ${state.remaining}`;
 
 
-        try {
+          await launchOneBatch(
+            secret
+          );
 
-          const response =
-            await fetch(
-              '/.netlify/functions/enrich-history-background',
-              {
 
-                method:
-                  'POST',
+          /*
+           * Laisse le temps à la
+           * Background Function
+           * de démarrer.
+           */
 
-                headers: {
+          await sleep(
+            4000
+          );
 
-                  'Content-Type':
-                    'application/json'
-                },
 
-                body:
-                  JSON.stringify({
-
-                    secret,
-
-                    force:
-                      false
-                  })
-              }
+          state =
+            await waitForBatchCompletion(
+              before
             );
 
 
           if (
-            response.status === 202 ||
-            response.ok
+            state.done
           ) {
 
-            status.textContent =
-`✅ Enrichissement lancé.
-
-Sportmonks alimente maintenant la mémoire MatchScope.
-
-Les matchs déjà enrichis seront ignorés.
-
-Attends quelques minutes avant de contrôler Supabase.`;
-
-          } else {
-
-            const text =
-              await response.text();
-
-
-            status.textContent =
-`❌ Erreur HTTP ${response.status}
-
-${text}`;
+            break;
           }
 
 
-        } catch (
-          error
+          if (
+            !stopRequested
+          ) {
+
+            statusBox.textContent =
+
+`✅ Lot terminé.
+
+${state.enriched} / ${state.target} matchs enrichis.
+
+Lancement automatique du lot suivant…`;
+
+
+            await sleep(
+              3000
+            );
+          }
+        }
+
+
+        state =
+          await getState();
+
+
+        if (
+          state.done
         ) {
 
-          status.textContent =
-`❌ Impossible de lancer l'enrichissement.
+          statusBox.textContent =
 
-${error.message}`;
+`✅ ENRICHISSEMENT TERMINÉ
+
+${state.enriched} / ${state.target} matchs enrichis.
+
+Aucun match restant.`;
+
+        } else if (
+          stopRequested
+        ) {
+
+          statusBox.textContent =
+
+`⏸️ Arrêt demandé.
+
+Le lot en cours a été laissé finir.
+
+Tu pourras reprendre plus tard sans perdre les données.`;
         }
+
+
+      } catch (
+        error
+      ) {
+
+        statusBox.textContent =
+
+`❌ Enrichissement interrompu.
+
+${error.message}
+
+Les matchs déjà enregistrés restent conservés.
+
+Recharge la page avant de reprendre.`;
+
+      } finally {
+
+        running =
+          false;
 
 
         button.disabled =
           false;
+
+
+        stopButton.disabled =
+          true;
+
+
+        secretInput.disabled =
+          false;
+      }
+    }
+
+
+    button.addEventListener(
+      'click',
+      runAll
+    );
+
+
+    stopButton.addEventListener(
+      'click',
+      () => {
+
+        if (
+          !running
+        ) {
+
+          return;
+        }
+
+
+        stopRequested =
+          true;
+
+
+        stopButton.disabled =
+          true;
+
+
+        statusBox.textContent =
+
+          'Arrêt demandé. Le lot déjà lancé va finir, puis aucun nouveau lot ne sera lancé.';
       }
     );
+
+
+    getState()
+
+      .catch(
+        error => {
+
+          summary.textContent =
+            'Impossible de lire l’état.';
+
+
+          statusBox.textContent =
+            error.message;
+        }
+      );
 
   </script>
 
