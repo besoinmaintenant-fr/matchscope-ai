@@ -78,13 +78,105 @@
   }
 
 
+  function exactScorePayload(
+    data,
+    row = null
+  ) {
+
+    /*
+     * Ancienne prédiction figée :
+     * prediction.js renvoie exactScore séparément.
+     */
+
+    if (
+      data?.exactScore
+    ) {
+
+      return data.exactScore;
+    }
+
+
+    /*
+     * Nouvelle prédiction figée :
+     * score exact enregistré dans snapshot.
+     */
+
+    if (
+      row
+        ?.snapshot
+        ?.exactScore
+    ) {
+
+      return row
+        .snapshot
+        .exactScore;
+    }
+
+
+    /*
+     * Nouvelle PRELINEUP calculée directement.
+     */
+
+    if (
+      data
+        ?.model
+        ?.mostLikelyScore
+    ) {
+
+      return {
+
+        mostLikelyScore:
+          data.model.mostLikelyScore,
+
+        topScores:
+          data.model.topScores,
+
+        scoreDistribution:
+          data.model.scoreDistribution,
+
+        scoreModel:
+          data.model.scoreModel
+      };
+    }
+
+
+    /*
+     * Base V0.7 si les XI sont déjà officiels.
+     */
+
+    if (
+      data
+        ?.baseModel
+        ?.mostLikelyScore
+    ) {
+
+      return {
+
+        mostLikelyScore:
+          data.baseModel.mostLikelyScore,
+
+        topScores:
+          data.baseModel.topScores,
+
+        scoreDistribution:
+          data.baseModel.scoreDistribution,
+
+        scoreModel:
+          data.baseModel.scoreModel
+      };
+    }
+
+
+    return null;
+  }
+
+
   function normalizePrediction(
     data
   ) {
 
     /*
-     * Prédiction déjà enregistrée :
-     * colonnes Supabase.
+     * Prédiction déjà enregistrée dans Supabase.
      */
 
     if (
@@ -95,6 +187,13 @@
 
       const row =
         data.prediction;
+
+
+      const exactScore =
+        exactScorePayload(
+          data,
+          row
+        );
 
 
       return {
@@ -154,6 +253,34 @@
             row.data_coverage
           ),
 
+        mostLikelyScore:
+          exactScore
+            ?.mostLikelyScore
+          ||
+          null,
+
+        topScores:
+          Array.isArray(
+            exactScore
+              ?.topScores
+          )
+            ? exactScore.topScores
+            : [],
+
+        scoreDistribution:
+          Array.isArray(
+            exactScore
+              ?.scoreDistribution
+          )
+            ? exactScore.scoreDistribution
+            : [],
+
+        scoreModel:
+          exactScore
+            ?.scoreModel
+          ||
+          null,
+
         locked:
           row.locked === true
       };
@@ -161,8 +288,7 @@
 
 
     /*
-     * Nouvelle PRELINEUP :
-     * résultat direct de V0.7.
+     * Nouvelle PRELINEUP.
      */
 
     if (
@@ -181,9 +307,8 @@
 
 
     /*
-     * XI officiels présents :
-     * V0.7 est seulement une base,
-     * aucune FINAL n'est fabriquée.
+     * XI officiels :
+     * V0.7 reste une base.
      */
 
     if (
@@ -240,7 +365,8 @@
     ];
 
 
-    container.innerHTML =
+    const marketHtml =
+
       markets
 
         .filter(
@@ -284,6 +410,132 @@
         )
 
         .join('');
+
+
+    let exactScoreHtml =
+      '';
+
+
+    const mainScore =
+      model
+        ?.mostLikelyScore;
+
+
+    if (
+      mainScore &&
+      Number.isFinite(
+        Number(
+          mainScore.probability
+        )
+      )
+    ) {
+
+      const scoreLabel =
+
+        mainScore.score
+
+        ||
+
+        `${mainScore.homeGoals}-${mainScore.awayGoals}`;
+
+
+      const alternatives =
+
+        Array.isArray(
+          model.topScores
+        )
+
+          ? model.topScores
+              .slice(
+                1,
+                5
+              )
+              .filter(
+                score =>
+                  Number.isFinite(
+                    Number(
+                      score.probability
+                    )
+                  )
+              )
+
+          : [];
+
+
+      const alternativesText =
+
+        alternatives.length
+
+          ? alternatives
+              .map(
+                score => {
+
+                  const label =
+
+                    score.score
+
+                    ||
+
+                    `${score.homeGoals}-${score.awayGoals}`;
+
+
+                  return `${label} ${pct(
+                    score.probability
+                  )}`;
+                }
+              )
+
+              .join(
+                ' · '
+              )
+
+          : '—';
+
+
+      exactScoreHtml =
+        `
+
+          <div class="market">
+
+            <div>
+
+              <strong>
+                Score exact le plus probable
+              </strong>
+
+              <p>
+                Dixon-Coles aligné sur les probabilités finales 1 / N / 2 de V0.7
+              </p>
+
+              <p>
+                Alternatives :
+                ${alternativesText}
+              </p>
+
+            </div>
+
+            <div class="market-prob">
+
+              <b>
+                ${scoreLabel} · ${pct(
+                  mainScore.probability
+                )}
+              </b>
+
+            </div>
+
+          </div>
+        `;
+    }
+
+
+    container.innerHTML =
+
+      marketHtml
+
+      +
+
+      exactScoreHtml;
   }
 
 
@@ -445,6 +697,21 @@
       '#modelVersion',
       'Chargement V0.7 serveur…'
     );
+
+
+    const marketList =
+      document.querySelector(
+        '#marketList'
+      );
+
+
+    if (
+      marketList
+    ) {
+
+      marketList.innerHTML =
+        '';
+    }
   }
 
 
@@ -476,17 +743,27 @@
       '#modelVersion',
       `V0.7 indisponible • ${message}`
     );
+
+
+    const marketList =
+      document.querySelector(
+        '#marketList'
+      );
+
+
+    if (
+      marketList
+    ) {
+
+      marketList.innerHTML =
+        '';
+    }
   }
 
 
   async function loadPrediction(
     match
   ) {
-
-    /*
-     * V0.7 est actuellement validé
-     * uniquement sur ces 3 ligues.
-     */
 
     if (
       ![
