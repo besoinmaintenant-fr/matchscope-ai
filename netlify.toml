@@ -13,13 +13,34 @@
 
 
 # -----------------------------------------------------
-# COMPOSITIONS OFFICIELLES
+# SNAPSHOTS PRÉ-MATCH
 #
-# Vérification toutes les 15 minutes
-# entre 10h00 et 22h45 UTC.
+# Toutes les 30 minutes entre 08h00 et 22h30 UTC.
 #
-# collect-lineups ne télécharge les compos détaillées
-# que pour les matchs proches du coup d'envoi.
+# Capture automatiquement :
+# - D1
+# - H6
+# - H3
+# - H90
+#
+# La plupart des passages sont légers :
+# la fiche détaillée Sportmonks n'est appelée
+# que lorsqu'un snapshot est réellement dû.
+# -----------------------------------------------------
+
+[functions."collect-prematch-snapshots"]
+  schedule = "*/30 8-22 * * *"
+
+
+# -----------------------------------------------------
+# COMPOSITIONS OFFICIELLES + SNAPSHOT FINAL
+#
+# Toutes les 15 minutes entre 10h00 et 22h45 UTC.
+#
+# Dès que les 22 titulaires sont disponibles :
+# - XI enregistrés
+# - match enregistré
+# - snapshot FINAL enregistré
 # -----------------------------------------------------
 
 [functions."collect-lineups"]
@@ -29,14 +50,9 @@
 # -----------------------------------------------------
 # FIN DES MATCHS
 #
-# Vérification toutes les 15 minutes
-# entre 12h00 et 23h45 UTC.
-#
-# Cette fonction :
-# - détecte FT / AET / AP
-# - enregistre le score
-# - enregistre le résultat 1/N/2
-# - calcule les Brier Scores
+# - score final
+# - résultat 1/N/2
+# - Brier Scores
 # -----------------------------------------------------
 
 [functions."postmatch-auto"]
@@ -45,12 +61,6 @@
 
 # -----------------------------------------------------
 # ENRICHISSEMENT HISTORIQUE
-#
-# Toutes les 3 heures.
-#
-# Le déclencheur est léger.
-# Le vrai travail est effectué par
-# enrich-history-background.
 # -----------------------------------------------------
 
 [functions."trigger-enrichment"]
