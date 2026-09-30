@@ -11,11 +11,13 @@ const {
 const API =
   'https://api.sportmonks.com/v3/football';
 
+
 const LEAGUE_IDS = [
-  8,    // Premier League
-  82,   // Bundesliga
-  564   // La Liga
+  8,
+  82,
+  564
 ];
+
 
 const LEAGUE_CODES = {
   8: 'PL',
@@ -23,12 +25,13 @@ const LEAGUE_CODES = {
   564: 'LL'
 };
 
-// Surveillance des XI à partir de H-60.
-const LOOKAHEAD_MINUTES = 60;
 
-// On continue 30 min après le coup d'envoi
-// si les XI n'ont toujours pas été mémorisés.
-const AFTER_KICKOFF_MINUTES = 30;
+const LOOKAHEAD_MINUTES =
+  60;
+
+
+const AFTER_KICKOFF_MINUTES =
+  30;
 
 
 // =====================================================
@@ -36,6 +39,7 @@ const AFTER_KICKOFF_MINUTES = 30;
 // =====================================================
 
 function array(value) {
+
   return Array.isArray(value)
     ? value
     : [];
@@ -43,6 +47,7 @@ function array(value) {
 
 
 function isoDate(date) {
+
   return date
     .toISOString()
     .slice(0, 10);
@@ -55,20 +60,28 @@ function parseKickoff(value) {
     return null;
   }
 
+
   const raw =
     String(value).trim();
+
 
   if (
     /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
       .test(raw)
   ) {
+
     return new Date(
-      raw.replace(' ', 'T') + 'Z'
+      raw.replace(
+        ' ',
+        'T'
+      ) + 'Z'
     );
   }
 
+
   const date =
     new Date(raw);
+
 
   return Number.isNaN(
     date.getTime()
@@ -85,11 +98,14 @@ function numberOrNull(value) {
     value === undefined ||
     value === ''
   ) {
+
     return null;
   }
 
+
   const number =
     Number(value);
+
 
   return Number.isFinite(number)
     ? number
@@ -127,9 +143,11 @@ function firstDefined(
       object?.[name] !==
       undefined
     ) {
+
       return object[name];
     }
   }
+
 
   return null;
 }
@@ -140,9 +158,11 @@ function coverage(values) {
   const list =
     Object.values(values);
 
+
   if (!list.length) {
     return 0;
   }
+
 
   const available =
     list.filter(
@@ -150,6 +170,7 @@ function coverage(values) {
         value !== null &&
         value !== undefined
     ).length;
+
 
   return Math.round(
     (
@@ -161,7 +182,7 @@ function coverage(values) {
 
 
 // =====================================================
-// LISTE LÉGÈRE DES MATCHS
+// LISTE LÉGÈRE
 // =====================================================
 
 async function fetchFixtureList(
@@ -171,16 +192,25 @@ async function fetchFixtureList(
   const now =
     new Date();
 
+
   const tomorrow =
     new Date(
       now.getTime() +
       24 * 60 * 60 * 1000
     );
 
-  const fixtures = [];
 
-  let page = 1;
-  let hasMore = true;
+  const fixtures =
+    [];
+
+
+  let page =
+    1;
+
+
+  let hasMore =
+    true;
+
 
   while (
     hasMore &&
@@ -196,42 +226,47 @@ async function fetchFixtureList(
         )}`
       );
 
+
     url.searchParams.set(
       'api_token',
       token
     );
+
 
     url.searchParams.set(
       'filters',
       `fixtureLeagues:${LEAGUE_IDS.join(',')}`
     );
 
-    /*
-     * Requête légère.
-     * Pas encore de compositions.
-     */
+
     url.searchParams.set(
       'include',
       'league;participants;state'
     );
+
 
     url.searchParams.set(
       'per_page',
       '100'
     );
 
+
     url.searchParams.set(
       'page',
       String(page)
     );
 
+
     const response =
       await fetch(url);
+
 
     const raw =
       await response.text();
 
+
     let payload;
+
 
     try {
 
@@ -245,6 +280,7 @@ async function fetchFixtureList(
       );
     }
 
+
     if (!response.ok) {
 
       throw new Error(
@@ -254,15 +290,18 @@ async function fetchFixtureList(
       );
     }
 
+
     if (
       Array.isArray(
         payload?.data
       )
     ) {
+
       fixtures.push(
         ...payload.data
       );
     }
+
 
     hasMore =
       Boolean(
@@ -271,8 +310,10 @@ async function fetchFixtureList(
           ?.has_more
       );
 
+
     page += 1;
   }
+
 
   return fixtures;
 }
@@ -291,37 +332,35 @@ function isCandidate(
       fixture?.starting_at
     );
 
+
   if (!kickoff) {
     return false;
   }
+
 
   const differenceMinutes =
     (
       kickoff.getTime() -
       Date.now()
     )
-    / 60000;
+    /
+    60000;
 
-  if (
-    differenceMinutes >
+
+  return (
+    differenceMinutes <=
     LOOKAHEAD_MINUTES
-  ) {
-    return false;
-  }
 
-  if (
-    differenceMinutes <
+    &&
+
+    differenceMinutes >=
     -AFTER_KICKOFF_MINUTES
-  ) {
-    return false;
-  }
-
-  return true;
+  );
 }
 
 
 // =====================================================
-// MATCHS AYANT DÉJÀ LE XI
+// XI DÉJÀ CONFIRMÉS
 // =====================================================
 
 async function getConfirmedFixtureIds(
@@ -332,6 +371,7 @@ async function getConfirmedFixtureIds(
     return new Set();
   }
 
+
   const cleanIds =
     fixtureIds
       .map(numberOrNull)
@@ -340,18 +380,23 @@ async function getConfirmedFixtureIds(
           value !== null
       );
 
+
   if (!cleanIds.length) {
     return new Set();
   }
+
 
   const rows =
     await supabaseRequest(
       'matches',
       {
-        method: 'GET',
+
+        method:
+          'GET',
 
         query:
-          '?select=' +
+          '?select='
+          +
           [
             'sportmonks_fixture_id',
             'lineups_confirmed'
@@ -361,29 +406,32 @@ async function getConfirmedFixtureIds(
       }
     );
 
-  if (!Array.isArray(rows)) {
-    return new Set();
-  }
 
   return new Set(
-    rows
+    array(rows)
+
       .filter(
         row =>
-          row.lineups_confirmed === true
+          row.lineups_confirmed ===
+          true
       )
+
       .map(
         row =>
           Number(
             row.sportmonks_fixture_id
           )
       )
-      .filter(Number.isFinite)
+
+      .filter(
+        Number.isFinite
+      )
   );
 }
 
 
 // =====================================================
-// FINAL SNAPSHOTS DÉJÀ ENREGISTRÉS
+// SNAPSHOT FINAL DÉJÀ PRÉSENT
 // =====================================================
 
 async function getFinalSnapshotIds(
@@ -394,6 +442,7 @@ async function getFinalSnapshotIds(
     return new Set();
   }
 
+
   const cleanIds =
     fixtureIds
       .map(numberOrNull)
@@ -402,15 +451,19 @@ async function getFinalSnapshotIds(
           value !== null
       );
 
+
   if (!cleanIds.length) {
     return new Set();
   }
+
 
   const rows =
     await supabaseRequest(
       'prematch_snapshots',
       {
-        method: 'GET',
+
+        method:
+          'GET',
 
         query:
           '?select=sportmonks_fixture_id'
@@ -421,28 +474,32 @@ async function getFinalSnapshotIds(
       }
     );
 
+
   return new Set(
     array(rows)
+
       .map(
         row =>
           Number(
             row.sportmonks_fixture_id
           )
       )
-      .filter(Number.isFinite)
+
+      .filter(
+        Number.isFinite
+      )
   );
 }
 
 
 // =====================================================
-// MATCH DÉTAILLÉ
+// MATCH DÉTAILLÉ CRITIQUE
 //
-// Une seule requête Sportmonks.
+// IMPORTANT :
+// aucune cote dans cette requête.
 //
-// Cette même réponse sert :
-// - à enregistrer les XI,
-// - à enregistrer le match,
-// - à créer le snapshot FINAL.
+// Une erreur sur les odds ne pourra donc jamais
+// empêcher la récupération des XI officiels.
 // =====================================================
 
 async function fetchFixtureDetails(
@@ -457,10 +514,12 @@ async function fetchFixtureDetails(
       )}`
     );
 
+
   url.searchParams.set(
     'api_token',
     token
   );
+
 
   url.searchParams.set(
     'include',
@@ -474,18 +533,21 @@ async function fetchFixtureDetails(
       'formations',
       'weatherReport',
       'sidelined.sideline',
-      'statistics.type',
-      'odds.bookmaker'
+      'statistics.type'
     ].join(';')
   );
+
 
   const response =
     await fetch(url);
 
+
   const raw =
     await response.text();
 
+
   let payload;
+
 
   try {
 
@@ -499,6 +561,7 @@ async function fetchFixtureDetails(
     );
   }
 
+
   if (!response.ok) {
 
     throw new Error(
@@ -508,6 +571,7 @@ async function fetchFixtureDetails(
     );
   }
 
+
   if (!payload?.data) {
 
     throw new Error(
@@ -515,7 +579,110 @@ async function fetchFixtureDetails(
     );
   }
 
+
   return payload.data;
+}
+
+
+// =====================================================
+// COTES OPTIONNELLES
+//
+// Si elles échouent :
+// - les XI restent enregistrés
+// - le snapshot FINAL reste enregistré
+// - odds = null
+// =====================================================
+
+async function fetchOptionalOdds(
+  fixtureId,
+  token
+) {
+
+  const url =
+    new URL(
+      `${API}/fixtures/${encodeURIComponent(
+        fixtureId
+      )}`
+    );
+
+
+  url.searchParams.set(
+    'api_token',
+    token
+  );
+
+
+  url.searchParams.set(
+    'include',
+    'odds.bookmaker'
+  );
+
+
+  const response =
+    await fetch(url);
+
+
+  const raw =
+    await response.text();
+
+
+  let payload =
+    null;
+
+
+  try {
+
+    payload =
+      JSON.parse(raw);
+
+  } catch {
+
+    payload =
+      null;
+  }
+
+
+  if (!response.ok) {
+
+    return {
+
+      ok:
+        false,
+
+      status:
+        response.status,
+
+      error:
+        payload?.message ||
+        payload?.error ||
+        `HTTP ${response.status}`,
+
+      odds:
+        null
+    };
+  }
+
+
+  return {
+
+    ok:
+      true,
+
+    status:
+      response.status,
+
+    error:
+      null,
+
+    odds:
+      firstDefined(
+        payload?.data,
+        [
+          'odds',
+          'Odds'
+        ]
+      )
+  };
 }
 
 
@@ -524,13 +691,15 @@ async function fetchFixtureDetails(
 // =====================================================
 
 function buildFinalSnapshot(
-  fixture
+  fixture,
+  oddsResult
 ) {
 
   const kickoff =
     parseKickoff(
       fixture?.starting_at
     );
+
 
   if (!kickoff) {
 
@@ -539,10 +708,12 @@ function buildFinalSnapshot(
     );
   }
 
+
   const lineup =
     lineupStatus(
       fixture
     );
+
 
   if (!lineup.official) {
 
@@ -551,10 +722,12 @@ function buildFinalSnapshot(
     );
   }
 
+
   const leagueId =
     numberOrNull(
       fixture?.league_id
     );
+
 
   const home =
     getTeam(
@@ -562,11 +735,13 @@ function buildFinalSnapshot(
       'home'
     );
 
+
   const away =
     getTeam(
       fixture,
       'away'
     );
+
 
   const venue =
     firstDefined(
@@ -574,11 +749,13 @@ function buildFinalSnapshot(
       ['venue']
     );
 
+
   const metadata =
     firstDefined(
       fixture,
       ['metadata']
     );
+
 
   const weather =
     firstDefined(
@@ -590,11 +767,13 @@ function buildFinalSnapshot(
       ]
     );
 
+
   const formations =
     firstDefined(
       fixture,
       ['formations']
     );
+
 
   const sidelined =
     firstDefined(
@@ -602,11 +781,13 @@ function buildFinalSnapshot(
       ['sidelined']
     );
 
+
   const lineups =
     firstDefined(
       fixture,
       ['lineups']
     );
+
 
   const statistics =
     firstDefined(
@@ -614,15 +795,17 @@ function buildFinalSnapshot(
       ['statistics']
     );
 
+
   const odds =
-    firstDefined(
-      fixture,
-      ['odds']
-    );
+    oddsResult?.ok
+      ? oddsResult.odds
+      : null;
+
 
   const capturedAt =
     new Date()
       .toISOString();
+
 
   const minutesToKickoff =
     Math.round(
@@ -633,6 +816,7 @@ function buildFinalSnapshot(
       /
       60000
     );
+
 
   const dataCoverage =
     coverage({
@@ -645,6 +829,7 @@ function buildFinalSnapshot(
       statistics,
       odds
     });
+
 
   return {
 
@@ -717,19 +902,35 @@ function buildFinalSnapshot(
       final_snapshot:
         true,
 
-      sportmonks_single_request:
-        true,
+      odds: {
+
+        attempted:
+          true,
+
+        ok:
+          oddsResult?.ok ===
+          true,
+
+        http_status:
+          oddsResult?.status ??
+          null,
+
+        error:
+          oddsResult?.error ??
+          null
+      },
 
       captured_at:
         capturedAt
     },
 
-    /*
-     * Photographie brute de la réponse reçue
-     * au moment réel où les XI ont été détectés.
-     */
-    raw_fixture:
-      fixture,
+    raw_fixture: {
+
+      ...fixture,
+
+      snapshot_odds:
+        odds
+    },
 
     updated_at:
       capturedAt
@@ -742,19 +943,24 @@ function buildFinalSnapshot(
 // =====================================================
 
 async function saveFinalSnapshot(
-  fixture
+  fixture,
+  oddsResult
 ) {
 
   const row =
     buildFinalSnapshot(
-      fixture
+      fixture,
+      oddsResult
     );
+
 
   const saved =
     await supabaseRequest(
       'prematch_snapshots',
       {
-        method: 'POST',
+
+        method:
+          'POST',
 
         query:
           '?on_conflict=sportmonks_fixture_id,snapshot_stage',
@@ -762,21 +968,19 @@ async function saveFinalSnapshot(
         body:
           row,
 
-        /*
-         * Le premier FINAL authentique gagne.
-         * Les passages suivants ne l'écrasent jamais.
-         */
         prefer:
           'resolution=ignore-duplicates,return=representation'
       }
     );
+
 
   return {
 
     saved:
       Array.isArray(saved)
       &&
-      saved.length > 0,
+      saved.length >
+      0,
 
     snapshot:
       Array.isArray(saved)
@@ -800,6 +1004,7 @@ async function processFixture(
       lightFixture?.id
     );
 
+
   if (
     !Number.isFinite(
       fixtureId
@@ -807,19 +1012,26 @@ async function processFixture(
   ) {
 
     return {
-      fixtureId: null,
-      status: 'INVALID_FIXTURE'
+
+      fixtureId:
+        null,
+
+      status:
+        'INVALID_FIXTURE'
     };
   }
 
-  /*
-   * Une seule requête détaillée.
-   */
+
+  // ---------------------------------------------------
+  // 1. APPEL CRITIQUE : XI
+  // ---------------------------------------------------
+
   const fixture =
     await fetchFixtureDetails(
       fixtureId,
       token
     );
+
 
   const lineup =
     lineupStatus(
@@ -828,7 +1040,7 @@ async function processFixture(
 
 
   // ---------------------------------------------------
-  // XI PAS ENCORE OFFICIELS
+  // 2. XI PAS ENCORE OFFICIELS
   // ---------------------------------------------------
 
   if (!lineup.official) {
@@ -847,7 +1059,7 @@ async function processFixture(
 
 
   // ---------------------------------------------------
-  // XI OFFICIELS
+  // 3. XI OFFICIELS : SAUVEGARDE IMMÉDIATE
   // ---------------------------------------------------
 
   await saveMatch(
@@ -862,9 +1074,65 @@ async function processFixture(
     );
 
 
+  // ---------------------------------------------------
+  // 4. COTES OPTIONNELLES
+  //
+  // Leur échec ne peut plus bloquer les XI.
+  // ---------------------------------------------------
+
+  let oddsResult =
+    {
+
+      ok:
+        false,
+
+      status:
+        null,
+
+      error:
+        'NOT_ATTEMPTED',
+
+      odds:
+        null
+    };
+
+
+  try {
+
+    oddsResult =
+      await fetchOptionalOdds(
+        fixtureId,
+        token
+      );
+
+  } catch (error) {
+
+    oddsResult = {
+
+      ok:
+        false,
+
+      status:
+        null,
+
+      error:
+        error?.message ||
+        String(error),
+
+      odds:
+        null
+    };
+  }
+
+
+  // ---------------------------------------------------
+  // 5. SNAPSHOT FINAL
+  // ---------------------------------------------------
+
   const finalSnapshot =
     await saveFinalSnapshot(
-      fixture
+      fixture,
+      oddsResult
     );
 
 
@@ -886,13 +1154,17 @@ async function processFixture(
         : null,
 
     finalSnapshotSaved:
-      finalSnapshot.saved
+      finalSnapshot.saved,
+
+    oddsAvailable:
+      oddsResult.ok ===
+      true
   };
 }
 
 
 // =====================================================
-// HANDLER NETLIFY
+// HANDLER
 // =====================================================
 
 exports.handler =
@@ -903,30 +1175,32 @@ exports.handler =
         .env
         .SPORTMONKS_API_TOKEN;
 
-    if (!token) {
 
-      console.error(
-        'collect-lineups : SPORTMONKS_API_TOKEN absent.'
-      );
+    if (!token) {
 
       return {
 
-        statusCode: 500,
+        statusCode:
+          500,
 
         body:
           JSON.stringify({
-            success: false,
+
+            success:
+              false,
+
             error:
               'SPORTMONKS_API_TOKEN absent.'
           })
       };
     }
 
+
     try {
 
-      // =================================================
+      // -------------------------------------------------
       // A. LISTE LÉGÈRE
-      // =================================================
+      // -------------------------------------------------
 
       const fixtures =
         await fetchFixtureList(
@@ -934,9 +1208,9 @@ exports.handler =
         );
 
 
-      // =================================================
-      // B. MATCHS À H-60 / +30
-      // =================================================
+      // -------------------------------------------------
+      // B. MATCHS PROCHES
+      // -------------------------------------------------
 
       const candidates =
         fixtures.filter(
@@ -946,20 +1220,22 @@ exports.handler =
 
       const fixtureIds =
         candidates
+
           .map(
             fixture =>
               Number(
                 fixture.id
               )
           )
+
           .filter(
             Number.isFinite
           );
 
 
-      // =================================================
+      // -------------------------------------------------
       // C. MÉMOIRE
-      // =================================================
+      // -------------------------------------------------
 
       const [
         confirmedIds,
@@ -978,24 +1254,22 @@ exports.handler =
 
 
       /*
-       * Un match n'est réellement terminé pour ce
-       * collecteur QUE si :
+       * Match complet seulement si :
        *
-       * 1. XI enregistrés
-       * 2. snapshot FINAL enregistré
-       *
-       * Cela permet de réparer automatiquement
-       * un ancien match qui aurait XI=true mais
-       * pas encore de snapshot FINAL.
+       * - XI sauvegardés
+       * - snapshot FINAL sauvegardé
        */
       const completed =
         new Set(
           fixtureIds.filter(
             fixtureId =>
+
               confirmedIds.has(
                 fixtureId
               )
+
               &&
+
               finalSnapshotIds.has(
                 fixtureId
               )
@@ -1006,6 +1280,7 @@ exports.handler =
       const unresolved =
         candidates.filter(
           fixture =>
+
             !completed.has(
               Number(
                 fixture.id
@@ -1014,12 +1289,13 @@ exports.handler =
         );
 
 
-      const results = [];
+      const results =
+        [];
 
 
-      // =================================================
-      // D. MATCHS DÉJÀ COMPLETS
-      // =================================================
+      // -------------------------------------------------
+      // D. DÉJÀ COMPLETS
+      // -------------------------------------------------
 
       candidates.forEach(
         fixture => {
@@ -1028,6 +1304,7 @@ exports.handler =
             Number(
               fixture.id
             );
+
 
           if (
             completed.has(
@@ -1047,9 +1324,9 @@ exports.handler =
       );
 
 
-      // =================================================
-      // E. MATCHS RESTANTS
-      // =================================================
+      // -------------------------------------------------
+      // E. RESTANTS
+      // -------------------------------------------------
 
       for (
         const fixture
@@ -1063,6 +1340,7 @@ exports.handler =
               fixture,
               token
             );
+
 
           results.push(
             result
@@ -1086,9 +1364,9 @@ exports.handler =
       }
 
 
-      // =================================================
+      // -------------------------------------------------
       // F. RÉSUMÉ
-      // =================================================
+      // -------------------------------------------------
 
       const summary = {
 
@@ -1142,6 +1420,13 @@ exports.handler =
               true
           ).length,
 
+        oddsAvailable:
+          results.filter(
+            item =>
+              item.oddsAvailable ===
+              true
+          ).length,
+
         results
       };
 
@@ -1161,6 +1446,7 @@ exports.handler =
           200,
 
         headers: {
+
           'content-type':
             'application/json; charset=utf-8',
 
@@ -1174,6 +1460,7 @@ exports.handler =
           )
       };
 
+
     } catch (error) {
 
       console.error(
@@ -1181,12 +1468,14 @@ exports.handler =
         error
       );
 
+
       return {
 
         statusCode:
           500,
 
         headers: {
+
           'content-type':
             'application/json; charset=utf-8'
         },
