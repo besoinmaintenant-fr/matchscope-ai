@@ -1,0 +1,1123 @@
+<!doctype html>
+
+<html lang="fr">
+
+<head>
+
+  <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  >
+
+  <title>
+    MatchScope — Mémoire pré-match
+  </title>
+
+
+  <style>
+
+    * {
+      box-sizing: border-box;
+    }
+
+
+    body {
+
+      margin: 0;
+
+      padding: 16px;
+
+      background: #06110c;
+
+      color: white;
+
+      font-family:
+        Arial,
+        sans-serif;
+    }
+
+
+    .container {
+
+      max-width: 760px;
+
+      margin: auto;
+    }
+
+
+    .header {
+
+      padding: 18px;
+
+      background: #0c1d14;
+
+      border:
+        1px solid #234331;
+
+      border-radius: 18px;
+    }
+
+
+    h1 {
+
+      margin: 0 0 8px;
+
+      font-size: 25px;
+    }
+
+
+    .subtitle {
+
+      color: #9db0a4;
+
+      line-height: 1.45;
+    }
+
+
+    .summary {
+
+      display: grid;
+
+      grid-template-columns:
+        repeat(3, 1fr);
+
+      gap: 8px;
+
+      margin-top: 14px;
+    }
+
+
+    .summary-card {
+
+      padding: 12px;
+
+      border-radius: 12px;
+
+      background: #07100b;
+
+      border:
+        1px solid #243d2f;
+    }
+
+
+    .summary-card span {
+
+      display: block;
+
+      font-size: 10px;
+
+      color: #84968b;
+
+      text-transform: uppercase;
+    }
+
+
+    .summary-card strong {
+
+      display: block;
+
+      margin-top: 5px;
+
+      font-size: 21px;
+    }
+
+
+    button {
+
+      width: 100%;
+
+      margin-top: 14px;
+
+      padding: 14px;
+
+      border: 0;
+
+      border-radius: 12px;
+
+      background: #37e481;
+
+      color: #00190b;
+
+      font-size: 15px;
+
+      font-weight: bold;
+    }
+
+
+    #status {
+
+      margin-top: 14px;
+
+      padding: 13px;
+
+      border-radius: 12px;
+
+      background: #07100b;
+
+      color: #a3b4a9;
+
+      line-height: 1.45;
+    }
+
+
+    .match {
+
+      margin-top: 15px;
+
+      padding: 16px;
+
+      border-radius: 17px;
+
+      background: #0c1a13;
+
+      border:
+        1px solid #243e30;
+    }
+
+
+    .match.complete {
+
+      border-color: #2a8554;
+    }
+
+
+    .match-title {
+
+      font-size: 17px;
+
+      font-weight: bold;
+
+      line-height: 1.35;
+    }
+
+
+    .match-meta {
+
+      margin-top: 5px;
+
+      color: #8fa196;
+
+      font-size: 12px;
+    }
+
+
+    .progress {
+
+      display: grid;
+
+      grid-template-columns:
+        repeat(5, 1fr);
+
+      gap: 5px;
+
+      margin-top: 14px;
+    }
+
+
+    .stage {
+
+      text-align: center;
+
+      padding:
+        9px 3px;
+
+      border-radius: 9px;
+
+      background: #131b17;
+
+      border:
+        1px solid #303a34;
+
+      color: #707d75;
+
+      font-size: 11px;
+
+      font-weight: bold;
+    }
+
+
+    .stage.ok {
+
+      color: #59ed99;
+
+      border-color: #267248;
+
+      background: #10281b;
+    }
+
+
+    .details {
+
+      margin-top: 13px;
+    }
+
+
+    .snapshot {
+
+      padding: 11px;
+
+      margin-top: 8px;
+
+      border-radius: 11px;
+
+      background: #07100b;
+
+      border:
+        1px solid #1e3327;
+    }
+
+
+    .snapshot-head {
+
+      display: flex;
+
+      align-items: center;
+
+      justify-content: space-between;
+
+      gap: 8px;
+
+      font-size: 13px;
+    }
+
+
+    .snapshot-stage {
+
+      font-weight: bold;
+
+      color: #55e894;
+    }
+
+
+    .snapshot-info {
+
+      margin-top: 7px;
+
+      font-size: 11px;
+
+      color: #92a398;
+
+      line-height: 1.55;
+    }
+
+
+    .chips {
+
+      display: flex;
+
+      flex-wrap: wrap;
+
+      gap: 5px;
+
+      margin-top: 8px;
+    }
+
+
+    .chip {
+
+      padding:
+        5px 7px;
+
+      border-radius: 999px;
+
+      font-size: 10px;
+
+      background: #191f1b;
+
+      color: #7d8c83;
+    }
+
+
+    .chip.yes {
+
+      background: #133120;
+
+      color: #5be79a;
+    }
+
+
+    .chip.no {
+
+      background: #261717;
+
+      color: #d98989;
+    }
+
+
+    .empty {
+
+      margin-top: 18px;
+
+      padding: 18px;
+
+      text-align: center;
+
+      border-radius: 14px;
+
+      background: #0c1a13;
+
+      color: #87998e;
+    }
+
+
+    .legend {
+
+      margin-top: 18px;
+
+      padding: 14px;
+
+      border-radius: 13px;
+
+      background: #17170c;
+
+      border:
+        1px solid #555126;
+
+      color: #d6cf88;
+
+      line-height: 1.5;
+
+      font-size: 12px;
+    }
+
+
+    @media (
+      max-width: 520px
+    ) {
+
+      .summary {
+
+        grid-template-columns:
+          1fr 1fr 1fr;
+      }
+
+
+      .summary-card strong {
+
+        font-size: 18px;
+      }
+
+    }
+
+  </style>
+
+</head>
+
+
+<body>
+
+
+  <div class="container">
+
+
+    <div class="header">
+
+
+      <h1>
+        Mémoire pré-match
+      </h1>
+
+
+      <div class="subtitle">
+
+        Contrôle des données réellement enregistrées
+        par MatchScope avant le coup d'envoi.
+
+      </div>
+
+
+      <div class="summary">
+
+
+        <div class="summary-card">
+
+          <span>
+            Matchs
+          </span>
+
+          <strong id="fixtureCount">
+            —
+          </strong>
+
+        </div>
+
+
+        <div class="summary-card">
+
+          <span>
+            Avec FINAL
+          </span>
+
+          <strong id="finalCount">
+            —
+          </strong>
+
+        </div>
+
+
+        <div class="summary-card">
+
+          <span>
+            5/5
+          </span>
+
+          <strong id="completeCount">
+            —
+          </strong>
+
+        </div>
+
+
+      </div>
+
+
+      <button id="refresh">
+
+        Actualiser
+
+      </button>
+
+
+      <div id="status">
+
+        Chargement…
+
+      </div>
+
+
+    </div>
+
+
+    <div id="matches"></div>
+
+
+    <div class="legend">
+
+      D1 = environ 24 h avant le match ·
+      H6 = environ 6 h ·
+      H3 = environ 3 h ·
+      H90 = environ 90 min ·
+      FINAL = premier instant où MatchScope détecte
+      les 22 titulaires officiels.
+
+      <br><br>
+
+      Une case absente ne sera jamais recréée
+      artificiellement après le match.
+
+    </div>
+
+
+  </div>
+
+
+  <script>
+
+
+    const STAGES = [
+      'D1',
+      'H6',
+      'H3',
+      'H90',
+      'FINAL'
+    ];
+
+
+    const fixtureCount =
+      document.querySelector(
+        '#fixtureCount'
+      );
+
+
+    const finalCount =
+      document.querySelector(
+        '#finalCount'
+      );
+
+
+    const completeCount =
+      document.querySelector(
+        '#completeCount'
+      );
+
+
+    const statusBox =
+      document.querySelector(
+        '#status'
+      );
+
+
+    const matchesBox =
+      document.querySelector(
+        '#matches'
+      );
+
+
+    const refreshButton =
+      document.querySelector(
+        '#refresh'
+      );
+
+
+    function escapeHtml(
+      value
+    ) {
+
+      return String(
+        value ?? ''
+      )
+
+        .replaceAll(
+          '&',
+          '&amp;'
+        )
+
+        .replaceAll(
+          '<',
+          '&lt;'
+        )
+
+        .replaceAll(
+          '>',
+          '&gt;'
+        )
+
+        .replaceAll(
+          '"',
+          '&quot;'
+        )
+
+        .replaceAll(
+          "'",
+          '&#039;'
+        );
+    }
+
+
+    function formatDate(
+      value
+    ) {
+
+      if (!value) {
+        return '—';
+      }
+
+
+      const date =
+        new Date(value);
+
+
+      if (
+        Number.isNaN(
+          date.getTime()
+        )
+      ) {
+
+        return '—';
+      }
+
+
+      return date
+        .toLocaleString(
+          'fr-FR',
+          {
+
+            day:
+              '2-digit',
+
+            month:
+              '2-digit',
+
+            hour:
+              '2-digit',
+
+            minute:
+              '2-digit',
+
+            timeZone:
+              'Europe/Paris'
+          }
+        );
+    }
+
+
+    function formatMinutes(
+      value
+    ) {
+
+      const number =
+        Number(value);
+
+
+      if (
+        !Number.isFinite(
+          number
+        )
+      ) {
+
+        return '—';
+      }
+
+
+      if (
+        number >= 0
+      ) {
+
+        return `${number} min avant`;
+      }
+
+
+      return `${Math.abs(
+        number
+      )} min après`;
+    }
+
+
+    function yesNoChip(
+      label,
+      value
+    ) {
+
+      return `
+
+        <span
+          class="chip ${
+            value
+              ? 'yes'
+              : 'no'
+          }"
+        >
+
+          ${escapeHtml(
+            label
+          )}
+
+          ${value
+            ? '✓'
+            : '×'
+          }
+
+        </span>
+      `;
+    }
+
+
+    function renderSnapshot(
+      snapshot
+    ) {
+
+      const available =
+        snapshot.available
+        ||
+        {};
+
+
+      return `
+
+        <div class="snapshot">
+
+          <div class="snapshot-head">
+
+            <span class="snapshot-stage">
+
+              ${escapeHtml(
+                snapshot.stage
+              )}
+
+            </span>
+
+            <span>
+
+              ${formatMinutes(
+                snapshot.minutesToKickoff
+              )}
+
+            </span>
+
+          </div>
+
+
+          <div class="snapshot-info">
+
+            Capture :
+            ${formatDate(
+              snapshot.capturedAt
+            )}
+
+            <br>
+
+            Couverture :
+            ${
+              snapshot.coverage !==
+              null
+
+                ? `${Number(
+                    snapshot.coverage
+                  ).toFixed(
+                    1
+                  )}%`
+
+                : '—'
+            }
+
+            <br>
+
+            XI officiels :
+            ${
+              snapshot.lineupsOfficial
+                ? 'oui'
+                : 'non'
+            }
+
+            · titulaires trouvés :
+            ${snapshot.startersFound ?? 0}
+
+          </div>
+
+
+          <div class="chips">
+
+            ${yesNoChip(
+              'Stade',
+              available.venue
+            )}
+
+            ${yesNoChip(
+              'Météo',
+              available.weather
+            )}
+
+            ${yesNoChip(
+              'Formations',
+              available.formations
+            )}
+
+            ${yesNoChip(
+              'Absences',
+              available.sidelined
+            )}
+
+            ${yesNoChip(
+              'XI',
+              available.lineups
+            )}
+
+            ${yesNoChip(
+              'Stats',
+              available.statistics
+            )}
+
+            ${yesNoChip(
+              'Cotes',
+              available.odds
+            )}
+
+          </div>
+
+        </div>
+      `;
+    }
+
+
+    function renderMatch(
+      fixture
+    ) {
+
+      const stages =
+        fixture.stages
+        ||
+        {};
+
+
+      const stageBar =
+        STAGES
+
+          .map(
+            stage => {
+
+              const present =
+                Boolean(
+                  stages[
+                    stage
+                  ]
+                );
+
+
+              return `
+
+                <div
+                  class="stage ${
+                    present
+                      ? 'ok'
+                      : ''
+                  }"
+                >
+
+                  ${stage}
+
+                  <br>
+
+                  ${present
+                    ? '✓'
+                    : '—'
+                  }
+
+                </div>
+              `;
+            }
+          )
+
+          .join('');
+
+
+      const details =
+        STAGES
+
+          .filter(
+            stage =>
+              Boolean(
+                stages[
+                  stage
+                ]
+              )
+          )
+
+          .map(
+            stage =>
+              renderSnapshot(
+                stages[
+                  stage
+                ]
+              )
+          )
+
+          .join('');
+
+
+      return `
+
+        <div
+          class="match ${
+            fixture.complete
+              ? 'complete'
+              : ''
+          }"
+        >
+
+          <div class="match-title">
+
+            ${escapeHtml(
+              fixture.home
+            )}
+
+            —
+
+            ${escapeHtml(
+              fixture.away
+            )}
+
+          </div>
+
+
+          <div class="match-meta">
+
+            ${escapeHtml(
+              fixture.league
+            )}
+
+            ·
+
+            ${formatDate(
+              fixture.kickoff
+            )}
+
+            · ID
+            ${escapeHtml(
+              fixture.fixtureId
+            )}
+
+          </div>
+
+
+          <div class="progress">
+
+            ${stageBar}
+
+          </div>
+
+
+          <div class="details">
+
+            ${details}
+
+          </div>
+
+        </div>
+      `;
+    }
+
+
+    function render(
+      data
+    ) {
+
+      fixtureCount.textContent =
+        data
+          ?.summary
+          ?.fixtures
+        ??
+        0;
+
+
+      finalCount.textContent =
+        data
+          ?.summary
+          ?.withFinal
+        ??
+        0;
+
+
+      completeCount.textContent =
+        data
+          ?.summary
+          ?.completeFixtures
+        ??
+        0;
+
+
+      const fixtures =
+        data.fixtures
+        ||
+        [];
+
+
+      if (!fixtures.length) {
+
+        matchesBox.innerHTML = `
+
+          <div class="empty">
+
+            Aucun snapshot enregistré pour le moment.
+
+            <br><br>
+
+            C'est normal si aucun match PL,
+            Bundesliga ou Liga n'est actuellement
+            dans une fenêtre D1 / H6 / H3 / H90 / FINAL.
+
+          </div>
+        `;
+
+
+        return;
+      }
+
+
+      matchesBox.innerHTML =
+        fixtures
+          .map(
+            renderMatch
+          )
+          .join('');
+    }
+
+
+    async function load() {
+
+      refreshButton.disabled =
+        true;
+
+
+      statusBox.textContent =
+        'Lecture de la mémoire Supabase…';
+
+
+      try {
+
+        const response =
+          await fetch(
+            `/.netlify/functions/snapshot-status?t=${Date.now()}`,
+            {
+
+              cache:
+                'no-store'
+            }
+          );
+
+
+        const data =
+          await response.json();
+
+
+        if (
+          !response.ok ||
+          data.success !== true
+        ) {
+
+          throw new Error(
+            data?.error ||
+            `HTTP ${response.status}`
+          );
+        }
+
+
+        render(
+          data
+        );
+
+
+        const stageSummary =
+          data
+            ?.summary
+            ?.stages
+          ||
+          {};
+
+
+        statusBox.textContent =
+
+`Mémoire lue avec succès.
+
+D1 : ${stageSummary.D1 ?? 0}
+H6 : ${stageSummary.H6 ?? 0}
+H3 : ${stageSummary.H3 ?? 0}
+H90 : ${stageSummary.H90 ?? 0}
+FINAL : ${stageSummary.FINAL ?? 0}
+
+Dernière lecture :
+${formatDate(data.checkedAt)}`;
+
+
+      } catch (error) {
+
+        statusBox.textContent =
+
+`Impossible de lire la mémoire.
+
+${error.message}`;
+
+
+      } finally {
+
+        refreshButton.disabled =
+          false;
+      }
+    }
+
+
+    refreshButton.addEventListener(
+      'click',
+      load
+    );
+
+
+    load();
+
+  </script>
+
+
+</body>
+
+</html>
