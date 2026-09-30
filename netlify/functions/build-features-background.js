@@ -7,15 +7,36 @@ const {
 // MATCHSCOPE
 // FEATURE ENGINE V1
 //
-// Transforme les données historiques Supabase
-// en variables pré-match exploitables par un modèle.
+// Transforme la mémoire historique Supabase
+// en variables pré-match exploitables
+// par les futurs modèles probabilistes.
 //
 // IMPORTANT :
-// Toutes les données historiques utilisées
-// doivent être antérieures au coup d'envoi
-// du match cible.
+//
+// Pour un match cible,
+// aucune donnée postérieure au coup d'envoi
+// ne doit être utilisée.
+//
+// PRELINEUP :
+// - forme
+// - domicile / extérieur
+// - calendrier / repos
+//
+// FINAL :
+// - mêmes données
+// - + composition officielle
+// - + continuité
+// - + rotations
+// - + stabilité par ligne
+// - + formation
+//
+// V0.7 N'EST PAS MODIFIÉE PAR CE FICHIER.
 // =====================================================
 
+
+// =====================================================
+// CONFIGURATION
+// =====================================================
 
 const FEATURE_VERSION =
   'features-v1';
@@ -38,6 +59,10 @@ const MODEL_LEAGUES = [
   'BL',
   'LL'
 ];
+
+
+const PAGE_SIZE =
+  1000;
 
 
 // =====================================================
@@ -89,10 +114,17 @@ function average(
 ) {
 
   const clean =
-    array(values)
+    array(
+      values
+    )
+
       .map(
-        Number
+        value =>
+          Number(
+            value
+          )
       )
+
       .filter(
         Number.isFinite
       );
@@ -107,6 +139,7 @@ function average(
 
 
   return (
+
     clean.reduce(
       (
         total,
@@ -115,7 +148,9 @@ function average(
         total + value,
       0
     )
+
     /
+
     clean.length
   );
 }
@@ -127,7 +162,30 @@ function percent(
 ) {
 
   if (
-    !denominator
+    denominator === null ||
+    denominator === undefined ||
+    Number(denominator) === 0
+  ) {
+
+    return null;
+  }
+
+
+  const first =
+    Number(
+      numerator
+    );
+
+
+  const second =
+    Number(
+      denominator
+    );
+
+
+  if (
+    !Number.isFinite(first) ||
+    !Number.isFinite(second)
   ) {
 
     return null;
@@ -136,8 +194,8 @@ function percent(
 
   return (
 
-    numerator /
-    denominator *
+    first /
+    second *
     100
   );
 }
@@ -149,18 +207,24 @@ function daysBetween(
 ) {
 
   const a =
-    new Date(first);
+    new Date(
+      first
+    );
 
 
   const b =
-    new Date(second);
+    new Date(
+      second
+    );
 
 
   if (
     Number.isNaN(
       a.getTime()
     )
+
     ||
+
     Number.isNaN(
       b.getTime()
     )
@@ -185,89 +249,236 @@ function daysBetween(
 
 // =====================================================
 // MATCHS CIBLES
+//
+// IMPORTANT :
+//
+// On NE filtre PAS sur lineups_confirmed.
+//
+// Pourquoi ?
+//
+// PRELINEUP doit pouvoir être créée
+// avant publication des compositions.
+//
+// FINAL sera créée uniquement lorsque
+// lineups_confirmed = true.
 // =====================================================
 
 async function loadTargets() {
 
-  const query =
-
-    '?select='
-
-    +
-
-    [
-      'sportmonks_fixture_id',
-      'league_code',
-      'starting_at',
-      'home_team_id',
-      'away_team_id',
-      'lineups_confirmed'
-    ].join(',')
-
-    +
-
-    `&league_code=in.(${MODEL_LEAGUES.join(',')})`
-
-    +
-
-    '&order=starting_at.asc';
-
-
   const rows =
-    await supabaseRequest(
-      'matches',
-      {
-        method:
-          'GET',
+    [];
 
-        query
-      }
+
+  let offset =
+    0;
+
+
+  while (
+    true
+  ) {
+
+    const query =
+
+      '?select='
+
+      +
+
+      [
+        'sportmonks_fixture_id',
+        'league_code',
+        'starting_at',
+        'home_team_id',
+        'away_team_id',
+        'lineups_confirmed'
+      ].join(',')
+
+      +
+
+      `&league_code=in.(${MODEL_LEAGUES.join(',')})`
+
+      +
+
+      '&order=starting_at.asc'
+
+      +
+
+      `&limit=${PAGE_SIZE}`
+
+      +
+
+      `&offset=${offset}`;
+
+
+    const page =
+      await supabaseRequest(
+        'matches',
+        {
+
+          method:
+            'GET',
+
+          query
+        }
+      );
+
+
+    if (
+      !Array.isArray(
+        page
+      )
+    ) {
+
+      throw new Error(
+        'Réponse Supabase matches invalide.'
+      );
+    }
+
+
+    rows.push(
+      ...page
     );
 
 
-  return array(
-    rows
-  );
+    if (
+      page.length <
+      PAGE_SIZE
+    ) {
+
+      break;
+    }
+
+
+    offset +=
+      PAGE_SIZE;
+
+
+    if (
+      offset >
+      20000
+    ) {
+
+      throw new Error(
+        'Pagination matches anormalement longue.'
+      );
+    }
+  }
+
+
+  return rows;
 }
 
 
 // =====================================================
 // FEATURES EXISTANTES
+//
+// Pagination obligatoire pour éviter
+// qu'une base > 1000 lignes soit tronquée.
 // =====================================================
 
 async function loadExistingFeatureIds() {
-
-  const rows =
-    await supabaseRequest(
-      'match_features',
-      {
-        method:
-          'GET',
-
-        query:
-
-          '?select=sportmonks_fixture_id,feature_stage'
-
-          +
-
-          `&feature_version=eq.${FEATURE_VERSION}`
-      }
-    );
-
 
   const existing =
     new Set();
 
 
-  array(rows).forEach(
-    row => {
+  let offset =
+    0;
 
-      existing.add(
 
-        `${row.sportmonks_fixture_id}:${row.feature_stage}`
+  while (
+    true
+  ) {
+
+    const query =
+
+      '?select='
+
+      +
+
+      [
+        'sportmonks_fixture_id',
+        'feature_stage',
+        'starting_at'
+      ].join(',')
+
+      +
+
+      `&feature_version=eq.${encodeURIComponent(
+        FEATURE_VERSION
+      )}`
+
+      +
+
+      '&order=starting_at.asc'
+
+      +
+
+      `&limit=${PAGE_SIZE}`
+
+      +
+
+      `&offset=${offset}`;
+
+
+    const page =
+      await supabaseRequest(
+        'match_features',
+        {
+
+          method:
+            'GET',
+
+          query
+        }
+      );
+
+
+    if (
+      !Array.isArray(
+        page
+      )
+    ) {
+
+      throw new Error(
+        'Réponse Supabase match_features invalide.'
       );
     }
-  );
+
+
+    page.forEach(
+      row => {
+
+        existing.add(
+
+          `${row.sportmonks_fixture_id}:${row.feature_stage}`
+        );
+      }
+    );
+
+
+    if (
+      page.length <
+      PAGE_SIZE
+    ) {
+
+      break;
+    }
+
+
+    offset +=
+      PAGE_SIZE;
+
+
+    if (
+      offset >
+      50000
+    ) {
+
+      throw new Error(
+        'Pagination match_features anormalement longue.'
+      );
+    }
+  }
 
 
   return existing;
@@ -275,7 +486,14 @@ async function loadExistingFeatureIds() {
 
 
 // =====================================================
-// HISTORIQUE MATCHS D'UNE ÉQUIPE
+// HISTORIQUE DES MATCHS D'UNE ÉQUIPE
+//
+// LEAKAGE GUARD :
+//
+// starting_at < coup d'envoi cible
+//
+// Donc le match étudié et les matchs futurs
+// ne peuvent pas entrer dans les calculs.
 // =====================================================
 
 async function loadTeamMatches(
@@ -311,7 +529,11 @@ async function loadTeamMatches(
 
     +
 
-    `&or=(home_team_id.eq.${teamId},away_team_id.eq.${teamId})`
+    `&or=(home_team_id.eq.${Number(
+      teamId
+    )},away_team_id.eq.${Number(
+      teamId
+    )})`
 
     +
 
@@ -326,6 +548,7 @@ async function loadTeamMatches(
     await supabaseRequest(
       'matches',
       {
+
         method:
           'GET',
 
@@ -341,7 +564,7 @@ async function loadTeamMatches(
 
 
 // =====================================================
-// RÉSULTATS
+// RÉSULTATS HISTORIQUES
 // =====================================================
 
 async function loadResults(
@@ -360,6 +583,7 @@ async function loadResults(
     await supabaseRequest(
       'results',
       {
+
         method:
           'GET',
 
@@ -386,19 +610,23 @@ async function loadResults(
     new Map();
 
 
-  array(rows).forEach(
-    row => {
+  array(
+    rows
+  )
 
-      map.set(
+    .forEach(
+      row => {
 
-        Number(
-          row.sportmonks_fixture_id
-        ),
+        map.set(
 
-        row
-      );
-    }
-  );
+          Number(
+            row.sportmonks_fixture_id
+          ),
+
+          row
+        );
+      }
+    );
 
 
   return map;
@@ -406,7 +634,7 @@ async function loadResults(
 
 
 // =====================================================
-// STATS ÉQUIPES
+// STATISTIQUES ÉQUIPES
 // =====================================================
 
 async function loadTeamStats(
@@ -426,6 +654,7 @@ async function loadTeamStats(
     await supabaseRequest(
       'team_match_statistics',
       {
+
         method:
           'GET',
 
@@ -446,7 +675,9 @@ async function loadTeamStats(
 
           +
 
-          `&team_id=eq.${teamId}`
+          `&team_id=eq.${Number(
+            teamId
+          )}`
 
           +
 
@@ -462,7 +693,7 @@ async function loadTeamStats(
 
 
 // =====================================================
-// RECONNAÎTRE LES TYPES DE STATS
+// CLÉ D'UNE STATISTIQUE
 // =====================================================
 
 function statKey(
@@ -479,13 +710,21 @@ function statKey(
 
   ]
 
-    .filter(Boolean)
+    .filter(
+      Boolean
+    )
 
-    .join(' ')
+    .join(
+      ' '
+    )
 
     .toLowerCase();
 }
 
+
+// =====================================================
+// EXTRACTION D'UNE STATISTIQUE
+// =====================================================
 
 function extractStat(
   stats,
@@ -500,7 +739,8 @@ function extractStat(
         if (
           Number(
             item.sportmonks_fixture_id
-          ) !==
+          )
+          !==
           Number(
             fixtureId
           )
@@ -518,6 +758,7 @@ function extractStat(
 
         return patterns.some(
           pattern =>
+
             key.includes(
               pattern
             )
@@ -548,6 +789,17 @@ function extractStat(
 
 
   if (
+    typeof value ===
+    'string'
+  ) {
+
+    return numberOrNull(
+      value
+    );
+  }
+
+
+  if (
     value &&
     typeof value ===
     'object'
@@ -556,11 +808,17 @@ function extractStat(
     const possible =
 
       value.value
+
       ??
+
       value.total
+
       ??
+
       value.count
+
       ??
+
       value.amount;
 
 
@@ -570,14 +828,12 @@ function extractStat(
   }
 
 
-  return numberOrNull(
-    value
-  );
+  return null;
 }
 
 
 // =====================================================
-// RÉSUMÉ DES MATCHS PRÉCÉDENTS
+// FORME HISTORIQUE D'UNE ÉQUIPE
 // =====================================================
 
 async function buildTeamForm(
@@ -588,20 +844,29 @@ async function buildTeamForm(
 
   const matches =
     await loadTeamMatches(
+
       teamId,
+
       leagueCode,
+
       kickoff
     );
 
 
   const fixtureIds =
 
-    matches.map(
-      match =>
-        Number(
-          match.sportmonks_fixture_id
-        )
-    );
+    matches
+
+      .map(
+        match =>
+          Number(
+            match.sportmonks_fixture_id
+          )
+      )
+
+      .filter(
+        Number.isFinite
+      );
 
 
   const [
@@ -627,11 +892,15 @@ async function buildTeamForm(
       .map(
         match => {
 
+          const fixtureId =
+            Number(
+              match.sportmonks_fixture_id
+            );
+
+
           const result =
             results.get(
-              Number(
-                match.sportmonks_fixture_id
-              )
+              fixtureId
             );
 
 
@@ -643,10 +912,11 @@ async function buildTeamForm(
           }
 
 
-          const home =
+          const isHome =
             Number(
               match.home_team_id
-            ) ===
+            )
+            ===
             Number(
               teamId
             );
@@ -654,7 +924,7 @@ async function buildTeamForm(
 
           const goalsFor =
 
-            home
+            isHome
 
               ? numberOrNull(
                   result.home_score
@@ -667,7 +937,7 @@ async function buildTeamForm(
 
           const goalsAgainst =
 
-            home
+            isHome
 
               ? numberOrNull(
                   result.away_score
@@ -710,17 +980,39 @@ async function buildTeamForm(
           }
 
 
+          const shots =
+            extractStat(
+              stats,
+              fixtureId,
+              [
+                'shots total',
+                'total shots',
+                'shots'
+              ]
+            );
+
+
+          const shotsOnTarget =
+            extractStat(
+              stats,
+              fixtureId,
+              [
+                'shots on target',
+                'shots-on-target',
+                'shots on goal'
+              ]
+            );
+
+
           return {
 
-            fixtureId:
-              Number(
-                match.sportmonks_fixture_id
-              ),
+            fixtureId,
 
             startingAt:
               match.starting_at,
 
-            home,
+            home:
+              isHome,
 
             goalsFor,
 
@@ -728,31 +1020,16 @@ async function buildTeamForm(
 
             points,
 
-            shots:
-              extractStat(
-                stats,
-                match.sportmonks_fixture_id,
-                [
-                  'shots total',
-                  'total shots',
-                  'shots'
-                ]
-              ),
+            shots,
 
-            shotsOnTarget:
-              extractStat(
-                stats,
-                match.sportmonks_fixture_id,
-                [
-                  'shots on target',
-                  'shots-on-target'
-                ]
-              )
+            shotsOnTarget
           };
         }
       )
 
-      .filter(Boolean);
+      .filter(
+        Boolean
+      );
 
 
   const recent =
@@ -762,35 +1039,18 @@ async function buildTeamForm(
     );
 
 
-  const venueRecent =
-
-    completed
-
-      .filter(
-        match =>
-          match.home
-      )
-
-      .slice(
-        0,
-        RECENT_MATCHES
-      );
-
-
   return {
 
     matches:
       completed,
 
-    recent,
-
-    venueRecent
+    recent
   };
 }
 
 
 // =====================================================
-// CALCUL DES FEATURES DE FORME
+// RÉSUMÉ FORME
 // =====================================================
 
 function summarizeForm(
@@ -798,7 +1058,9 @@ function summarizeForm(
 ) {
 
   const recent =
-    form.recent;
+    array(
+      form?.recent
+    );
 
 
   return {
@@ -808,6 +1070,7 @@ function summarizeForm(
 
     pointsPerMatch:
       average(
+
         recent.map(
           match =>
             match.points
@@ -816,6 +1079,7 @@ function summarizeForm(
 
     goalsForAvg:
       average(
+
         recent.map(
           match =>
             match.goalsFor
@@ -824,6 +1088,7 @@ function summarizeForm(
 
     goalsAgainstAvg:
       average(
+
         recent.map(
           match =>
             match.goalsAgainst
@@ -832,6 +1097,7 @@ function summarizeForm(
 
     shotsAvg:
       average(
+
         recent.map(
           match =>
             match.shots
@@ -840,6 +1106,7 @@ function summarizeForm(
 
     shotsOnTargetAvg:
       average(
+
         recent.map(
           match =>
             match.shotsOnTarget
@@ -849,15 +1116,29 @@ function summarizeForm(
 }
 
 
+// =====================================================
+// RÉSUMÉ DOMICILE / EXTÉRIEUR
+// =====================================================
+
 function summarizeVenue(
   matches
 ) {
 
+  const clean =
+    array(
+      matches
+    );
+
+
   return {
+
+    sample:
+      clean.length,
 
     pointsPerMatch:
       average(
-        matches.map(
+
+        clean.map(
           match =>
             match.points
         )
@@ -865,7 +1146,8 @@ function summarizeVenue(
 
     goalsForAvg:
       average(
-        matches.map(
+
+        clean.map(
           match =>
             match.goalsFor
         )
@@ -873,7 +1155,8 @@ function summarizeVenue(
 
     goalsAgainstAvg:
       average(
-        matches.map(
+
+        clean.map(
           match =>
             match.goalsAgainst
         )
@@ -883,7 +1166,7 @@ function summarizeVenue(
 
 
 // =====================================================
-// XI HISTORIQUES
+// XI TITULAIRES D'UN MATCH
 // =====================================================
 
 async function loadStarters(
@@ -895,6 +1178,7 @@ async function loadStarters(
     await supabaseRequest(
       'lineups',
       {
+
         method:
           'GET',
 
@@ -904,11 +1188,15 @@ async function loadStarters(
 
           +
 
-          `&sportmonks_fixture_id=eq.${fixtureId}`
+          `&sportmonks_fixture_id=eq.${Number(
+            fixtureId
+          )}`
 
           +
 
-          `&team_id=eq.${teamId}`
+          `&team_id=eq.${Number(
+            teamId
+          )}`
 
           +
 
@@ -923,6 +1211,10 @@ async function loadStarters(
 }
 
 
+// =====================================================
+// JOUEURS COMMUNS ENTRE DEUX XI
+// =====================================================
+
 function overlap(
   first,
   second
@@ -931,25 +1223,44 @@ function overlap(
   const secondIds =
     new Set(
 
-      second.map(
-        player =>
-          Number(
-            player.player_id
-          )
+      array(
+        second
       )
+
+        .map(
+          player =>
+            Number(
+              player.player_id
+            )
+        )
+
+        .filter(
+          Number.isFinite
+        )
     );
 
 
-  return first.filter(
-    player =>
-      secondIds.has(
-        Number(
-          player.player_id
+  return array(
+    first
+  )
+
+    .filter(
+      player =>
+
+        secondIds.has(
+          Number(
+            player.player_id
+          )
         )
-      )
-  ).length;
+    )
+
+    .length;
 }
 
+
+// =====================================================
+// CLASSIFICATION DES POSTES
+// =====================================================
 
 function positionGroup(
   player
@@ -973,9 +1284,13 @@ function positionGroup(
 
     ]
 
-      .filter(Boolean)
+      .filter(
+        Boolean
+      )
 
-      .join(' ')
+      .join(
+        ' '
+      )
 
       .toLowerCase();
 
@@ -991,7 +1306,7 @@ function positionGroup(
 
 
   if (
-    /defend|back|defen/.test(
+    /defend|defender|back|defen/.test(
       text
     )
   ) {
@@ -1001,7 +1316,7 @@ function positionGroup(
 
 
   if (
-    /midfield|milieu/.test(
+    /midfield|midfielder|milieu/.test(
       text
     )
   ) {
@@ -1011,7 +1326,7 @@ function positionGroup(
 
 
   if (
-    /forward|attack|striker|wing/.test(
+    /forward|attack|attacker|striker|wing|ailier/.test(
       text
     )
   ) {
@@ -1035,8 +1350,11 @@ async function buildLineupFeatures(
 
   const previousMatches =
     await loadTeamMatches(
+
       teamId,
+
       target.league_code,
+
       target.starting_at
     );
 
@@ -1055,10 +1373,17 @@ async function buildLineupFeatures(
 
     const starters =
       await loadStarters(
+
         match.sportmonks_fixture_id,
+
         teamId
       );
 
+
+    /*
+     * Un XI historique incomplet
+     * n'entre pas dans l'échantillon.
+     */
 
     if (
       starters.length >=
@@ -1075,9 +1400,15 @@ async function buildLineupFeatures(
   }
 
 
+  // ===================================================
+  // XI ACTUEL
+  // ===================================================
+
   const current =
     await loadStarters(
+
       target.sportmonks_fixture_id,
+
       teamId
     );
 
@@ -1090,6 +1421,10 @@ async function buildLineupFeatures(
     return null;
   }
 
+
+  // ===================================================
+  // FRÉQUENCE DE TITULARISATION HISTORIQUE
+  // ===================================================
 
   const appearanceCount =
     new Map();
@@ -1105,6 +1440,16 @@ async function buildLineupFeatures(
             Number(
               player.player_id
             );
+
+
+          if (
+            !Number.isFinite(
+              id
+            )
+          ) {
+
+            return;
+          }
 
 
           appearanceCount.set(
@@ -1129,6 +1474,13 @@ async function buildLineupFeatures(
   );
 
 
+  // ===================================================
+  // XI HABITUEL
+  //
+  // Les 11 joueurs les plus souvent titulaires
+  // sur l'historique disponible.
+  // ===================================================
+
   const regularIds =
     new Set(
 
@@ -1141,6 +1493,7 @@ async function buildLineupFeatures(
             first,
             second
           ) =>
+
             second[1] -
             first[1]
         )
@@ -1154,8 +1507,12 @@ async function buildLineupFeatures(
           entry =>
             entry[0]
         )
-  );
+    );
 
+
+  // ===================================================
+  // MATCH PRÉCÉDENT
+  // ===================================================
 
   const previous =
     history[0]
@@ -1175,6 +1532,10 @@ async function buildLineupFeatures(
       : null;
 
 
+  // ===================================================
+  // PROXIMITÉ MOYENNE AVEC LES XI HISTORIQUES
+  // ===================================================
+
   const averageOverlap =
 
     history.length
@@ -1183,6 +1544,7 @@ async function buildLineupFeatures(
 
           history.map(
             item =>
+
               overlap(
                 current,
                 item.starters
@@ -1192,6 +1554,13 @@ async function buildLineupFeatures(
 
       : null;
 
+
+  // ===================================================
+  // CONTINUITÉ HISTORIQUE HABITUELLE
+  //
+  // On compare chaque XI historique
+  // au XI historique immédiatement précédent.
+  // ===================================================
 
   let historicalContinuity =
     null;
@@ -1216,11 +1585,13 @@ async function buildLineupFeatures(
 
         overlap(
 
-          history[index]
-            .starters,
+          history[
+            index
+          ].starters,
 
-          history[index + 1]
-            .starters
+          history[
+            index + 1
+          ].starters
         )
       );
     }
@@ -1233,17 +1604,30 @@ async function buildLineupFeatures(
   }
 
 
+  // ===================================================
+  // TITULAIRES HABITUELS PRÉSENTS
+  // ===================================================
+
   const regularsPresent =
 
-    current.filter(
-      player =>
-        regularIds.has(
-          Number(
-            player.player_id
-          )
-        )
-    ).length;
+    current
 
+      .filter(
+        player =>
+
+          regularIds.has(
+            Number(
+              player.player_id
+            )
+          )
+      )
+
+      .length;
+
+
+  // ===================================================
+  // STABILITÉ PAR LIGNE
+  // ===================================================
 
   const lines = {
 
@@ -1305,6 +1689,10 @@ async function buildLineupFeatures(
     }
   );
 
+
+  // ===================================================
+  // FORMATION
+  // ===================================================
 
   const formation =
 
@@ -1383,8 +1771,10 @@ async function buildLineupFeatures(
 
         ? null
 
-        : 11 -
-          kept,
+        : Math.max(
+            0,
+            11 - kept
+          ),
 
     regularsPresentPct:
       percent(
@@ -1436,6 +1826,8 @@ async function buildLineupFeatures(
 
     formation,
 
+    previousFormation,
+
     formationChanged:
 
       formation &&
@@ -1450,7 +1842,7 @@ async function buildLineupFeatures(
 
 
 // =====================================================
-// UNE ÉQUIPE
+// FEATURES D'UNE ÉQUIPE
 // =====================================================
 
 async function buildTeamFeatures(
@@ -1461,8 +1853,11 @@ async function buildTeamFeatures(
 
   const form =
     await buildTeamForm(
+
       teamId,
+
       target.league_code,
+
       target.starting_at
     );
 
@@ -1473,18 +1868,34 @@ async function buildTeamFeatures(
     );
 
 
+  // ===================================================
+  // DOMICILE / EXTÉRIEUR
+  // ===================================================
+
   const venueMatches =
 
     form.matches
 
       .filter(
-        match =>
+        match => {
 
-          venue === 'home'
+          if (
+            venue ===
+            'home'
+          ) {
 
-            ? match.home
+            return (
+              match.home ===
+              true
+            );
+          }
 
-            : !match.home
+
+          return (
+            match.home ===
+            false
+          );
+        }
       )
 
       .slice(
@@ -1498,6 +1909,10 @@ async function buildTeamFeatures(
       venueMatches
     );
 
+
+  // ===================================================
+  // REPOS
+  // ===================================================
 
   const previous =
     form.matches[0]
@@ -1517,11 +1932,20 @@ async function buildTeamFeatures(
       : null;
 
 
+  // ===================================================
+  // CHARGE 14 JOURS
+  // ===================================================
+
+  const targetDate =
+    new Date(
+      target.starting_at
+    );
+
+
   const cutoff14 =
     new Date(
-      new Date(
-        target.starting_at
-      ).getTime()
+
+      targetDate.getTime()
 
       -
 
@@ -1532,14 +1956,40 @@ async function buildTeamFeatures(
 
   const matchesLast14 =
 
-    form.matches.filter(
-      match =>
+    form.matches
 
-        new Date(
-          match.startingAt
-        ) >=
-        cutoff14
-    ).length;
+      .filter(
+        match => {
+
+          const date =
+            new Date(
+              match.startingAt
+            );
+
+
+          if (
+            Number.isNaN(
+              date.getTime()
+            )
+          ) {
+
+            return false;
+          }
+
+
+          return (
+            date >=
+            cutoff14
+
+            &&
+
+            date <
+            targetDate
+          );
+        }
+      )
+
+      .length;
 
 
   return {
@@ -1579,15 +2029,19 @@ function dataCoverage(
 
   const available =
 
-    entries.filter(
-      value =>
+    entries
 
-        value !== null
+      .filter(
+        value =>
 
-        &&
+          value !== null
 
-        value !== undefined
-    ).length;
+          &&
+
+          value !== undefined
+      )
+
+      .length;
 
 
   return percent(
@@ -1598,13 +2052,47 @@ function dataCoverage(
 
 
 // =====================================================
-// CRÉATION D'UN MATCH
+// CRÉATION DES FEATURES D'UN MATCH
 // =====================================================
 
 async function buildFixtureFeatures(
   target,
   stage
 ) {
+
+  const homeTeamId =
+    Number(
+      target.home_team_id
+    );
+
+
+  const awayTeamId =
+    Number(
+      target.away_team_id
+    );
+
+
+  if (
+    !Number.isFinite(
+      homeTeamId
+    )
+
+    ||
+
+    !Number.isFinite(
+      awayTeamId
+    )
+  ) {
+
+    throw new Error(
+      'IDs équipes invalides.'
+    );
+  }
+
+
+  // ===================================================
+  // FORME / CALENDRIER
+  // ===================================================
 
   const [
     home,
@@ -1614,21 +2102,21 @@ async function buildFixtureFeatures(
 
       buildTeamFeatures(
         target,
-        Number(
-          target.home_team_id
-        ),
+        homeTeamId,
         'home'
       ),
 
       buildTeamFeatures(
         target,
-        Number(
-          target.away_team_id
-        ),
+        awayTeamId,
         'away'
       )
     ]);
 
+
+  // ===================================================
+  // COMPOSITIONS
+  // ===================================================
 
   let homeLineup =
     null;
@@ -1651,76 +2139,117 @@ async function buildFixtureFeatures(
 
         buildLineupFeatures(
           target,
-          Number(
-            target.home_team_id
-          )
+          homeTeamId
         ),
 
         buildLineupFeatures(
           target,
-          Number(
-            target.away_team_id
-          )
+          awayTeamId
         )
       ]);
   }
 
 
+  // ===================================================
+  // FEATURES DE BASE
+  // ===================================================
+
   const featureValues = {
 
     home_points_per_match_5:
-      home.summary.pointsPerMatch,
+      home
+        .summary
+        .pointsPerMatch,
 
     away_points_per_match_5:
-      away.summary.pointsPerMatch,
+      away
+        .summary
+        .pointsPerMatch,
+
 
     home_goals_for_avg_5:
-      home.summary.goalsForAvg,
+      home
+        .summary
+        .goalsForAvg,
 
     away_goals_for_avg_5:
-      away.summary.goalsForAvg,
+      away
+        .summary
+        .goalsForAvg,
+
 
     home_goals_against_avg_5:
-      home.summary.goalsAgainstAvg,
+      home
+        .summary
+        .goalsAgainstAvg,
 
     away_goals_against_avg_5:
-      away.summary.goalsAgainstAvg,
+      away
+        .summary
+        .goalsAgainstAvg,
+
 
     home_shots_avg_5:
-      home.summary.shotsAvg,
+      home
+        .summary
+        .shotsAvg,
 
     away_shots_avg_5:
-      away.summary.shotsAvg,
+      away
+        .summary
+        .shotsAvg,
+
 
     home_shots_on_target_avg_5:
-      home.summary.shotsOnTargetAvg,
+      home
+        .summary
+        .shotsOnTargetAvg,
 
     away_shots_on_target_avg_5:
-      away.summary.shotsOnTargetAvg,
+      away
+        .summary
+        .shotsOnTargetAvg,
+
 
     home_home_points_per_match_5:
-      home.venueSummary.pointsPerMatch,
+      home
+        .venueSummary
+        .pointsPerMatch,
 
     away_away_points_per_match_5:
-      away.venueSummary.pointsPerMatch,
+      away
+        .venueSummary
+        .pointsPerMatch,
+
 
     home_home_goals_for_avg_5:
-      home.venueSummary.goalsForAvg,
+      home
+        .venueSummary
+        .goalsForAvg,
 
     away_away_goals_for_avg_5:
-      away.venueSummary.goalsForAvg,
+      away
+        .venueSummary
+        .goalsForAvg,
+
 
     home_home_goals_against_avg_5:
-      home.venueSummary.goalsAgainstAvg,
+      home
+        .venueSummary
+        .goalsAgainstAvg,
 
     away_away_goals_against_avg_5:
-      away.venueSummary.goalsAgainstAvg,
+      away
+        .venueSummary
+        .goalsAgainstAvg,
+
 
     home_rest_days:
       home.restDays,
 
     away_rest_days:
       away.restDays,
+
 
     home_matches_last_14:
       home.matchesLast14,
@@ -1729,6 +2258,10 @@ async function buildFixtureFeatures(
       away.matchesLast14
   };
 
+
+  // ===================================================
+  // FEATURES XI OFFICIEL
+  // ===================================================
 
   if (
     stage ===
@@ -1751,6 +2284,7 @@ async function buildFixtureFeatures(
           ??
           null,
 
+
         home_changes_from_previous:
           homeLineup
             ?.changesFromPrevious
@@ -1762,6 +2296,7 @@ async function buildFixtureFeatures(
             ?.changesFromPrevious
           ??
           null,
+
 
         home_regulars_present_pct:
           homeLineup
@@ -1775,6 +2310,7 @@ async function buildFixtureFeatures(
           ??
           null,
 
+
         home_average_xi_overlap_pct:
           homeLineup
             ?.averageOverlapPct
@@ -1786,6 +2322,7 @@ async function buildFixtureFeatures(
             ?.averageOverlapPct
           ??
           null,
+
 
         home_historical_continuity_pct:
           homeLineup
@@ -1799,6 +2336,7 @@ async function buildFixtureFeatures(
           ??
           null,
 
+
         home_goalkeeper_regular_pct:
           homeLineup
             ?.goalkeeperRegularPct
@@ -1810,6 +2348,7 @@ async function buildFixtureFeatures(
             ?.goalkeeperRegularPct
           ??
           null,
+
 
         home_defence_regular_pct:
           homeLineup
@@ -1823,6 +2362,7 @@ async function buildFixtureFeatures(
           ??
           null,
 
+
         home_midfield_regular_pct:
           homeLineup
             ?.midfieldRegularPct
@@ -1834,6 +2374,7 @@ async function buildFixtureFeatures(
             ?.midfieldRegularPct
           ??
           null,
+
 
         home_attack_regular_pct:
           homeLineup
@@ -1847,6 +2388,7 @@ async function buildFixtureFeatures(
           ??
           null,
 
+
         home_formation:
           homeLineup
             ?.formation
@@ -1858,6 +2400,7 @@ async function buildFixtureFeatures(
             ?.formation
           ??
           null,
+
 
         home_formation_changed:
           homeLineup
@@ -1874,6 +2417,10 @@ async function buildFixtureFeatures(
     );
   }
 
+
+  // ===================================================
+  // LIGNE FINALE MATCH_FEATURES
+  // ===================================================
 
   return {
 
@@ -1892,8 +2439,14 @@ async function buildFixtureFeatures(
       new Date()
         .toISOString(),
 
+
+    /*
+     * Heure limite des informations
+     * pouvant être utilisées.
+     */
     source_cutoff_at:
       target.starting_at,
+
 
     league_code:
       target.league_code,
@@ -1902,22 +2455,42 @@ async function buildFixtureFeatures(
       target.starting_at,
 
     home_team_id:
-      Number(
-        target.home_team_id
-      ),
+      homeTeamId,
 
     away_team_id:
-      Number(
-        target.away_team_id
-      ),
+      awayTeamId,
+
+
+    // -------------------------------------------------
+    // ÉCHANTILLON
+    // -------------------------------------------------
 
     home_matches_sample:
-      home.summary.sample,
+      home
+        .summary
+        .sample,
 
     away_matches_sample:
-      away.summary.sample,
+      away
+        .summary
+        .sample,
+
+
+    // -------------------------------------------------
+    // VARIABLES
+    // -------------------------------------------------
 
     ...featureValues,
+
+
+    // -------------------------------------------------
+    // ABSENCES
+    //
+    // Volontairement désactivées dans features-v1.
+    //
+    // On les activera uniquement lorsque
+    // leur historique pré-match aura été validé.
+    // -------------------------------------------------
 
     home_absences_count:
       null,
@@ -1931,10 +2504,20 @@ async function buildFixtureFeatures(
     away_regular_absences_count:
       null,
 
+
+    // -------------------------------------------------
+    // COUVERTURE
+    // -------------------------------------------------
+
     data_coverage:
       dataCoverage(
         featureValues
       ),
+
+
+    // -------------------------------------------------
+    // TRACE / AUDIT
+    // -------------------------------------------------
 
     raw_features: {
 
@@ -1950,11 +2533,28 @@ async function buildFixtureFeatures(
         new Date()
           .toISOString(),
 
+
       home_history_matches:
-        home.summary.sample,
+        home
+          .summary
+          .sample,
 
       away_history_matches:
-        away.summary.sample,
+        away
+          .summary
+          .sample,
+
+
+      home_venue_sample:
+        home
+          .venueSummary
+          .sample,
+
+      away_venue_sample:
+        away
+          .venueSummary
+          .sample,
+
 
       home_lineup_history:
         homeLineup
@@ -1966,6 +2566,19 @@ async function buildFixtureFeatures(
         awayLineup
           ?.historyMatches
         ??
+        null,
+
+
+      home_previous_formation:
+        homeLineup
+          ?.previousFormation
+        ??
+        null,
+
+      away_previous_formation:
+        awayLineup
+          ?.previousFormation
+        ??
         null
     }
   };
@@ -1973,7 +2586,7 @@ async function buildFixtureFeatures(
 
 
 // =====================================================
-// UPSERT
+// SAUVEGARDE
 // =====================================================
 
 async function saveFeature(
@@ -1983,6 +2596,7 @@ async function saveFeature(
   return supabaseRequest(
     'match_features',
     {
+
       method:
         'POST',
 
@@ -1993,7 +2607,6 @@ async function saveFeature(
         +
 
         encodeURIComponent(
-
           'sportmonks_fixture_id,feature_stage,feature_version'
         ),
 
@@ -2008,32 +2621,68 @@ async function saveFeature(
 
 
 // =====================================================
+// RÉPONSE JSON
+// =====================================================
+
+function jsonResponse(
+  statusCode,
+  body
+) {
+
+  return {
+
+    statusCode,
+
+    headers: {
+
+      'content-type':
+        'application/json; charset=utf-8',
+
+      'cache-control':
+        'no-store'
+    },
+
+    body:
+      JSON.stringify(
+        body
+      )
+  };
+}
+
+
+// =====================================================
 // HANDLER
 // =====================================================
 
 exports.handler =
   async event => {
 
+    // =================================================
+    // MÉTHODE
+    // =================================================
+
     if (
       event.httpMethod !==
       'POST'
     ) {
 
-      return {
-        statusCode:
-          405,
+      return jsonResponse(
+        405,
+        {
 
-        body:
-          JSON.stringify({
-            success:
-              false,
+          success:
+            false,
 
-            error:
-              'POST requis.'
-          })
-      };
+          error:
+            'POST requis.'
+        }
+      );
     }
 
+
+    // =================================================
+    // BODY
+    // =================================================
 
     let body =
       {};
@@ -2054,6 +2703,10 @@ exports.handler =
     }
 
 
+    // =================================================
+    // SÉCURITÉ
+    // =================================================
+
     const secret =
       process
         .env
@@ -2062,28 +2715,32 @@ exports.handler =
 
     if (
       !secret
+
       ||
+
       body?.secret !==
       secret
     ) {
 
-      return {
-        statusCode:
-          401,
+      return jsonResponse(
+        401,
+        {
 
-        body:
-          JSON.stringify({
-            success:
-              false,
+          success:
+            false,
 
-            error:
-              'Accès non autorisé.'
-          })
-      };
+          error:
+            'Accès non autorisé.'
+        }
+      );
     }
 
 
     try {
+
+      // =================================================
+      // CIBLES + FEATURES EXISTANTES
+      // =================================================
 
       const [
         targets,
@@ -2097,6 +2754,10 @@ exports.handler =
         ]);
 
 
+      // =================================================
+      // FILE D'ATTENTE
+      // =================================================
+
       const todo =
         [];
 
@@ -2106,25 +2767,48 @@ exports.handler =
         of targets
       ) {
 
-        const id =
+        const fixtureId =
           Number(
             target.sportmonks_fixture_id
           );
 
 
         if (
+          !Number.isFinite(
+            fixtureId
+          )
+        ) {
+
+          continue;
+        }
+
+
+        // ---------------------------------------------
+        // PRELINEUP
+        // ---------------------------------------------
+
+        if (
           !existing.has(
-            `${id}:PRELINEUP`
+            `${fixtureId}:PRELINEUP`
           )
         ) {
 
           todo.push({
+
             target,
+
             stage:
               'PRELINEUP'
           });
         }
 
+
+        // ---------------------------------------------
+        // FINAL
+        //
+        // Seulement si les XI officiels
+        // ont réellement été enregistrés.
+        // ---------------------------------------------
 
         if (
           target.lineups_confirmed ===
@@ -2133,18 +2817,24 @@ exports.handler =
           &&
 
           !existing.has(
-            `${id}:FINAL`
+            `${fixtureId}:FINAL`
           )
         ) {
 
           todo.push({
+
             target,
+
             stage:
               'FINAL'
           });
         }
       }
 
+
+      // =================================================
+      // PETIT LOT
+      // =================================================
 
       const batch =
         todo.slice(
@@ -2157,6 +2847,18 @@ exports.handler =
         [];
 
 
+      let saved =
+        0;
+
+
+      let failed =
+        0;
+
+
+      // =================================================
+      // TRAITEMENT
+      // =================================================
+
       for (
         const item
         of batch
@@ -2166,7 +2868,9 @@ exports.handler =
 
           const row =
             await buildFixtureFeatures(
+
               item.target,
+
               item.stage
             );
 
@@ -2176,16 +2880,23 @@ exports.handler =
           );
 
 
+          saved +=
+            1;
+
+
           results.push({
 
             fixtureId:
-              row.sportmonks_fixture_id,
+              row
+                .sportmonks_fixture_id,
 
             stage:
-              row.feature_stage,
+              row
+                .feature_stage,
 
             coverage:
-              row.data_coverage,
+              row
+                .data_coverage,
 
             status:
               'SAVED'
@@ -2195,6 +2906,10 @@ exports.handler =
         } catch (
           error
         ) {
+
+          failed +=
+            1;
+
 
           results.push({
 
@@ -2220,39 +2935,50 @@ exports.handler =
       }
 
 
-      return {
+      // =================================================
+      // RÉSUMÉ
+      // =================================================
 
-        statusCode:
-          200,
+      return jsonResponse(
+        200,
+        {
 
-        body:
-          JSON.stringify({
+          success:
+            true,
 
-            success:
-              true,
+          featureVersion:
+            FEATURE_VERSION,
 
-            featureVersion:
-              FEATURE_VERSION,
+          targets:
+            targets.length,
 
-            targets:
-              targets.length,
+          existingFeatures:
+            existing.size,
 
-            remainingBeforeRun:
-              todo.length,
+          remainingBeforeRun:
+            todo.length,
 
-            processed:
-              batch.length,
+          processed:
+            batch.length,
 
-            remainingAfterRun:
-              Math.max(
-                0,
-                todo.length -
-                batch.length
-              ),
+          saved,
 
-            results
-          })
-      };
+          failed,
+
+          remainingAfterRun:
+            Math.max(
+              0,
+              todo.length -
+              batch.length
+            ),
+
+          done:
+            todo.length <=
+            batch.length,
+
+          results
+        }
+      );
 
 
     } catch (
@@ -2265,24 +2991,20 @@ exports.handler =
       );
 
 
-      return {
+      return jsonResponse(
+        500,
+        {
 
-        statusCode:
-          500,
+          success:
+            false,
 
-        body:
-          JSON.stringify({
-
-            success:
-              false,
-
-            error:
-              error?.message
-              ||
-              String(
-                error
-              )
-          })
-      };
+          error:
+            error?.message
+            ||
+            String(
+              error
+            )
+        }
+      );
     }
   };
