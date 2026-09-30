@@ -1,0 +1,1936 @@
+<!doctype html>
+
+<html lang="fr">
+
+<head>
+
+  <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  >
+
+  <title>
+    MatchScope — Rolling Backtest
+  </title>
+
+
+  <style>
+
+    * {
+      box-sizing: border-box;
+    }
+
+
+    body {
+
+      margin: 0;
+
+      padding: 18px;
+
+      background: #06110c;
+
+      color: white;
+
+      font-family:
+        Arial,
+        sans-serif;
+    }
+
+
+    .box {
+
+      max-width: 720px;
+
+      margin: 20px auto;
+
+      background: #0d1d15;
+
+      border:
+        1px solid #244a35;
+
+      border-radius: 20px;
+
+      padding: 20px;
+    }
+
+
+    h1 {
+
+      margin:
+        0 0 8px;
+
+      font-size: 25px;
+    }
+
+
+    .subtitle {
+
+      color: #9fb4a7;
+
+      line-height: 1.5;
+
+      margin-bottom: 18px;
+    }
+
+
+    .badges {
+
+      display: flex;
+
+      flex-wrap: wrap;
+
+      gap: 8px;
+
+      margin-bottom: 18px;
+    }
+
+
+    .badge {
+
+      padding:
+        7px 10px;
+
+      border-radius: 999px;
+
+      font-size: 12px;
+
+      font-weight: bold;
+
+      background: #153722;
+
+      color: #5aeb98;
+    }
+
+
+    .badge.safe {
+
+      background: #292712;
+
+      color: #e6dd89;
+    }
+
+
+    input,
+    button {
+
+      width: 100%;
+
+      padding: 15px;
+
+      border-radius: 12px;
+
+      font-size: 16px;
+    }
+
+
+    input {
+
+      background: #07100b;
+
+      color: white;
+
+      border:
+        1px solid #315641;
+
+      margin-bottom: 10px;
+    }
+
+
+    button {
+
+      border: 0;
+
+      background: #37e481;
+
+      color: #00190b;
+
+      font-weight: bold;
+
+      margin-top: 8px;
+    }
+
+
+    button:disabled {
+
+      opacity: .45;
+    }
+
+
+    .progress-zone {
+
+      margin-top: 25px;
+    }
+
+
+    .progress-number {
+
+      font-size: 31px;
+
+      color: #37e481;
+
+      font-weight: bold;
+
+      margin-top: 5px;
+    }
+
+
+    .progress-shell {
+
+      height: 14px;
+
+      margin-top: 10px;
+
+      background: #07100b;
+
+      border:
+        1px solid #244a35;
+
+      border-radius: 999px;
+
+      overflow: hidden;
+    }
+
+
+    .progress-bar {
+
+      height: 100%;
+
+      width: 0%;
+
+      background: #37e481;
+
+      transition:
+        width .3s ease;
+    }
+
+
+    .summary {
+
+      display: grid;
+
+      grid-template-columns:
+        repeat(3, 1fr);
+
+      gap: 9px;
+
+      margin-top: 18px;
+    }
+
+
+    .summary-card {
+
+      background: #07100b;
+
+      border:
+        1px solid #243f30;
+
+      border-radius: 13px;
+
+      padding: 13px;
+    }
+
+
+    .summary-card span {
+
+      display: block;
+
+      color: #899c90;
+
+      font-size: 10px;
+
+      text-transform: uppercase;
+    }
+
+
+    .summary-card strong {
+
+      display: block;
+
+      margin-top: 7px;
+
+      font-size: 21px;
+    }
+
+
+    .good {
+      color: #47e68a;
+    }
+
+
+    .bad {
+      color: #ff7777;
+    }
+
+
+    .warning-color {
+      color: #e5d67e;
+    }
+
+
+    #status {
+
+      background: #07100b;
+
+      border-radius: 12px;
+
+      padding: 15px;
+
+      margin-top: 18px;
+
+      min-height: 90px;
+
+      white-space: pre-wrap;
+
+      line-height: 1.5;
+    }
+
+
+    .section-title {
+
+      margin:
+        28px 0 13px;
+
+      font-size: 19px;
+
+      font-weight: bold;
+    }
+
+
+    .experiment {
+
+      background: #07100b;
+
+      border:
+        1px solid #284333;
+
+      border-radius: 17px;
+
+      padding: 16px;
+
+      margin-bottom: 16px;
+    }
+
+
+    .experiment.good-border {
+      border-color: #278151;
+    }
+
+
+    .experiment.bad-border {
+      border-color: #814444;
+    }
+
+
+    .header {
+
+      display: flex;
+
+      justify-content: space-between;
+
+      gap: 10px;
+
+      align-items: center;
+    }
+
+
+    .name {
+
+      font-size: 17px;
+
+      font-weight: bold;
+    }
+
+
+    .stage {
+
+      padding:
+        6px 9px;
+
+      background: #153523;
+
+      color: #78e9aa;
+
+      border-radius: 999px;
+
+      font-size: 10px;
+    }
+
+
+    .main-metrics {
+
+      display: grid;
+
+      grid-template-columns:
+        repeat(3, 1fr);
+
+      gap: 8px;
+
+      margin-top: 14px;
+    }
+
+
+    .metric {
+
+      background: #0d1812;
+
+      border-radius: 10px;
+
+      padding: 10px;
+    }
+
+
+    .metric span {
+
+      display: block;
+
+      color: #84968a;
+
+      font-size: 10px;
+
+      margin-bottom: 5px;
+    }
+
+
+    .metric strong {
+
+      font-size: 16px;
+    }
+
+
+    .info {
+
+      color: #92a69a;
+
+      font-size: 12px;
+
+      line-height: 1.55;
+
+      margin-top: 12px;
+    }
+
+
+    .folds {
+
+      margin-top: 15px;
+
+      border-top:
+        1px solid #1f3729;
+
+      padding-top: 12px;
+    }
+
+
+    .fold {
+
+      padding: 11px;
+
+      margin-bottom: 8px;
+
+      border-radius: 10px;
+
+      background: #0d1812;
+
+      border:
+        1px solid #1d3226;
+    }
+
+
+    .fold.good-fold {
+
+      border-color: #236c45;
+    }
+
+
+    .fold.bad-fold {
+
+      border-color: #673939;
+    }
+
+
+    .fold-header {
+
+      display: flex;
+
+      justify-content: space-between;
+
+      gap: 8px;
+
+      font-size: 12px;
+
+      font-weight: bold;
+    }
+
+
+    .fold-details {
+
+      margin-top: 7px;
+
+      color: #8fa194;
+
+      font-size: 11px;
+
+      line-height: 1.5;
+    }
+
+
+    .leagues {
+
+      margin-top: 13px;
+
+      border-top:
+        1px solid #1f3729;
+
+      padding-top: 10px;
+    }
+
+
+    .league {
+
+      display: grid;
+
+      grid-template-columns:
+        35px 1fr 1fr 1fr;
+
+      gap: 5px;
+
+      padding: 5px 0;
+
+      font-size: 11px;
+
+      color: #a4b5aa;
+    }
+
+
+    .notice {
+
+      margin-top: 20px;
+
+      padding: 14px;
+
+      background: #1a180b;
+
+      color: #ddd588;
+
+      border:
+        1px solid #5b5621;
+
+      border-radius: 12px;
+
+      font-size: 13px;
+
+      line-height: 1.5;
+    }
+
+
+    @media (
+      max-width: 550px
+    ) {
+
+      .main-metrics {
+
+        grid-template-columns:
+          1fr;
+      }
+
+
+      .league {
+
+        grid-template-columns:
+          32px 1fr 1fr;
+      }
+
+
+      .league .gain {
+
+        display: none;
+      }
+    }
+
+  </style>
+
+</head>
+
+
+<body>
+
+
+  <div class="box">
+
+
+    <h1>
+      MatchScope Rolling Lab
+    </h1>
+
+
+    <div class="badges">
+
+      <div class="badge">
+        V0.8 Rolling
+      </div>
+
+      <div class="badge">
+        4 fenêtres
+      </div>
+
+      <div class="badge safe">
+        Holdout final protégé
+      </div>
+
+    </div>
+
+
+    <div class="subtitle">
+
+      Vérification chronologique de la stabilité
+      des candidats avant toute évolution du moteur
+      probabiliste MatchScope.
+
+    </div>
+
+
+    <input
+      id="secret"
+      type="password"
+      placeholder="MATCHSCOPE_SYNC_SECRET"
+      autocomplete="off"
+    >
+
+
+    <button id="launch">
+
+      Lancer le rolling backtest
+
+    </button>
+
+
+    <!-- ========================================== -->
+    <!-- PROGRESSION -->
+    <!-- ========================================== -->
+
+    <div class="progress-zone">
+
+      <div>
+        Candidats testés
+      </div>
+
+      <div
+        id="progressNumber"
+        class="progress-number"
+      >
+        —
+      </div>
+
+
+      <div class="progress-shell">
+
+        <div
+          id="progressBar"
+          class="progress-bar"
+        ></div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- RÉSUMÉ -->
+    <!-- ========================================== -->
+
+    <div class="summary">
+
+
+      <div class="summary-card">
+
+        <span>
+          Candidats +
+        </span>
+
+        <strong
+          id="improved"
+          class="good"
+        >
+          —
+        </strong>
+
+      </div>
+
+
+      <div class="summary-card">
+
+        <span>
+          Folds gagnés
+        </span>
+
+        <strong
+          id="winningFolds"
+        >
+          —
+        </strong>
+
+      </div>
+
+
+      <div class="summary-card">
+
+        <span>
+          Folds total
+        </span>
+
+        <strong
+          id="totalFolds"
+        >
+          —
+        </strong>
+
+      </div>
+
+
+    </div>
+
+
+    <div id="status">
+
+      Chargement de l'état…
+
+    </div>
+
+
+    <div class="section-title">
+
+      Validation chronologique
+
+    </div>
+
+
+    <div id="experiments">
+
+      Aucun rolling backtest enregistré.
+
+    </div>
+
+
+    <div class="notice">
+
+      Les derniers matchs réservés comme holdout final
+      ne sont pas utilisés dans ce rolling backtest.
+
+      Un candidat ne sera pas intégré simplement parce
+      que son Brier moyen est meilleur : nous regarderons
+      aussi combien de fenêtres il gagne, sa stabilité
+      et son comportement dans chaque championnat.
+
+    </div>
+
+
+  </div>
+
+
+  <script>
+
+
+    // =================================================
+    // DOM
+    // =================================================
+
+    const secretInput =
+      document.querySelector(
+        '#secret'
+      );
+
+
+    const launchButton =
+      document.querySelector(
+        '#launch'
+      );
+
+
+    const statusBox =
+      document.querySelector(
+        '#status'
+      );
+
+
+    const experimentsBox =
+      document.querySelector(
+        '#experiments'
+      );
+
+
+    const progressNumber =
+      document.querySelector(
+        '#progressNumber'
+      );
+
+
+    const progressBar =
+      document.querySelector(
+        '#progressBar'
+      );
+
+
+    const improvedBox =
+      document.querySelector(
+        '#improved'
+      );
+
+
+    const winningFoldsBox =
+      document.querySelector(
+        '#winningFolds'
+      );
+
+
+    const totalFoldsBox =
+      document.querySelector(
+        '#totalFolds'
+      );
+
+
+    let running =
+      false;
+
+
+    let runSince =
+      null;
+
+
+    // =================================================
+    // OUTILS
+    // =================================================
+
+    function sleep(
+      milliseconds
+    ) {
+
+      return new Promise(
+
+        resolve =>
+          setTimeout(
+            resolve,
+            milliseconds
+          )
+      );
+    }
+
+
+    function escapeHtml(
+      value
+    ) {
+
+      return String(
+        value ?? ''
+      )
+
+        .replaceAll(
+          '&',
+          '&amp;'
+        )
+
+        .replaceAll(
+          '<',
+          '&lt;'
+        )
+
+        .replaceAll(
+          '>',
+          '&gt;'
+        )
+
+        .replaceAll(
+          '"',
+          '&quot;'
+        )
+
+        .replaceAll(
+          "'",
+          '&#039;'
+        );
+    }
+
+
+    function brier(
+      value
+    ) {
+
+      const number =
+        Number(
+          value
+        );
+
+
+      return Number.isFinite(
+        number
+      )
+
+        ? number.toFixed(
+            4
+          )
+
+        : '—';
+    }
+
+
+    function pct(
+      value,
+      decimals = 2
+    ) {
+
+      const number =
+        Number(
+          value
+        );
+
+
+      if (
+        !Number.isFinite(
+          number
+        )
+      ) {
+
+        return '—';
+      }
+
+
+      return `${
+        number > 0
+          ? '+'
+          : ''
+      }${number.toFixed(
+        decimals
+      )}%`;
+    }
+
+
+    function accuracy(
+      value
+    ) {
+
+      const number =
+        Number(
+          value
+        );
+
+
+      return Number.isFinite(
+        number
+      )
+
+        ? `${(
+            number *
+            100
+          ).toFixed(
+            1
+          )}%`
+
+        : '—';
+    }
+
+
+    function dateShort(
+      value
+    ) {
+
+      if (
+        !value
+      ) {
+
+        return '—';
+      }
+
+
+      const date =
+        new Date(
+          value
+        );
+
+
+      if (
+        Number.isNaN(
+          date.getTime()
+        )
+      ) {
+
+        return '—';
+      }
+
+
+      return date.toLocaleDateString(
+        'fr-FR'
+      );
+    }
+
+
+    // =================================================
+    // RENDER GLOBAL
+    // =================================================
+
+    function renderState(
+      data
+    ) {
+
+      const completed =
+        Number(
+          data.completedExperiments
+          ||
+          0
+        );
+
+
+      const expected =
+        Number(
+          data.expectedExperiments
+          ||
+          3
+        );
+
+
+      const progress =
+        Number(
+          data.progress
+          ||
+          0
+        );
+
+
+      progressNumber.textContent =
+        `${completed} / ${expected}`;
+
+
+      progressBar.style.width =
+        `${Math.max(
+          0,
+          Math.min(
+            100,
+            progress
+          )
+        )}%`;
+
+
+      improvedBox.textContent =
+        data
+          ?.summary
+          ?.improved
+        ??
+        0;
+
+
+      winningFoldsBox.textContent =
+        data
+          ?.summary
+          ?.winningFolds
+        ??
+        0;
+
+
+      totalFoldsBox.textContent =
+        data
+          ?.summary
+          ?.totalFolds
+        ??
+        0;
+
+
+      renderExperiments(
+        data.experiments
+        ||
+        []
+      );
+    }
+
+
+    // =================================================
+    // CANDIDATS
+    // =================================================
+
+    function renderExperiments(
+      experiments
+    ) {
+
+      if (
+        !experiments.length
+      ) {
+
+        experimentsBox.innerHTML =
+          'Aucun rolling backtest enregistré.';
+
+
+        return;
+      }
+
+
+      experimentsBox.innerHTML =
+
+        experiments
+
+          .map(
+            experiment => {
+
+              const gain =
+                Number(
+                  experiment.gainPct
+                );
+
+
+              const positive =
+                Number.isFinite(
+                  gain
+                )
+
+                &&
+
+                gain >
+                0;
+
+
+              const negative =
+                Number.isFinite(
+                  gain
+                )
+
+                &&
+
+                gain <
+                0;
+
+
+              const borderClass =
+
+                positive
+
+                  ? 'good-border'
+
+                  : negative
+
+                    ? 'bad-border'
+
+                    : '';
+
+
+              const gainClass =
+
+                positive
+
+                  ? 'good'
+
+                  : negative
+
+                    ? 'bad'
+
+                    : 'warning-color';
+
+
+              return `
+
+                <div
+                  class="experiment ${borderClass}"
+                >
+
+                  <div class="header">
+
+                    <div class="name">
+
+                      ${escapeHtml(
+                        experiment.family
+                      )}
+
+                    </div>
+
+                    <div class="stage">
+
+                      ${escapeHtml(
+                        experiment.stage
+                      )}
+
+                    </div>
+
+                  </div>
+
+
+                  <div class="main-metrics">
+
+
+                    <div class="metric">
+
+                      <span>
+                        Brier V0.7
+                      </span>
+
+                      <strong>
+
+                        ${brier(
+                          experiment.baselineBrier
+                        )}
+
+                      </strong>
+
+                    </div>
+
+
+                    <div class="metric">
+
+                      <span>
+                        Brier challenger
+                      </span>
+
+                      <strong>
+
+                        ${brier(
+                          experiment.challengerBrier
+                        )}
+
+                      </strong>
+
+                    </div>
+
+
+                    <div class="metric">
+
+                      <span>
+                        Gain moyen pondéré
+                      </span>
+
+                      <strong
+                        class="${gainClass}"
+                      >
+
+                        ${pct(
+                          experiment.gainPct
+                        )}
+
+                      </strong>
+
+                    </div>
+
+
+                  </div>
+
+
+                  <div class="info">
+
+                    Développement :
+                    ${experiment.developmentRows ?? '—'}
+                    matchs
+
+                    · Testés dans les folds :
+                    ${experiment.tested ?? '—'}
+
+                    <br>
+
+                    Folds gagnés :
+                    <strong>
+                      ${experiment.winningFolds ?? 0}
+                      /
+                      ${experiment.foldsCompleted ?? 0}
+                    </strong>
+
+                    <br>
+
+                    Gain moyen des fenêtres :
+                    ${pct(
+                      experiment.averageFoldGain
+                    )}
+
+                    · Dispersion :
+                    ${
+                      experiment.foldGainStdDev ===
+                      null
+
+                        ? '—'
+
+                        : `${Number(
+                            experiment.foldGainStdDev
+                          ).toFixed(
+                            2
+                          )} pts`
+                    }
+
+                    <br>
+
+                    Accuracy V0.7 :
+                    ${accuracy(
+                      experiment.baselineAccuracy
+                    )}
+
+                    · Challenger :
+                    ${accuracy(
+                      experiment.challengerAccuracy
+                    )}
+
+                    <br>
+
+                    Erreur calibration :
+                    ${brier(
+                      experiment.calibrationError
+                    )}
+
+                  </div>
+
+
+                  ${renderFolds(
+                    experiment.folds
+                    ||
+                    []
+                  )}
+
+
+                  ${renderLeagues(
+                    experiment.leagues
+                    ||
+                    {}
+                  )}
+
+                </div>
+              `;
+            }
+          )
+
+          .join('');
+    }
+
+
+    // =================================================
+    // FOLDS
+    // =================================================
+
+    function renderFolds(
+      folds
+    ) {
+
+      if (
+        !folds.length
+      ) {
+
+        return '';
+      }
+
+
+      return `
+
+        <div class="folds">
+
+          <strong>
+            Fenêtres chronologiques
+          </strong>
+
+          <div style="margin-top:10px">
+
+            ${folds
+
+              .map(
+                fold => {
+
+                  const gain =
+                    Number(
+                      fold.gainPct
+                    );
+
+
+                  const positive =
+                    Number.isFinite(
+                      gain
+                    )
+
+                    &&
+
+                    gain >
+                    0;
+
+
+                  const foldClass =
+
+                    positive
+
+                      ? 'good-fold'
+
+                      : 'bad-fold';
+
+
+                  return `
+
+                    <div
+                      class="fold ${foldClass}"
+                    >
+
+                      <div class="fold-header">
+
+                        <span>
+                          Fold ${fold.fold}
+                        </span>
+
+                        <span
+                          class="${
+                            positive
+                              ? 'good'
+                              : 'bad'
+                          }"
+                        >
+
+                          ${pct(
+                            gain
+                          )}
+
+                        </span>
+
+                      </div>
+
+
+                      <div class="fold-details">
+
+                        Train :
+                        ${fold.training ?? '—'}
+
+                        · Test :
+                        ${fold.tested ?? '—'}
+
+                        <br>
+
+                        ${dateShort(
+                          fold.start
+                        )}
+
+                        →
+
+                        ${dateShort(
+                          fold.end
+                        )}
+
+                        <br>
+
+                        Brier :
+                        ${brier(
+                          fold.baselineBrier
+                        )}
+
+                        →
+
+                        ${brier(
+                          fold.challengerBrier
+                        )}
+
+                        <br>
+
+                        Accuracy :
+                        ${accuracy(
+                          fold.baselineAccuracy
+                        )}
+
+                        →
+
+                        ${accuracy(
+                          fold.challengerAccuracy
+                        )}
+
+                      </div>
+
+                    </div>
+                  `;
+                }
+              )
+
+              .join('')}
+
+          </div>
+
+        </div>
+      `;
+    }
+
+
+    // =================================================
+    // LIGUES
+    // =================================================
+
+    function renderLeagues(
+      leagues
+    ) {
+
+      const codes =
+        [
+          'PL',
+          'BL',
+          'LL'
+        ];
+
+
+      const rows =
+
+        codes
+
+          .filter(
+            code =>
+              leagues[
+                code
+              ]
+          )
+
+          .map(
+            code => {
+
+              const league =
+                leagues[
+                  code
+                ];
+
+
+              return `
+
+                <div class="league">
+
+                  <strong>
+                    ${code}
+                  </strong>
+
+                  <span>
+                    V07
+                    ${brier(
+                      league.baselineBrier
+                    )}
+                  </span>
+
+                  <span>
+                    NEW
+                    ${brier(
+                      league.challengerBrier
+                    )}
+                  </span>
+
+                  <span class="gain">
+
+                    ${pct(
+                      league.gainPct,
+                      1
+                    )}
+
+                  </span>
+
+                </div>
+              `;
+            }
+          )
+
+          .join('');
+
+
+      if (
+        !rows
+      ) {
+
+        return '';
+      }
+
+
+      return `
+
+        <div class="leagues">
+
+          <strong>
+            Résultat cumulé par championnat
+          </strong>
+
+          <div style="margin-top:8px">
+
+            ${rows}
+
+          </div>
+
+        </div>
+      `;
+    }
+
+
+    // =================================================
+    // STATUS
+    // =================================================
+
+    async function getState(
+      since = null
+    ) {
+
+      let url =
+
+        `/.netlify/functions/rolling-status?t=${Date.now()}`;
+
+
+      if (
+        since
+      ) {
+
+        url +=
+
+          `&since=${encodeURIComponent(
+            since
+          )}`;
+      }
+
+
+      const response =
+        await fetch(
+          url,
+          {
+
+            method:
+              'GET',
+
+            cache:
+              'no-store'
+          }
+        );
+
+
+      let data =
+        {};
+
+
+      try {
+
+        data =
+          await response.json();
+
+      } catch {
+
+        throw new Error(
+          'Réponse rolling-status illisible.'
+        );
+      }
+
+
+      if (
+        !response.ok
+
+        ||
+
+        data.success !==
+        true
+      ) {
+
+        throw new Error(
+
+          data?.error
+
+          ||
+
+          `HTTP ${response.status}`
+        );
+      }
+
+
+      renderState(
+        data
+      );
+
+
+      return data;
+    }
+
+
+    // =================================================
+    // LANCEMENT
+    // =================================================
+
+    async function launchRolling(
+      secret
+    ) {
+
+      const response =
+        await fetch(
+          '/.netlify/functions/rolling-lab-background',
+          {
+
+            method:
+              'POST',
+
+            headers: {
+
+              'Content-Type':
+                'application/json'
+            },
+
+            body:
+              JSON.stringify({
+
+                secret
+              })
+          }
+        );
+
+
+      if (
+        !(
+          response.status ===
+          202
+
+          ||
+
+          response.ok
+        )
+      ) {
+
+        const text =
+          await response.text();
+
+
+        throw new Error(
+
+          `Erreur HTTP ${response.status}\n${text}`
+        );
+      }
+    }
+
+
+    // =================================================
+    // POLLING
+    // =================================================
+
+    async function waitForRolling() {
+
+      const maxAttempts =
+        190;
+
+
+      for (
+        let attempt = 0;
+        attempt < maxAttempts;
+        attempt += 1
+      ) {
+
+        await sleep(
+          5000
+        );
+
+
+        const state =
+          await getState(
+            runSince
+          );
+
+
+        statusBox.textContent =
+
+`Rolling backtest en cours…
+
+${state.completedExperiments} / ${state.expectedExperiments} candidats terminés.
+
+Folds gagnés :
+${state.summary.winningFolds} / ${state.summary.totalFolds}
+
+Le holdout final reste protégé.`;
+
+
+        if (
+          state.done
+        ) {
+
+          return state;
+        }
+      }
+
+
+      throw new Error(
+        'Le rolling backtest n’a pas terminé dans le délai prévu.'
+      );
+    }
+
+
+    // =================================================
+    // BOUTON
+    // =================================================
+
+    launchButton.addEventListener(
+      'click',
+      async () => {
+
+        if (
+          running
+        ) {
+
+          return;
+        }
+
+
+        const secret =
+          secretInput
+            .value
+            .trim();
+
+
+        if (
+          !secret
+        ) {
+
+          statusBox.textContent =
+
+            'Entre ton MATCHSCOPE_SYNC_SECRET.';
+
+
+          return;
+        }
+
+
+        running =
+          true;
+
+
+        launchButton.disabled =
+          true;
+
+
+        secretInput.disabled =
+          true;
+
+
+        runSince =
+          new Date(
+            Date.now() -
+            5000
+          )
+            .toISOString();
+
+
+        try {
+
+          progressNumber.textContent =
+            '0 / 3';
+
+
+          progressBar.style.width =
+            '0%';
+
+
+          improvedBox.textContent =
+            '0';
+
+
+          winningFoldsBox.textContent =
+            '0';
+
+
+          totalFoldsBox.textContent =
+            '0';
+
+
+          experimentsBox.innerHTML =
+
+            'Construction des fenêtres chronologiques…';
+
+
+          statusBox.textContent =
+
+`Démarrage du rolling backtest…
+
+3 candidats vont être testés.
+
+Les holdouts finaux restent volontairement hors de ce calcul.
+
+V0.7 n'est pas modifiée.`;
+
+
+          await launchRolling(
+            secret
+          );
+
+
+          const state =
+            await waitForRolling();
+
+
+          statusBox.textContent =
+
+`✅ ROLLING BACKTEST TERMINÉ
+
+${state.completedExperiments} candidats testés.
+
+Candidats avec Brier global amélioré :
+${state.summary.improved}
+
+Folds gagnés :
+${state.summary.winningFolds} / ${state.summary.totalFolds}
+
+Les holdouts finaux n'ont pas été réutilisés.
+
+V0.7 reste inchangée.`;
+
+
+        } catch (
+          error
+        ) {
+
+          statusBox.textContent =
+
+`❌ ROLLING BACKTEST INTERROMPU
+
+${error.message}
+
+Les résultats déjà terminés restent enregistrés.
+
+V0.7 n'a pas été modifiée.`;
+
+
+        } finally {
+
+          running =
+            false;
+
+
+          launchButton.disabled =
+            false;
+
+
+          secretInput.disabled =
+            false;
+        }
+      }
+    );
+
+
+    // =================================================
+    // CHARGEMENT INITIAL
+    // =================================================
+
+    getState()
+
+      .then(
+        state => {
+
+          if (
+            state.experiments.length
+          ) {
+
+            statusBox.textContent =
+
+`Dernier rolling backtest disponible.
+
+${state.completedExperiments} / ${state.expectedExperiments} candidats enregistrés.
+
+Tu peux relancer une nouvelle validation si nécessaire.`;
+
+          } else {
+
+            statusBox.textContent =
+
+`Rolling Lab prêt.
+
+Aucun résultat v0.8-rolling enregistré pour le moment.`;
+          }
+        }
+      )
+
+      .catch(
+        error => {
+
+          statusBox.textContent =
+
+`Impossible de lire le Rolling Lab.
+
+${error.message}`;
+        }
+      );
+
+  </script>
+
+
+</body>
+
+</html>
