@@ -1,0 +1,1700 @@
+<!doctype html>
+
+<html lang="fr">
+
+<head>
+
+  <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  >
+
+  <title>
+    MatchScope — Challenger Lab
+  </title>
+
+
+  <style>
+
+    * {
+      box-sizing: border-box;
+    }
+
+
+    body {
+
+      margin: 0;
+
+      padding: 20px;
+
+      background: #06110c;
+
+      color: white;
+
+      font-family:
+        Arial,
+        sans-serif;
+    }
+
+
+    .box {
+
+      max-width: 720px;
+
+      margin: 25px auto;
+
+      background: #0d1d15;
+
+      border:
+        1px solid #244a35;
+
+      border-radius: 20px;
+
+      padding: 22px;
+    }
+
+
+    h1 {
+
+      margin:
+        0 0 8px;
+
+      font-size: 26px;
+    }
+
+
+    .subtitle {
+
+      color: #9fb4a7;
+
+      line-height: 1.5;
+
+      margin-bottom: 18px;
+    }
+
+
+    .badges {
+
+      display: flex;
+
+      flex-wrap: wrap;
+
+      gap: 8px;
+
+      margin-bottom: 20px;
+    }
+
+
+    .badge {
+
+      padding:
+        7px 11px;
+
+      border-radius: 999px;
+
+      background: #163523;
+
+      color: #56eb94;
+
+      font-size: 12px;
+
+      font-weight: bold;
+    }
+
+
+    .badge.shadow {
+
+      background: #242511;
+
+      color: #e4dc88;
+    }
+
+
+    input,
+    button {
+
+      width: 100%;
+
+      padding: 15px;
+
+      border-radius: 12px;
+
+      font-size: 16px;
+    }
+
+
+    input {
+
+      background: #07100b;
+
+      color: white;
+
+      border:
+        1px solid #315641;
+
+      margin-bottom: 10px;
+    }
+
+
+    button {
+
+      border: 0;
+
+      background: #37e481;
+
+      color: #00190b;
+
+      font-weight: bold;
+
+      margin-top: 8px;
+    }
+
+
+    button:disabled {
+
+      opacity: .45;
+    }
+
+
+    .progress-zone {
+
+      margin-top: 25px;
+    }
+
+
+    .progress-number {
+
+      font-size: 32px;
+
+      color: #37e481;
+
+      font-weight: bold;
+
+      margin-top: 5px;
+    }
+
+
+    .progress-shell {
+
+      height: 14px;
+
+      margin-top: 10px;
+
+      background: #07100b;
+
+      border-radius: 999px;
+
+      border:
+        1px solid #244a35;
+
+      overflow: hidden;
+    }
+
+
+    .progress-bar {
+
+      height: 100%;
+
+      width: 0%;
+
+      background: #37e481;
+
+      transition:
+        width .3s ease;
+    }
+
+
+    .summary-grid {
+
+      display: grid;
+
+      grid-template-columns:
+        repeat(3, 1fr);
+
+      gap: 10px;
+
+      margin-top: 18px;
+    }
+
+
+    .summary-card {
+
+      padding: 14px;
+
+      border-radius: 13px;
+
+      background: #07100b;
+
+      border:
+        1px solid #243f30;
+    }
+
+
+    .summary-card span {
+
+      display: block;
+
+      font-size: 11px;
+
+      color: #8da495;
+
+      text-transform: uppercase;
+    }
+
+
+    .summary-card strong {
+
+      display: block;
+
+      margin-top: 7px;
+
+      font-size: 23px;
+    }
+
+
+    .good {
+      color: #4be88c;
+    }
+
+
+    .bad {
+      color: #ff7b7b;
+    }
+
+
+    .neutral {
+      color: #d5d5d5;
+    }
+
+
+    #status {
+
+      margin-top: 20px;
+
+      padding: 15px;
+
+      min-height: 90px;
+
+      border-radius: 12px;
+
+      background: #07100b;
+
+      white-space: pre-wrap;
+
+      line-height: 1.5;
+    }
+
+
+    .section-title {
+
+      margin:
+        28px 0 12px;
+
+      font-size: 18px;
+
+      font-weight: bold;
+    }
+
+
+    .experiment {
+
+      margin-bottom: 12px;
+
+      padding: 16px;
+
+      border-radius: 15px;
+
+      background: #07100b;
+
+      border:
+        1px solid #253e31;
+    }
+
+
+    .experiment.good-border {
+
+      border-color: #2c8754;
+    }
+
+
+    .experiment.bad-border {
+
+      border-color: #794040;
+    }
+
+
+    .experiment-header {
+
+      display: flex;
+
+      justify-content: space-between;
+
+      gap: 10px;
+
+      align-items: center;
+
+      margin-bottom: 13px;
+    }
+
+
+    .experiment-name {
+
+      font-weight: bold;
+
+      font-size: 15px;
+    }
+
+
+    .stage {
+
+      font-size: 10px;
+
+      padding:
+        5px 8px;
+
+      border-radius: 999px;
+
+      background: #193225;
+
+      color: #8be7b0;
+    }
+
+
+    .metrics {
+
+      display: grid;
+
+      grid-template-columns:
+        repeat(3, 1fr);
+
+      gap: 8px;
+    }
+
+
+    .metric {
+
+      padding: 9px;
+
+      border-radius: 10px;
+
+      background: #0d1812;
+    }
+
+
+    .metric span {
+
+      display: block;
+
+      font-size: 10px;
+
+      color: #87998d;
+
+      margin-bottom: 5px;
+    }
+
+
+    .metric strong {
+
+      font-size: 15px;
+    }
+
+
+    .experiment-info {
+
+      margin-top: 10px;
+
+      color: #91a397;
+
+      font-size: 12px;
+
+      line-height: 1.5;
+    }
+
+
+    .league-details {
+
+      margin-top: 12px;
+
+      border-top:
+        1px solid #1c3025;
+
+      padding-top: 10px;
+    }
+
+
+    .league-line {
+
+      display: grid;
+
+      grid-template-columns:
+        35px 1fr 1fr 1fr;
+
+      gap: 6px;
+
+      padding: 5px 0;
+
+      font-size: 11px;
+
+      color: #a7b7ad;
+    }
+
+
+    .warning {
+
+      margin-top: 22px;
+
+      padding: 14px;
+
+      border-radius: 12px;
+
+      background: #19180b;
+
+      border:
+        1px solid #5b5621;
+
+      color: #ded797;
+
+      font-size: 13px;
+
+      line-height: 1.5;
+    }
+
+
+    @media (
+      max-width: 560px
+    ) {
+
+      .summary-grid {
+
+        grid-template-columns:
+          1fr 1fr 1fr;
+      }
+
+
+      .metrics {
+
+        grid-template-columns:
+          1fr;
+      }
+
+
+      .league-line {
+
+        grid-template-columns:
+          32px 1fr 1fr;
+      }
+
+
+      .league-line .accuracy {
+
+        display: none;
+      }
+    }
+
+  </style>
+
+</head>
+
+
+<body>
+
+
+  <div class="box">
+
+
+    <h1>
+      MatchScope Challenger Lab
+    </h1>
+
+
+    <div class="badges">
+
+      <div class="badge">
+        V0.8 Shadow
+      </div>
+
+      <div class="badge">
+        features-v1
+      </div>
+
+      <div class="badge shadow">
+        V0.7 reste en production
+      </div>
+
+    </div>
+
+
+    <div class="subtitle">
+
+      Laboratoire de comparaison entre la
+      probabilité actuelle V0.7 et les nouvelles
+      couches statistiques MatchScope.
+
+    </div>
+
+
+    <input
+      id="secret"
+      type="password"
+      placeholder="MATCHSCOPE_SYNC_SECRET"
+      autocomplete="off"
+    >
+
+
+    <button id="launch">
+
+      Lancer le laboratoire probabiliste
+
+    </button>
+
+
+    <!-- ============================================ -->
+    <!-- PROGRESSION -->
+    <!-- ============================================ -->
+
+    <div class="progress-zone">
+
+      <div>
+        Expériences
+      </div>
+
+      <div
+        id="progressNumber"
+        class="progress-number"
+      >
+        —
+      </div>
+
+
+      <div class="progress-shell">
+
+        <div
+          id="progressBar"
+          class="progress-bar"
+        ></div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ============================================ -->
+    <!-- RÉSUMÉ -->
+    <!-- ============================================ -->
+
+    <div class="summary-grid">
+
+
+      <div class="summary-card">
+
+        <span>
+          Améliorent
+        </span>
+
+        <strong
+          id="improvedCount"
+          class="good"
+        >
+          —
+        </strong>
+
+      </div>
+
+
+      <div class="summary-card">
+
+        <span>
+          Dégradent
+        </span>
+
+        <strong
+          id="degradedCount"
+          class="bad"
+        >
+          —
+        </strong>
+
+      </div>
+
+
+      <div class="summary-card">
+
+        <span>
+          Neutres
+        </span>
+
+        <strong
+          id="neutralCount"
+          class="neutral"
+        >
+          —
+        </strong>
+
+      </div>
+
+
+    </div>
+
+
+    <div id="status">
+
+      Chargement des dernières expériences…
+
+    </div>
+
+
+    <div class="section-title">
+
+      Résultats des expériences
+
+    </div>
+
+
+    <div id="experiments">
+
+      Aucun résultat pour le moment.
+
+    </div>
+
+
+    <div class="warning">
+
+      Une expérience positive ne sera pas
+      automatiquement mise en production.
+
+      Nous utiliserons ensuite plusieurs contrôles
+      chronologiques et la stabilité par championnat
+      avant toute évolution de V0.7.
+
+    </div>
+
+
+  </div>
+
+
+  <script>
+
+
+    // =================================================
+    // ÉLÉMENTS
+    // =================================================
+
+    const secretInput =
+      document.querySelector(
+        '#secret'
+      );
+
+
+    const launchButton =
+      document.querySelector(
+        '#launch'
+      );
+
+
+    const statusBox =
+      document.querySelector(
+        '#status'
+      );
+
+
+    const experimentsBox =
+      document.querySelector(
+        '#experiments'
+      );
+
+
+    const progressBar =
+      document.querySelector(
+        '#progressBar'
+      );
+
+
+    const progressNumber =
+      document.querySelector(
+        '#progressNumber'
+      );
+
+
+    const improvedCount =
+      document.querySelector(
+        '#improvedCount'
+      );
+
+
+    const degradedCount =
+      document.querySelector(
+        '#degradedCount'
+      );
+
+
+    const neutralCount =
+      document.querySelector(
+        '#neutralCount'
+      );
+
+
+    let running =
+      false;
+
+
+    let runSince =
+      null;
+
+
+    // =================================================
+    // OUTILS
+    // =================================================
+
+    function sleep(
+      milliseconds
+    ) {
+
+      return new Promise(
+
+        resolve =>
+          setTimeout(
+            resolve,
+            milliseconds
+          )
+      );
+    }
+
+
+    function formatBrier(
+      value
+    ) {
+
+      const number =
+        Number(
+          value
+        );
+
+
+      return Number.isFinite(
+        number
+      )
+
+        ? number.toFixed(
+            4
+          )
+
+        : '—';
+    }
+
+
+    function formatPct(
+      value,
+      decimals = 1
+    ) {
+
+      const number =
+        Number(
+          value
+        );
+
+
+      return Number.isFinite(
+        number
+      )
+
+        ? `${number.toFixed(
+            decimals
+          )}%`
+
+        : '—';
+    }
+
+
+    function formatAccuracy(
+      value
+    ) {
+
+      const number =
+        Number(
+          value
+        );
+
+
+      return Number.isFinite(
+        number
+      )
+
+        ? `${(
+            number *
+            100
+          ).toFixed(
+            1
+          )}%`
+
+        : '—';
+    }
+
+
+    function escapeHtml(
+      value
+    ) {
+
+      return String(
+        value ?? ''
+      )
+
+        .replaceAll(
+          '&',
+          '&amp;'
+        )
+
+        .replaceAll(
+          '<',
+          '&lt;'
+        )
+
+        .replaceAll(
+          '>',
+          '&gt;'
+        )
+
+        .replaceAll(
+          '"',
+          '&quot;'
+        )
+
+        .replaceAll(
+          "'",
+          '&#039;'
+        );
+    }
+
+
+    // =================================================
+    // AFFICHAGE
+    // =================================================
+
+    function renderState(
+      data
+    ) {
+
+      const completed =
+        Number(
+          data.completedExperiments
+          ||
+          0
+        );
+
+
+      const expected =
+        Number(
+          data.expectedExperiments
+          ||
+          10
+        );
+
+
+      const progress =
+        Number(
+          data.progress
+          ||
+          0
+        );
+
+
+      progressNumber.textContent =
+
+        `${completed} / ${expected}`;
+
+
+      progressBar
+        .style
+        .width =
+
+          `${Math.max(
+            0,
+            Math.min(
+              100,
+              progress
+            )
+          )}%`;
+
+
+      improvedCount.textContent =
+        data
+          ?.summary
+          ?.improved
+        ??
+        0;
+
+
+      degradedCount.textContent =
+        data
+          ?.summary
+          ?.degraded
+        ??
+        0;
+
+
+      neutralCount.textContent =
+        data
+          ?.summary
+          ?.neutral
+        ??
+        0;
+
+
+      renderExperiments(
+        data.experiments
+        ||
+        []
+      );
+    }
+
+
+    // =================================================
+    // EXPÉRIENCES
+    // =================================================
+
+    function renderExperiments(
+      experiments
+    ) {
+
+      if (
+        !experiments.length
+      ) {
+
+        experimentsBox.innerHTML =
+
+          'Aucun résultat pour le moment.';
+
+
+        return;
+      }
+
+
+      experimentsBox.innerHTML =
+
+        experiments
+
+          .map(
+            experiment => {
+
+              const gain =
+                Number(
+                  experiment.gainPct
+                );
+
+
+              const positive =
+                Number.isFinite(
+                  gain
+                )
+
+                &&
+
+                gain >
+                0;
+
+
+              const negative =
+                Number.isFinite(
+                  gain
+                )
+
+                &&
+
+                gain <
+                0;
+
+
+              const borderClass =
+
+                positive
+
+                  ? 'good-border'
+
+                  : negative
+
+                    ? 'bad-border'
+
+                    : '';
+
+
+              const gainClass =
+
+                positive
+
+                  ? 'good'
+
+                  : negative
+
+                    ? 'bad'
+
+                    : 'neutral';
+
+
+              const gainText =
+
+                Number.isFinite(
+                  gain
+                )
+
+                  ? `${
+                      gain > 0
+                        ? '+'
+                        : ''
+                    }${gain.toFixed(
+                      2
+                    )}%`
+
+                  : '—';
+
+
+              return `
+
+                <div
+                  class="experiment ${borderClass}"
+                >
+
+                  <div class="experiment-header">
+
+                    <div class="experiment-name">
+
+                      ${escapeHtml(
+                        experiment.family
+                      )}
+
+                    </div>
+
+                    <div class="stage">
+
+                      ${escapeHtml(
+                        experiment.stage
+                      )}
+
+                    </div>
+
+                  </div>
+
+
+                  <div class="metrics">
+
+
+                    <div class="metric">
+
+                      <span>
+                        Brier V0.7
+                      </span>
+
+                      <strong>
+
+                        ${formatBrier(
+                          experiment.baselineBrier
+                        )}
+
+                      </strong>
+
+                    </div>
+
+
+                    <div class="metric">
+
+                      <span>
+                        Brier challenger
+                      </span>
+
+                      <strong>
+
+                        ${formatBrier(
+                          experiment.challengerBrier
+                        )}
+
+                      </strong>
+
+                    </div>
+
+
+                    <div class="metric">
+
+                      <span>
+                        Gain Brier
+                      </span>
+
+                      <strong
+                        class="${gainClass}"
+                      >
+
+                        ${gainText}
+
+                      </strong>
+
+                    </div>
+
+
+                  </div>
+
+
+                  <div class="experiment-info">
+
+                    Training :
+                    ${experiment.training ?? '—'}
+                    matchs
+
+                    · Holdout :
+                    ${experiment.holdout ?? '—'}
+
+                    <br>
+
+                    Accuracy V0.7 :
+                    ${formatAccuracy(
+                      experiment.baselineAccuracy
+                    )}
+
+                    · Challenger :
+                    ${formatAccuracy(
+                      experiment.challengerAccuracy
+                    )}
+
+                    <br>
+
+                    Erreur calibration :
+                    ${formatBrier(
+                      experiment.calibrationError
+                    )}
+
+                  </div>
+
+
+                  ${renderLeagues(
+                    experiment.leagues
+                  )}
+
+                </div>
+              `;
+            }
+          )
+
+          .join('');
+    }
+
+
+    // =================================================
+    // RÉSULTATS PAR LIGUE
+    // =================================================
+
+    function renderLeagues(
+      leagues
+    ) {
+
+      if (
+        !leagues
+        ||
+        typeof leagues !==
+        'object'
+      ) {
+
+        return '';
+      }
+
+
+      const codes =
+        [
+          'PL',
+          'BL',
+          'LL'
+        ];
+
+
+      const rows =
+
+        codes
+
+          .filter(
+            code =>
+              leagues[
+                code
+              ]
+          )
+
+          .map(
+            code => {
+
+              const league =
+                leagues[
+                  code
+                ];
+
+
+              const gain =
+                Number(
+                  league.gainPct
+                );
+
+
+              const gainText =
+
+                Number.isFinite(
+                  gain
+                )
+
+                  ? `${
+                      gain > 0
+                        ? '+'
+                        : ''
+                    }${gain.toFixed(
+                      1
+                    )}%`
+
+                  : '—';
+
+
+              return `
+
+                <div class="league-line">
+
+                  <strong>
+                    ${code}
+                  </strong>
+
+                  <span>
+                    V07
+                    ${formatBrier(
+                      league.baselineBrier
+                    )}
+                  </span>
+
+                  <span>
+                    NEW
+                    ${formatBrier(
+                      league.challengerBrier
+                    )}
+                  </span>
+
+                  <span class="accuracy">
+
+                    ${gainText}
+
+                  </span>
+
+                </div>
+              `;
+            }
+          )
+
+          .join('');
+
+
+      if (
+        !rows
+      ) {
+
+        return '';
+      }
+
+
+      return `
+
+        <div class="league-details">
+
+          ${rows}
+
+        </div>
+      `;
+    }
+
+
+    // =================================================
+    // LECTURE STATUS
+    // =================================================
+
+    async function getState(
+      since = null
+    ) {
+
+      let url =
+
+        `/.netlify/functions/challenger-status?t=${Date.now()}`;
+
+
+      if (
+        since
+      ) {
+
+        url +=
+
+          `&since=${encodeURIComponent(
+            since
+          )}`;
+      }
+
+
+      const response =
+        await fetch(
+          url,
+          {
+
+            method:
+              'GET',
+
+            cache:
+              'no-store'
+          }
+        );
+
+
+      let data =
+        {};
+
+
+      try {
+
+        data =
+          await response.json();
+
+      } catch {
+
+        throw new Error(
+          'Réponse challenger-status illisible.'
+        );
+      }
+
+
+      if (
+        !response.ok
+        ||
+        data.success !==
+        true
+      ) {
+
+        throw new Error(
+
+          data?.error
+
+          ||
+
+          `HTTP ${response.status}`
+        );
+      }
+
+
+      renderState(
+        data
+      );
+
+
+      return data;
+    }
+
+
+    // =================================================
+    // LANCEMENT DU LAB
+    // =================================================
+
+    async function launchLab(
+      secret
+    ) {
+
+      const response =
+        await fetch(
+          '/.netlify/functions/challenger-lab-background',
+          {
+
+            method:
+              'POST',
+
+            headers: {
+
+              'Content-Type':
+                'application/json'
+            },
+
+            body:
+              JSON.stringify({
+
+                secret
+              })
+          }
+        );
+
+
+      if (
+        !(
+          response.status ===
+          202
+
+          ||
+
+          response.ok
+        )
+      ) {
+
+        const text =
+          await response.text();
+
+
+        throw new Error(
+
+          `Erreur HTTP ${response.status}\n${text}`
+        );
+      }
+    }
+
+
+    // =================================================
+    // ATTENDRE LES 10 EXPÉRIENCES
+    // =================================================
+
+    async function waitForLab() {
+
+      const maxAttempts =
+        190;
+
+
+      for (
+        let attempt = 0;
+        attempt < maxAttempts;
+        attempt += 1
+      ) {
+
+        await sleep(
+          5000
+        );
+
+
+        const state =
+          await getState(
+            runSince
+          );
+
+
+        statusBox.textContent =
+
+`Laboratoire en cours…
+
+${state.completedExperiments} / ${state.expectedExperiments} expériences terminées.
+
+Amélioration Brier :
+${state.summary.improved}
+
+Dégradation :
+${state.summary.degraded}`;
+
+
+        if (
+          state.done
+        ) {
+
+          return state;
+        }
+      }
+
+
+      throw new Error(
+        'Le laboratoire n’a pas terminé dans le délai prévu.'
+      );
+    }
+
+
+    // =================================================
+    // BOUTON
+    // =================================================
+
+    launchButton.addEventListener(
+      'click',
+      async () => {
+
+        if (
+          running
+        ) {
+
+          return;
+        }
+
+
+        const secret =
+          secretInput
+            .value
+            .trim();
+
+
+        if (
+          !secret
+        ) {
+
+          statusBox.textContent =
+
+            'Entre ton MATCHSCOPE_SYNC_SECRET.';
+
+
+          return;
+        }
+
+
+        running =
+          true;
+
+
+        launchButton.disabled =
+          true;
+
+
+        secretInput.disabled =
+          true;
+
+
+        /*
+         * Petite marge de 5 secondes
+         * pour éviter un décalage d'horloge
+         * entre l'iPhone et le serveur.
+         */
+        runSince =
+          new Date(
+            Date.now() -
+            5000
+          )
+            .toISOString();
+
+
+        try {
+
+          progressBar
+            .style
+            .width =
+              '0%';
+
+
+          progressNumber.textContent =
+            '0 / 10';
+
+
+          experimentsBox.innerHTML =
+            'Le laboratoire démarre…';
+
+
+          improvedCount.textContent =
+            '0';
+
+
+          degradedCount.textContent =
+            '0';
+
+
+          neutralCount.textContent =
+            '0';
+
+
+          statusBox.textContent =
+
+`Démarrage de V0.8 Shadow…
+
+V0.7 reste totalement inchangée.
+
+Construction des probabilités historiques et lancement des tests…`;
+
+
+          await launchLab(
+            secret
+          );
+
+
+          const state =
+            await waitForLab();
+
+
+          statusBox.textContent =
+
+`✅ LABORATOIRE TERMINÉ
+
+${state.completedExperiments} expériences effectuées.
+
+Améliorent le Brier :
+${state.summary.improved}
+
+Dégradent le Brier :
+${state.summary.degraded}
+
+Neutres :
+${state.summary.neutral}
+
+Aucune modification de V0.7 n'a été effectuée.`;
+
+
+        } catch (
+          error
+        ) {
+
+          statusBox.textContent =
+
+`❌ LABORATOIRE INTERROMPU
+
+${error.message}
+
+V0.7 n'a pas été modifiée.
+
+Les expériences déjà enregistrées restent dans Supabase.`;
+
+
+        } finally {
+
+          running =
+            false;
+
+
+          launchButton.disabled =
+            false;
+
+
+          secretInput.disabled =
+            false;
+        }
+      }
+    );
+
+
+    // =================================================
+    // CHARGEMENT DES DERNIERS RÉSULTATS
+    // =================================================
+
+    getState()
+
+      .then(
+        state => {
+
+          if (
+            state.experiments.length
+          ) {
+
+            statusBox.textContent =
+
+`Dernier état enregistré :
+
+${state.completedExperiments} / ${state.expectedExperiments} familles disponibles.
+
+Tu peux relancer le laboratoire pour effectuer une nouvelle validation.`;
+
+          } else {
+
+            statusBox.textContent =
+
+`Laboratoire prêt.
+
+Aucune expérience V0.8 Shadow enregistrée pour le moment.`;
+          }
+        }
+      )
+
+      .catch(
+        error => {
+
+          statusBox.textContent =
+
+`Impossible de lire l'état du laboratoire.
+
+${error.message}`;
+        }
+      );
+
+  </script>
+
+
+</body>
+
+</html>
