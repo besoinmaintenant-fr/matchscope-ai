@@ -1635,10 +1635,12 @@ function topExactScores(
       );
 
     const dc =
-      dixonColesMarkets(
-        lambdaHome,
-        lambdaAway,
-        config.rho
+       dixonColesMarkets(
+    lambdaHome,
+    lambdaAway,
+    config.rho,
+    includeScores
+  );
       );
 
     const elo =
