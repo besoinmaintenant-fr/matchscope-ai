@@ -47,9 +47,12 @@
     }
 
 
-    .header {
+    .header,
+    .section {
 
       padding: 18px;
+
+      margin-bottom: 16px;
 
       background: #0c1d14;
 
@@ -60,11 +63,20 @@
     }
 
 
-    h1 {
+    h1,
+    h2 {
 
       margin: 0 0 8px;
+    }
 
+
+    h1 {
       font-size: 25px;
+    }
+
+
+    h2 {
+      font-size: 20px;
     }
 
 
@@ -159,18 +171,20 @@
       color: #a3b4a9;
 
       line-height: 1.45;
+      white-space: pre-wrap;
     }
 
 
+    .future-match,
     .match {
 
-      margin-top: 15px;
+      margin-top: 13px;
 
-      padding: 16px;
+      padding: 15px;
 
-      border-radius: 17px;
+      border-radius: 15px;
 
-      background: #0c1a13;
+      background: #07100b;
 
       border:
         1px solid #243e30;
@@ -183,6 +197,7 @@
     }
 
 
+    .future-title,
     .match-title {
 
       font-size: 17px;
@@ -193,6 +208,7 @@
     }
 
 
+    .future-meta,
     .match-meta {
 
       margin-top: 5px;
@@ -200,9 +216,30 @@
       color: #8fa196;
 
       font-size: 12px;
+
+      line-height: 1.5;
     }
 
 
+    .next-action {
+
+      margin-top: 10px;
+
+      padding: 10px;
+
+      border-radius: 10px;
+
+      background: #10281b;
+
+      color: #62e99d;
+
+      font-size: 12px;
+
+      line-height: 1.45;
+    }
+
+
+    .stage-grid,
     .progress {
 
       display: grid;
@@ -212,10 +249,11 @@
 
       gap: 5px;
 
-      margin-top: 14px;
+      margin-top: 13px;
     }
 
 
+    .plan-stage,
     .stage {
 
       text-align: center;
@@ -232,12 +270,13 @@
 
       color: #707d75;
 
-      font-size: 11px;
+      font-size: 10px;
 
       font-weight: bold;
     }
 
 
+    .plan-stage.captured,
     .stage.ok {
 
       color: #59ed99;
@@ -245,6 +284,49 @@
       border-color: #267248;
 
       background: #10281b;
+    }
+
+
+    .plan-stage.due {
+
+      color: #00190b;
+
+      border-color: #37e481;
+
+      background: #37e481;
+    }
+
+
+    .plan-stage.waiting {
+
+      color: #d9d28a;
+
+      border-color: #665f26;
+
+      background: #211f10;
+    }
+
+
+    .plan-stage.missed {
+
+      color: #e48b8b;
+
+      border-color: #6b3838;
+
+      background: #251414;
+    }
+
+
+    .plan-detail {
+
+      display: block;
+
+      margin-top: 4px;
+
+      font-size: 8px;
+
+      font-weight: normal;
+
     }
 
 
@@ -348,7 +430,7 @@
 
     .empty {
 
-      margin-top: 18px;
+      margin-top: 13px;
 
       padding: 18px;
 
@@ -356,15 +438,15 @@
 
       border-radius: 14px;
 
-      background: #0c1a13;
+      background: #07100b;
 
       color: #87998e;
+
+      line-height: 1.5;
     }
 
 
     .legend {
-
-      margin-top: 18px;
 
       padding: 14px;
 
@@ -388,14 +470,12 @@
     ) {
 
       .summary {
-
         grid-template-columns:
           1fr 1fr 1fr;
       }
 
 
       .summary-card strong {
-
         font-size: 18px;
       }
 
@@ -422,8 +502,8 @@
 
       <div class="subtitle">
 
-        Contrôle des données réellement enregistrées
-        par MatchScope avant le coup d'envoi.
+        MatchScope contrôle maintenant ce qu'il
+        doit mémoriser avant chaque rencontre.
 
       </div>
 
@@ -434,7 +514,7 @@
         <div class="summary-card">
 
           <span>
-            Matchs
+            Matchs mémoire
           </span>
 
           <strong id="fixtureCount">
@@ -460,7 +540,7 @@
         <div class="summary-card">
 
           <span>
-            5/5
+            5 / 5
           </span>
 
           <strong id="completeCount">
@@ -490,22 +570,63 @@
     </div>
 
 
-    <div id="matches"></div>
+    <div class="section">
+
+
+      <h2>
+        Prochains matchs surveillés
+      </h2>
+
+
+      <div class="subtitle">
+
+        MatchScope calcule automatiquement
+        quand chaque photographie devra être prise.
+
+      </div>
+
+
+      <div id="upcoming"></div>
+
+
+    </div>
+
+
+    <div class="section">
+
+
+      <h2>
+        Snapshots déjà capturés
+      </h2>
+
+
+      <div id="matches"></div>
+
+
+    </div>
 
 
     <div class="legend">
 
-      D1 = environ 24 h avant le match ·
-      H6 = environ 6 h ·
-      H3 = environ 3 h ·
-      H90 = environ 90 min ·
-      FINAL = premier instant où MatchScope détecte
-      les 22 titulaires officiels.
+      🟢 = snapshot déjà capturé.
+
+      <br>
+
+      🟡 = capture à venir.
+
+      <br>
+
+      Vert plein = fenêtre de capture ouverte maintenant.
+
+      <br>
+
+      🔴 = fenêtre passée sans snapshot.
 
       <br><br>
 
-      Une case absente ne sera jamais recréée
-      artificiellement après le match.
+      D1 ≈ 24 h · H6 ≈ 6 h · H3 ≈ 3 h ·
+      H90 ≈ 90 min · FINAL = premier passage où
+      les 22 titulaires officiels sont disponibles.
 
     </div>
 
@@ -555,15 +676,19 @@
       );
 
 
+    const upcomingBox =
+      document.querySelector(
+        '#upcoming'
+      );
+
+
     const refreshButton =
       document.querySelector(
         '#refresh'
       );
 
 
-    function escapeHtml(
-      value
-    ) {
+    function escapeHtml(value) {
 
       return String(
         value ?? ''
@@ -596,9 +721,7 @@
     }
 
 
-    function formatDate(
-      value
-    ) {
+    function formatDate(value) {
 
       if (!value) {
         return '—';
@@ -614,32 +737,108 @@
           date.getTime()
         )
       ) {
-
         return '—';
       }
 
 
-      return date
-        .toLocaleString(
-          'fr-FR',
-          {
+      return date.toLocaleString(
+        'fr-FR',
+        {
 
-            day:
-              '2-digit',
+          weekday:
+            'short',
 
-            month:
-              '2-digit',
+          day:
+            '2-digit',
 
-            hour:
-              '2-digit',
+          month:
+            '2-digit',
 
-            minute:
-              '2-digit',
+          hour:
+            '2-digit',
 
-            timeZone:
-              'Europe/Paris'
-          }
+          minute:
+            '2-digit',
+
+          timeZone:
+            'Europe/Paris'
+        }
+      );
+    }
+
+
+    function duration(
+      minutes
+    ) {
+
+      const value =
+        Number(minutes);
+
+
+      if (
+        !Number.isFinite(value)
+      ) {
+        return '—';
+      }
+
+
+      if (
+        value <= 0
+      ) {
+        return 'maintenant';
+      }
+
+
+      if (
+        value <
+        60
+      ) {
+        return `${Math.round(
+          value
+        )} min`;
+      }
+
+
+      const hours =
+        Math.floor(
+          value / 60
         );
+
+
+      const remaining =
+        Math.round(
+          value % 60
+        );
+
+
+      if (
+        hours <
+        24
+      ) {
+
+        return remaining
+
+          ? `${hours} h ${remaining}`
+
+          : `${hours} h`;
+      }
+
+
+      const days =
+        Math.floor(
+          hours / 24
+        );
+
+
+      const leftoverHours =
+        hours % 24;
+
+
+      return leftoverHours
+
+        ? `${days} j ${leftoverHours} h`
+
+        : `${days} j`;
     }
 
 
@@ -652,11 +851,8 @@
 
 
       if (
-        !Number.isFinite(
-          number
-        )
+        !Number.isFinite(number)
       ) {
-
         return '—';
       }
 
@@ -664,7 +860,6 @@
       if (
         number >= 0
       ) {
-
         return `${number} min avant`;
       }
 
@@ -672,6 +867,243 @@
       return `${Math.abs(
         number
       )} min après`;
+    }
+
+
+    function planClass(
+      status
+    ) {
+
+      if (
+        status ===
+        'CAPTURED'
+      ) {
+        return 'captured';
+      }
+
+
+      if (
+        status ===
+        'DUE_NOW'
+      ) {
+        return 'due';
+      }
+
+
+      if (
+        status ===
+        'WAITING'
+        ||
+        status ===
+        'WAITING_XI'
+      ) {
+        return 'waiting';
+      }
+
+
+      return 'missed';
+    }
+
+
+    function planText(
+      item
+    ) {
+
+      switch (
+        item.status
+      ) {
+
+        case 'CAPTURED':
+          return '✓';
+
+        case 'DUE_NOW':
+          return 'MAINTENANT';
+
+        case 'WAITING':
+          return `dans ${duration(
+            item.minutesUntilWindow
+          )}`;
+
+        case 'WAITING_XI':
+          return 'attente XI';
+
+        case 'MISSED':
+          return 'manqué';
+
+        default:
+          return '—';
+      }
+    }
+
+
+    function renderUpcoming(
+      fixtures
+    ) {
+
+      if (
+        !fixtures.length
+      ) {
+
+        upcomingBox.innerHTML = `
+
+          <div class="empty">
+
+            Aucun match PL, Bundesliga ou Liga
+            détecté dans les 14 prochains jours.
+
+          </div>
+        `;
+
+        return;
+      }
+
+
+      upcomingBox.innerHTML =
+        fixtures
+
+          .map(
+            fixture => {
+
+              const plan =
+                fixture.plan
+                ||
+                [];
+
+
+              const stages =
+                plan
+
+                  .map(
+                    item => `
+
+                      <div
+                        class="plan-stage ${
+                          planClass(
+                            item.status
+                          )
+                        }"
+                      >
+
+                        ${escapeHtml(
+                          item.stage
+                        )}
+
+                        <span class="plan-detail">
+
+                          ${escapeHtml(
+                            planText(
+                              item
+                            )
+                          )}
+
+                        </span>
+
+                      </div>
+                    `
+                  )
+
+                  .join('');
+
+
+              let nextText =
+                'Toutes les captures prévues sont terminées.';
+
+
+              if (
+                fixture.nextDue
+              ) {
+
+                if (
+                  fixture.nextDue.status ===
+                  'DUE_NOW'
+                ) {
+
+                  nextText =
+                    `${fixture.nextDue.stage} doit être capturé maintenant.`;
+
+                } else if (
+                  fixture.nextDue.status ===
+                  'WAITING'
+                ) {
+
+                  nextText =
+                    `Prochaine fenêtre : ${fixture.nextDue.stage} dans ${duration(
+                      fixture.nextDue.minutesUntilWindow
+                    )}.`;
+
+                } else if (
+                  fixture.nextDue.status ===
+                  'WAITING_XI'
+                ) {
+
+                  nextText =
+                    'Prochaine étape : attendre les compositions officielles.';
+                }
+              }
+
+
+              return `
+
+                <div class="future-match">
+
+                  <div class="future-title">
+
+                    ${escapeHtml(
+                      fixture.home
+                    )}
+
+                    —
+
+                    ${escapeHtml(
+                      fixture.away
+                    )}
+
+                  </div>
+
+
+                  <div class="future-meta">
+
+                    ${escapeHtml(
+                      fixture.league
+                    )}
+
+                    ·
+
+                    ${formatDate(
+                      fixture.kickoff
+                    )}
+
+                    <br>
+
+                    ID
+                    ${escapeHtml(
+                      fixture.fixtureId
+                    )}
+
+                  </div>
+
+
+                  <div class="stage-grid">
+
+                    ${stages}
+
+                  </div>
+
+
+                  <div class="next-action">
+
+                    ${escapeHtml(
+                      nextText
+                    )}
+
+                  </div>
+
+                </div>
+              `;
+            }
+          )
+
+          .join('');
     }
 
 
@@ -690,9 +1122,7 @@
           }"
         >
 
-          ${escapeHtml(
-            label
-          )}
+          ${escapeHtml(label)}
 
           ${value
             ? '✓'
@@ -771,7 +1201,7 @@
                 : 'non'
             }
 
-            · titulaires trouvés :
+            · titulaires :
             ${snapshot.startersFound ?? 0}
 
           </div>
@@ -933,11 +1363,6 @@
               fixture.kickoff
             )}
 
-            · ID
-            ${escapeHtml(
-              fixture.fixtureId
-            )}
-
           </div>
 
 
@@ -959,57 +1384,22 @@
     }
 
 
-    function render(
-      data
+    function renderMemory(
+      fixtures
     ) {
 
-      fixtureCount.textContent =
-        data
-          ?.summary
-          ?.fixtures
-        ??
-        0;
-
-
-      finalCount.textContent =
-        data
-          ?.summary
-          ?.withFinal
-        ??
-        0;
-
-
-      completeCount.textContent =
-        data
-          ?.summary
-          ?.completeFixtures
-        ??
-        0;
-
-
-      const fixtures =
-        data.fixtures
-        ||
-        [];
-
-
-      if (!fixtures.length) {
+      if (
+        !fixtures.length
+      ) {
 
         matchesBox.innerHTML = `
 
           <div class="empty">
 
-            Aucun snapshot enregistré pour le moment.
-
-            <br><br>
-
-            C'est normal si aucun match PL,
-            Bundesliga ou Liga n'est actuellement
-            dans une fenêtre D1 / H6 / H3 / H90 / FINAL.
+            Aucun snapshot capturé pour le moment.
 
           </div>
         `;
-
 
         return;
       }
@@ -1017,9 +1407,11 @@
 
       matchesBox.innerHTML =
         fixtures
+
           .map(
             renderMatch
           )
+
           .join('');
     }
 
@@ -1031,16 +1423,17 @@
 
 
       statusBox.textContent =
-        'Lecture de la mémoire Supabase…';
+        'Lecture de MatchScope…';
 
 
       try {
 
         const response =
           await fetch(
-            `/.netlify/functions/snapshot-status?t=${Date.now()}`,
-            {
 
+            `/.netlify/functions/snapshot-status?t=${Date.now()}`,
+
+            {
               cache:
                 'no-store'
             }
@@ -1052,23 +1445,59 @@
 
 
         if (
-          !response.ok ||
-          data.success !== true
+          !response.ok
+          ||
+          data.success !==
+          true
         ) {
 
           throw new Error(
-            data?.error ||
+            data?.error
+            ||
             `HTTP ${response.status}`
           );
         }
 
 
-        render(
+        fixtureCount.textContent =
           data
+            ?.summary
+            ?.fixtures
+          ??
+          0;
+
+
+        finalCount.textContent =
+          data
+            ?.summary
+            ?.withFinal
+          ??
+          0;
+
+
+        completeCount.textContent =
+          data
+            ?.summary
+            ?.completeFixtures
+          ??
+          0;
+
+
+        renderUpcoming(
+          data.upcoming
+          ||
+          []
         );
 
 
-        const stageSummary =
+        renderMemory(
+          data.fixtures
+          ||
+          []
+        );
+
+
+        const stages =
           data
             ?.summary
             ?.stages
@@ -1076,25 +1505,46 @@
           {};
 
 
+        const upcomingCount =
+          data
+            ?.upcomingSummary
+            ?.count
+          ??
+          0;
+
+
         statusBox.textContent =
 
 `Mémoire lue avec succès.
 
-D1 : ${stageSummary.D1 ?? 0}
-H6 : ${stageSummary.H6 ?? 0}
-H3 : ${stageSummary.H3 ?? 0}
-H90 : ${stageSummary.H90 ?? 0}
-FINAL : ${stageSummary.FINAL ?? 0}
+Prochains matchs surveillés : ${upcomingCount}
+
+D1 : ${stages.D1 ?? 0}
+H6 : ${stages.H6 ?? 0}
+H3 : ${stages.H3 ?? 0}
+H90 : ${stages.H90 ?? 0}
+FINAL : ${stages.FINAL ?? 0}
 
 Dernière lecture :
 ${formatDate(data.checkedAt)}`;
+
+
+        if (
+          data.upcomingError
+        ) {
+
+          statusBox.textContent +=
+
+`\n\nCalendrier live indisponible :
+${data.upcomingError}`;
+        }
 
 
       } catch (error) {
 
         statusBox.textContent =
 
-`Impossible de lire la mémoire.
+`Impossible de lire MatchScope.
 
 ${error.message}`;
 
