@@ -1,3526 +1,2150 @@
-(() => {
-  // ===================================================
-  // MATCHSCOPE AI — V0.7
-  // Dixon-Coles + Elo + 365 jours
-  // calibration par ligue + holdout chronologique
-  // Utilisable dans le navigateur ET côté serveur.
-  // ===================================================
+/* ============================================================
+   MATCHSCOPE AI — model.js
+   Version : V0.7
+   Modèle  : Dixon-Coles + Elo + calibration
+   ============================================================
 
-  const IS_SERVER =
-    typeof module !== 'undefined' &&
-    module.exports;
+   Exports :
+   - buildModel()
+   - predictV07()
+   - tuneModel()
+   - brier3()
+   - bestPick()
 
-  const HAS_BROWSER_ANALYSIS =
-    typeof openAnalysis === 'function';
+   Compatible :
+   - Navigateur ES Modules
+   - Netlify Functions / Node ES Modules
 
-  if (!IS_SERVER && !HAS_BROWSER_ANALYSIS) {
-    console.error('MatchScope V0.7 : openAnalysis introuvable.');
-    return;
+   ============================================================ */
+
+
+const DEFAULT_CONFIG = {
+  historyDays: 365,
+
+  // Pondération temporelle
+  decayHalfLifeDays: 120,
+
+  // Elo
+  initialElo: 1500,
+  eloK: 24,
+  eloHomeAdvantage: 65,
+  eloScale: 400,
+
+  // Importance Elo dans les xG finaux
+  eloWeight: 0.16,
+
+  // Dixon-Coles
+  rho: -0.08,
+
+  // Limites xG
+  minLambda: 0.20,
+  maxLambda: 4.50,
+
+  // Nombre de buts calculés dans la matrice
+  maxGoals: 10,
+
+  // Minimum matchs équipe
+  minTeamMatches: 3,
+
+  // Sécurité
+  epsilon: 1e-9,
+
+  // Calibration
+  calibrationStrength: 0.55,
+};
+
+
+/* ============================================================
+   UTILITAIRES
+   ============================================================ */
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+
+function safeNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+
+function sigmoid(x) {
+  return 1 / (1 + Math.exp(-x));
+}
+
+
+function daysBetween(a, b) {
+  const d1 = new Date(a);
+  const d2 = new Date(b);
+
+  if (
+    Number.isNaN(d1.getTime()) ||
+    Number.isNaN(d2.getTime())
+  ) {
+    return 0;
   }
 
-  const previousOpenAnalysis =
-    HAS_BROWSER_ANALYSIS ? openAnalysis : null;
+  return Math.abs(d2 - d1) / 86400000;
+}
 
-  const MODEL_VERSION = 'v0.7';
-  const TARGET_BRIER = 0.620;
-  const MODEL_HISTORY_VERSION = 'modelhistory-v2';
-  const MODEL_LEAGUES = new Set(['BL', 'LL', 'PL']);
 
-  let tuningCache = null;
-
-  function resetTuningCache() {
-    tuningCache = null;
+function poisson(k, lambda) {
+  if (lambda <= 0) {
+    return k === 0 ? 1 : 0;
   }
 
-  // ===================================================
-  // OUTILS
-  // ===================================================
+  let factorial = 1;
 
-  function clamp(value, min, max) {
-    return Math.max(min, Math.min(max, value));
+  for (let i = 2; i <= k; i++) {
+    factorial *= i;
   }
 
-  function num(value) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
+  return (
+    Math.exp(-lambda) *
+    Math.pow(lambda, k) /
+    factorial
+  );
+}
 
-  function normalizeTeam(value = '') {
-    return String(value)
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '');
-  }
 
-  function sameTeam(first, second) {
-    return normalizeTeam(first) === normalizeTeam(second);
-  }
+function normalizeProbabilities(obj) {
+  const home = Math.max(0, safeNumber(obj.home));
+  const draw = Math.max(0, safeNumber(obj.draw));
+  const away = Math.max(0, safeNumber(obj.away));
 
-  function teamKey(competition, team) {
-    return `${competition}::${normalizeTeam(team)}`;
-  }
+  const total = home + draw + away;
 
-  function pct(probability) {
-    if (!Number.isFinite(Number(probability))) {
-      return '—';
-    }
-
-    return `${Math.round(clamp(Number(probability), 0, 1) * 100)}%`;
-  }
-
-  function matchTime(match) {
-    if (match?.startingAt) {
-      const parsed = Date.parse(match.startingAt);
-
-      if (Number.isFinite(parsed)) {
-        return parsed;
-      }
-    }
-
-    const timestamp = Number(match?.kickoffTs);
-
-    return Number.isFinite(timestamp)
-      ? timestamp
-      : null;
-  }
-
-  function actualVector(result) {
+  if (total <= 0) {
     return {
-      home: result === '1' ? 1 : 0,
-      draw: result === 'N' ? 1 : 0,
-      away: result === '2' ? 1 : 0
+      home: 1 / 3,
+      draw: 1 / 3,
+      away: 1 / 3,
     };
   }
 
-  function brier3(probability, result) {
-    const actual = actualVector(result);
+  return {
+    home: home / total,
+    draw: draw / total,
+    away: away / total,
+  };
+}
 
-    return (
-      Math.pow(
-        probability.home - actual.home,
-        2
-      )
-      +
-      Math.pow(
-        probability.draw - actual.draw,
-        2
-      )
-      +
-      Math.pow(
-        probability.away - actual.away,
-        2
-      )
-    );
+
+/* ============================================================
+   NORMALISATION MATCHS
+   ============================================================ */
+
+function extractTeamId(match, side) {
+  const candidates =
+    side === "home"
+      ? [
+          match.homeTeamId,
+          match.home_team_id,
+          match.homeId,
+          match.home_id,
+          match.localteam_id,
+          match.localTeamId,
+          match.homeTeam?.id,
+          match.home_team?.id,
+          match.participants?.find(
+            (p) =>
+              p.meta?.location === "home" ||
+              p.location === "home"
+          )?.id,
+        ]
+      : [
+          match.awayTeamId,
+          match.away_team_id,
+          match.awayId,
+          match.away_id,
+          match.visitorteam_id,
+          match.visitorTeamId,
+          match.awayTeam?.id,
+          match.away_team?.id,
+          match.participants?.find(
+            (p) =>
+              p.meta?.location === "away" ||
+              p.location === "away"
+          )?.id,
+        ];
+
+  for (const value of candidates) {
+    if (value !== undefined && value !== null) {
+      return String(value);
+    }
   }
 
-  function bestPick(probability) {
-    return [
-      ['1', probability.home],
-      ['N', probability.draw],
-      ['2', probability.away]
-    ]
-      .sort(
-        (first, second) =>
-          second[1] - first[1]
-      )[0][0];
+  return null;
+}
+
+
+function extractScore(match, side) {
+  const direct =
+    side === "home"
+      ? [
+          match.homeScore,
+          match.home_score,
+          match.homeGoals,
+          match.home_goals,
+          match.goalsHome,
+          match.goals_home,
+        ]
+      : [
+          match.awayScore,
+          match.away_score,
+          match.awayGoals,
+          match.away_goals,
+          match.goalsAway,
+          match.goals_away,
+        ];
+
+  for (const value of direct) {
+    const n = Number(value);
+
+    if (Number.isFinite(n)) {
+      return n;
+    }
   }
 
-  // ===================================================
-  // HISTORIQUE
-  // ===================================================
+  if (Array.isArray(match.scores)) {
+    const participantId = extractTeamId(match, side);
 
-  function leagueMatchesBefore(
-    history,
-    competition,
-    beforeTime = Infinity
-  ) {
-    return history.filter(match => {
-      if (match.competition !== competition) {
-        return false;
-      }
-
-      const timestamp = matchTime(match);
-
-      if (!Number.isFinite(timestamp)) {
-        return false;
-      }
-
-      if (
-        Number.isFinite(beforeTime) &&
-        timestamp >= beforeTime
-      ) {
-        return false;
-      }
+    const scoreItem = match.scores.find((s) => {
+      const isCurrent =
+        s.description === "CURRENT" ||
+        s.description === "Current" ||
+        s.type === "CURRENT";
 
       return (
-        num(match?.score?.home) !== null &&
-        num(match?.score?.away) !== null
+        String(s.participant_id) ===
+          String(participantId) &&
+        isCurrent
       );
     });
-  }
 
-  function teamMatchesBefore(
-    history,
-    team,
-    competition,
-    beforeTime = Infinity,
-    venue = 'all',
-    limit = 10,
-    excludeId = null
-  ) {
-    return history
-      .filter(match => {
-        if (match.competition !== competition) {
-          return false;
-        }
+    if (scoreItem) {
+      const n =
+        scoreItem.score?.goals ??
+        scoreItem.score ??
+        scoreItem.goals;
 
-        if (
-          excludeId !== null &&
-          String(match.id) === String(excludeId)
-        ) {
-          return false;
-        }
-
-        const timestamp = matchTime(match);
-
-        if (!Number.isFinite(timestamp)) {
-          return false;
-        }
-
-        if (
-          Number.isFinite(beforeTime) &&
-          timestamp >= beforeTime
-        ) {
-          return false;
-        }
-
-        const isHome = sameTeam(
-          match.home,
-          team
-        );
-
-        const isAway = sameTeam(
-          match.away,
-          team
-        );
-
-        if (venue === 'home') {
-          return isHome;
-        }
-
-        if (venue === 'away') {
-          return isAway;
-        }
-
-        return isHome || isAway;
-      })
-      .sort(
-        (first, second) =>
-          (matchTime(second) || 0)
-          -
-          (matchTime(first) || 0)
-      )
-      .slice(
-        0,
-        limit
-      );
-  }
-
-  // ===================================================
-  // PONDÉRATION TEMPORELLE
-  // ===================================================
-
-  function timeWeight(
-    matchTimestamp,
-    referenceTimestamp,
-    halfLife
-  ) {
-    if (
-      !Number.isFinite(matchTimestamp) ||
-      !Number.isFinite(referenceTimestamp)
-    ) {
-      return 1;
+      if (Number.isFinite(Number(n))) {
+        return Number(n);
+      }
     }
-
-    const ageDays = Math.max(
-      0,
-      (
-        referenceTimestamp -
-        matchTimestamp
-      ) / 86400000
-    );
-
-    return Math.exp(
-      -Math.log(2)
-      *
-      ageDays
-      /
-      halfLife
-    );
   }
 
-  // ===================================================
-  // RÉSUMÉ ÉQUIPE
-  // ===================================================
+  return null;
+}
 
-  function weightedSummary(
-    list,
-    team,
-    referenceTimestamp,
-    halfLife
+
+function extractDate(match) {
+  return (
+    match.date ||
+    match.starting_at ||
+    match.startingAt ||
+    match.kickoff ||
+    match.kickoff_at ||
+    match.fixtureDate ||
+    match.fixture_date ||
+    null
+  );
+}
+
+
+function extractLeagueId(match) {
+  return (
+    match.leagueId ??
+    match.league_id ??
+    match.league?.id ??
+    match.competitionId ??
+    match.competition_id ??
+    null
+  );
+}
+
+
+function normalizeMatch(match) {
+  if (!match) return null;
+
+  const homeTeamId = extractTeamId(match, "home");
+  const awayTeamId = extractTeamId(match, "away");
+
+  const homeGoals = extractScore(match, "home");
+  const awayGoals = extractScore(match, "away");
+
+  const date = extractDate(match);
+
+  if (
+    !homeTeamId ||
+    !awayTeamId ||
+    homeGoals === null ||
+    awayGoals === null
   ) {
-    const result = {
-      played: 0,
-      weight: 0,
-      points: 0,
-      gf: 0,
-      ga: 0
-    };
-
-    list.forEach(match => {
-      const isHome = sameTeam(
-        match.home,
-        team
-      );
-
-      const goalsFor = num(
-        isHome
-          ? match?.score?.home
-          : match?.score?.away
-      );
-
-      const goalsAgainst = num(
-        isHome
-          ? match?.score?.away
-          : match?.score?.home
-      );
-
-      if (
-        goalsFor === null ||
-        goalsAgainst === null
-      ) {
-        return;
-      }
-
-      const weight = timeWeight(
-        matchTime(match),
-        referenceTimestamp,
-        halfLife
-      );
-
-      const points =
-        goalsFor > goalsAgainst
-          ? 3
-          : goalsFor === goalsAgainst
-            ? 1
-            : 0;
-
-      result.played += 1;
-      result.weight += weight;
-      result.points += points * weight;
-      result.gf += goalsFor * weight;
-      result.ga += goalsAgainst * weight;
-    });
-
-    return result;
+    return null;
   }
 
-  // ===================================================
-  // MOYENNES CHAMPIONNAT
-  // ===================================================
+  return {
+    homeTeamId,
+    awayTeamId,
 
-  function leagueBaseline(
-    history,
-    competition,
-    beforeTime,
-    halfLife
-  ) {
-    const list = leagueMatchesBefore(
-      history,
-      competition,
-      beforeTime
-    );
-
-    const referenceTimestamp =
-      Number.isFinite(beforeTime)
-        ? beforeTime
-        : Date.now();
-
-    let totalWeight = 0;
-    let homeGoals = 0;
-    let awayGoals = 0;
-    let homeWins = 0;
-    let draws = 0;
-    let awayWins = 0;
-
-    list.forEach(match => {
-      const home = num(
-        match?.score?.home
-      );
-
-      const away = num(
-        match?.score?.away
-      );
-
-      if (
-        home === null ||
-        away === null
-      ) {
-        return;
-      }
-
-      const weight = timeWeight(
-        matchTime(match),
-        referenceTimestamp,
-        Math.max(
-          90,
-          halfLife * 2
-        )
-      );
-
-      totalWeight += weight;
-
-      homeGoals +=
-        home * weight;
-
-      awayGoals +=
-        away * weight;
-
-      if (home > away) {
-        homeWins += weight;
-      } else if (home === away) {
-        draws += weight;
-      } else {
-        awayWins += weight;
-      }
-    });
-
-    const goalPriorWeight = 16;
-    const resultPriorWeight = 26;
-
-    return {
-      n: list.length,
-
-      homeGoalAvg:
-        (
-          homeGoals +
-          goalPriorWeight * 1.45
-        )
-        /
-        (
-          totalWeight +
-          goalPriorWeight
-        ),
-
-      awayGoalAvg:
-        (
-          awayGoals +
-          goalPriorWeight * 1.15
-        )
-        /
-        (
-          totalWeight +
-          goalPriorWeight
-        ),
-
-      resultPrior: {
-        home:
-          (
-            homeWins +
-            resultPriorWeight * 0.44
-          )
-          /
-          (
-            totalWeight +
-            resultPriorWeight
-          ),
-
-        draw:
-          (
-            draws +
-            resultPriorWeight * 0.28
-          )
-          /
-          (
-            totalWeight +
-            resultPriorWeight
-          ),
-
-        away:
-          (
-            awayWins +
-            resultPriorWeight * 0.28
-          )
-          /
-          (
-            totalWeight +
-            resultPriorWeight
-          )
-      }
-    };
-  }
-
-  function shrinkRate(
-    weightedSum,
-    weight,
-    prior,
-    shrinkWeight
-  ) {
-    return (
-      weightedSum +
-      shrinkWeight * prior
-    )
-    /
-    (
-      weight +
-      shrinkWeight
-    );
-  }
-
-  // ===================================================
-  // POISSON
-  // ===================================================
-
-  function poisson(
-    lambda,
-    goals
-  ) {
-    let factorial = 1;
-
-    for (
-      let index = 2;
-      index <= goals;
-      index += 1
-    ) {
-      factorial *= index;
-    }
-
-    return (
-      Math.exp(-lambda)
-      *
-      Math.pow(
-        lambda,
-        goals
-      )
-      /
-      factorial
-    );
-  }
-
-  // ===================================================
-  // DIXON-COLES
-  // ===================================================
-
-  function dcTau(
     homeGoals,
     awayGoals,
-    lambdaHome,
-    lambdaAway,
-    rho
-  ) {
-    if (
-      homeGoals === 0 &&
-      awayGoals === 0
-    ) {
-      return Math.max(
-        0.01,
-        1 -
-        lambdaHome *
-        lambdaAway *
-        rho
-      );
-    }
 
-    if (
-      homeGoals === 1 &&
-      awayGoals === 0
-    ) {
-      return Math.max(
-        0.01,
-        1 +
-        lambdaAway *
-        rho
-      );
-    }
+    date,
 
-    if (
-      homeGoals === 0 &&
-      awayGoals === 1
-    ) {
-      return Math.max(
-        0.01,
-        1 +
-        lambdaHome *
-        rho
-      );
-    }
+    leagueId: extractLeagueId(match),
 
-    if (
-      homeGoals === 1 &&
-      awayGoals === 1
-    ) {
-      return Math.max(
-        0.01,
-        1 - rho
-      );
-    }
+    raw: match,
+  };
+}
 
+
+/* ============================================================
+   FILTRAGE HISTORIQUE
+   ============================================================ */
+
+function prepareHistory(
+  matches = [],
+  {
+    leagueId = null,
+    referenceDate = new Date(),
+    historyDays = 365,
+  } = {}
+) {
+  const normalized = matches
+    .map(normalizeMatch)
+    .filter(Boolean);
+
+  return normalized
+    .filter((match) => {
+      if (
+        leagueId !== null &&
+        match.leagueId !== null &&
+        String(match.leagueId) !== String(leagueId)
+      ) {
+        return false;
+      }
+
+      if (!match.date) {
+        return true;
+      }
+
+      const age = daysBetween(
+        match.date,
+        referenceDate
+      );
+
+      return age <= historyDays;
+    })
+    .sort((a, b) => {
+      if (!a.date || !b.date) return 0;
+
+      return (
+        new Date(a.date).getTime() -
+        new Date(b.date).getTime()
+      );
+    });
+}
+
+
+/* ============================================================
+   PONDÉRATION TEMPORELLE
+   ============================================================ */
+
+function timeWeight(
+  matchDate,
+  referenceDate,
+  halfLifeDays
+) {
+  if (!matchDate || !referenceDate) {
     return 1;
   }
 
-  function dixonColesMarkets(
+  const age = daysBetween(
+    matchDate,
+    referenceDate
+  );
+
+  if (halfLifeDays <= 0) {
+    return 1;
+  }
+
+  return Math.pow(
+    0.5,
+    age / halfLifeDays
+  );
+}
+
+
+/* ============================================================
+   STATISTIQUES LIGUE / ÉQUIPES
+   ============================================================ */
+
+function createTeamStats() {
+  return {
+    homeMatches: 0,
+    awayMatches: 0,
+
+    weightedHomeMatches: 0,
+    weightedAwayMatches: 0,
+
+    homeGF: 0,
+    homeGA: 0,
+
+    awayGF: 0,
+    awayGA: 0,
+  };
+}
+
+
+function computeStats(
+  matches,
+  referenceDate,
+  config
+) {
+  const teams = new Map();
+
+  let totalWeight = 0;
+
+  let totalHomeGoals = 0;
+  let totalAwayGoals = 0;
+
+  for (const match of matches) {
+    const weight = timeWeight(
+      match.date,
+      referenceDate,
+      config.decayHalfLifeDays
+    );
+
+    if (!teams.has(match.homeTeamId)) {
+      teams.set(
+        match.homeTeamId,
+        createTeamStats()
+      );
+    }
+
+    if (!teams.has(match.awayTeamId)) {
+      teams.set(
+        match.awayTeamId,
+        createTeamStats()
+      );
+    }
+
+    const home = teams.get(match.homeTeamId);
+    const away = teams.get(match.awayTeamId);
+
+    home.homeMatches += 1;
+    home.weightedHomeMatches += weight;
+
+    home.homeGF +=
+      match.homeGoals * weight;
+
+    home.homeGA +=
+      match.awayGoals * weight;
+
+
+    away.awayMatches += 1;
+    away.weightedAwayMatches += weight;
+
+    away.awayGF +=
+      match.awayGoals * weight;
+
+    away.awayGA +=
+      match.homeGoals * weight;
+
+
+    totalWeight += weight;
+
+    totalHomeGoals +=
+      match.homeGoals * weight;
+
+    totalAwayGoals +=
+      match.awayGoals * weight;
+  }
+
+  const leagueHomeAvg =
+    totalWeight > 0
+      ? totalHomeGoals / totalWeight
+      : 1.45;
+
+  const leagueAwayAvg =
+    totalWeight > 0
+      ? totalAwayGoals / totalWeight
+      : 1.15;
+
+  return {
+    teams,
+
+    leagueHomeAvg:
+      clamp(leagueHomeAvg, 0.5, 3),
+
+    leagueAwayAvg:
+      clamp(leagueAwayAvg, 0.4, 2.5),
+
+    matchCount: matches.length,
+  };
+}
+
+
+/* ============================================================
+   FORCES ATTAQUE / DÉFENSE
+   ============================================================ */
+
+function teamStrengths(
+  teamId,
+  stats,
+  config
+) {
+  const team = stats.teams.get(
+    String(teamId)
+  );
+
+  if (!team) {
+    return {
+      homeAttack: 1,
+      homeDefense: 1,
+      awayAttack: 1,
+      awayDefense: 1,
+      dataQuality: 0,
+    };
+  }
+
+  const minMatches =
+    config.minTeamMatches;
+
+  const homeWeight =
+    clamp(
+      team.weightedHomeMatches /
+        minMatches,
+      0,
+      1
+    );
+
+  const awayWeight =
+    clamp(
+      team.weightedAwayMatches /
+        minMatches,
+      0,
+      1
+    );
+
+
+  const rawHomeAttack =
+    team.weightedHomeMatches > 0
+      ? team.homeGF /
+        team.weightedHomeMatches /
+        stats.leagueHomeAvg
+      : 1;
+
+  const rawHomeDefense =
+    team.weightedHomeMatches > 0
+      ? team.homeGA /
+        team.weightedHomeMatches /
+        stats.leagueAwayAvg
+      : 1;
+
+
+  const rawAwayAttack =
+    team.weightedAwayMatches > 0
+      ? team.awayGF /
+        team.weightedAwayMatches /
+        stats.leagueAwayAvg
+      : 1;
+
+  const rawAwayDefense =
+    team.weightedAwayMatches > 0
+      ? team.awayGA /
+        team.weightedAwayMatches /
+        stats.leagueHomeAvg
+      : 1;
+
+
+  const shrink = (value, weight) =>
+    1 + (value - 1) * weight;
+
+
+  return {
+    homeAttack: clamp(
+      shrink(
+        rawHomeAttack,
+        homeWeight
+      ),
+      0.35,
+      2.8
+    ),
+
+    homeDefense: clamp(
+      shrink(
+        rawHomeDefense,
+        homeWeight
+      ),
+      0.35,
+      2.8
+    ),
+
+    awayAttack: clamp(
+      shrink(
+        rawAwayAttack,
+        awayWeight
+      ),
+      0.35,
+      2.8
+    ),
+
+    awayDefense: clamp(
+      shrink(
+        rawAwayDefense,
+        awayWeight
+      ),
+      0.35,
+      2.8
+    ),
+
+    dataQuality:
+      (homeWeight + awayWeight) / 2,
+  };
+}
+
+
+/* ============================================================
+   ELO
+   ============================================================ */
+
+function eloExpected(
+  homeElo,
+  awayElo,
+  config
+) {
+  const adjustedHome =
+    homeElo +
+    config.eloHomeAdvantage;
+
+  return (
+    1 /
+    (
+      1 +
+      Math.pow(
+        10,
+        (awayElo - adjustedHome) /
+          config.eloScale
+      )
+    )
+  );
+}
+
+
+function matchResult(
+  homeGoals,
+  awayGoals
+) {
+  if (homeGoals > awayGoals) return 1;
+  if (homeGoals < awayGoals) return 0;
+
+  return 0.5;
+}
+
+
+function computeElo(
+  matches,
+  config
+) {
+  const ratings = new Map();
+
+  const getRating = (teamId) => {
+    if (!ratings.has(teamId)) {
+      ratings.set(
+        teamId,
+        config.initialElo
+      );
+    }
+
+    return ratings.get(teamId);
+  };
+
+
+  for (const match of matches) {
+    const homeElo =
+      getRating(match.homeTeamId);
+
+    const awayElo =
+      getRating(match.awayTeamId);
+
+    const expectedHome =
+      eloExpected(
+        homeElo,
+        awayElo,
+        config
+      );
+
+    const actualHome =
+      matchResult(
+        match.homeGoals,
+        match.awayGoals
+      );
+
+
+    // Petite prise en compte de l'écart de buts
+    const goalDiff =
+      Math.abs(
+        match.homeGoals -
+        match.awayGoals
+      );
+
+    const multiplier =
+      goalDiff <= 1
+        ? 1
+        : Math.log(goalDiff + 1);
+
+
+    const delta =
+      config.eloK *
+      multiplier *
+      (actualHome - expectedHome);
+
+
+    ratings.set(
+      match.homeTeamId,
+      homeElo + delta
+    );
+
+    ratings.set(
+      match.awayTeamId,
+      awayElo - delta
+    );
+  }
+
+  return ratings;
+}
+
+
+/* ============================================================
+   DIXON-COLES
+   ============================================================ */
+
+function dixonColesTau(
+  homeGoals,
+  awayGoals,
   lambdaHome,
   lambdaAway,
-  rho,
-  includeScores = false
+  rho
 ) {
+  if (
+    homeGoals === 0 &&
+    awayGoals === 0
+  ) {
+    return (
+      1 -
+      lambdaHome *
+        lambdaAway *
+        rho
+    );
+  }
+
+  if (
+    homeGoals === 0 &&
+    awayGoals === 1
+  ) {
+    return (
+      1 +
+      lambdaHome * rho
+    );
+  }
+
+  if (
+    homeGoals === 1 &&
+    awayGoals === 0
+  ) {
+    return (
+      1 +
+      lambdaAway * rho
+    );
+  }
+
+  if (
+    homeGoals === 1 &&
+    awayGoals === 1
+  ) {
+    return 1 - rho;
+  }
+
+  return 1;
+}
+
+
+/* ============================================================
+   MATRICE DES SCORES
+   ============================================================ */
+
+function createScoreMatrix(
+  lambdaHome,
+  lambdaAway,
+  config
+) {
+  const matrix = [];
+
+  let total = 0;
+
+  for (
+    let homeGoals = 0;
+    homeGoals <= config.maxGoals;
+    homeGoals++
+  ) {
+    const row = [];
+
+    for (
+      let awayGoals = 0;
+      awayGoals <= config.maxGoals;
+      awayGoals++
+    ) {
+      let probability =
+        poisson(
+          homeGoals,
+          lambdaHome
+        ) *
+        poisson(
+          awayGoals,
+          lambdaAway
+        );
+
+
+      probability *=
+        dixonColesTau(
+          homeGoals,
+          awayGoals,
+          lambdaHome,
+          lambdaAway,
+          config.rho
+        );
+
+
+      probability =
+        Math.max(
+          config.epsilon,
+          probability
+        );
+
+
+      row.push(probability);
+
+      total += probability;
+    }
+
+    matrix.push(row);
+  }
+
+
+  if (total > 0) {
+    for (let h = 0; h < matrix.length; h++) {
+      for (
+        let a = 0;
+        a < matrix[h].length;
+        a++
+      ) {
+        matrix[h][a] /= total;
+      }
+    }
+  }
+
+  return matrix;
+}
+
+
+/* ============================================================
+   EXTRACTION PROBABILITÉS
+   ============================================================ */
+
+function matrixToProbabilities(matrix) {
   let home = 0;
   let draw = 0;
   let away = 0;
 
-  let over15 = 0;
   let over25 = 0;
-  let btts = 0;
+  let under25 = 0;
 
-  let probabilityMass = 0;
+  let bttsYes = 0;
 
-  const rawScores =
-    [];
+  let expectedHomeGoals = 0;
+  let expectedAwayGoals = 0;
 
-  for (
-    let homeGoals = 0;
-    homeGoals <= 8;
-    homeGoals += 1
-  ) {
+  const scores = [];
 
+
+  for (let h = 0; h < matrix.length; h++) {
     for (
-      let awayGoals = 0;
-      awayGoals <= 8;
-      awayGoals += 1
+      let a = 0;
+      a < matrix[h].length;
+      a++
     ) {
+      const p = matrix[h][a];
 
-      const probability =
-        poisson(
-          lambdaHome,
-          homeGoals
-        )
-        *
-        poisson(
-          lambdaAway,
-          awayGoals
-        )
-        *
-        dcTau(
-          homeGoals,
-          awayGoals,
-          lambdaHome,
-          lambdaAway,
-          rho
-        );
+      if (h > a) home += p;
+      else if (h === a) draw += p;
+      else away += p;
 
 
-      probabilityMass +=
-        probability;
-
-
-      if (
-        includeScores
-      ) {
-
-        rawScores.push({
-
-          homeGoals,
-
-          awayGoals,
-
-          probability
-        });
-      }
-
-
-      if (
-        homeGoals >
-        awayGoals
-      ) {
-
-        home +=
-          probability;
-
-      } else if (
-        homeGoals ===
-        awayGoals
-      ) {
-
-        draw +=
-          probability;
-
+      if (h + a >= 3) {
+        over25 += p;
       } else {
-
-        away +=
-          probability;
+        under25 += p;
       }
 
 
-      if (
-        homeGoals +
-        awayGoals >= 2
-      ) {
-
-        over15 +=
-          probability;
+      if (h > 0 && a > 0) {
+        bttsYes += p;
       }
 
 
-      if (
-        homeGoals +
-        awayGoals >= 3
-      ) {
+      expectedHomeGoals +=
+        h * p;
 
-        over25 +=
-          probability;
-      }
+      expectedAwayGoals +=
+        a * p;
 
 
-      if (
-        homeGoals > 0 &&
-        awayGoals > 0
-      ) {
-
-        btts +=
-          probability;
-      }
+      scores.push({
+        home: h,
+        away: a,
+        probability: p,
+      });
     }
   }
 
 
-  const scoreDistribution =
-
-    includeScores
-
-      ? rawScores.map(
-          score => ({
-
-            homeGoals:
-              score.homeGoals,
-
-            awayGoals:
-              score.awayGoals,
-
-            probability:
-
-              score.probability
-
-              /
-
-              probabilityMass
-          })
-        )
-
-      : [];
+  scores.sort(
+    (x, y) =>
+      y.probability -
+      x.probability
+  );
 
 
   return {
+    probabilities:
+      normalizeProbabilities({
+        home,
+        draw,
+        away,
+      }),
 
-    home:
-      home /
-      probabilityMass,
+    over25,
+    under25,
 
-    draw:
-      draw /
-      probabilityMass,
+    bttsYes,
+    bttsNo:
+      1 - bttsYes,
 
-    away:
-      away /
-      probabilityMass,
+    expectedGoals: {
+      home: expectedHomeGoals,
+      away: expectedAwayGoals,
+      total:
+        expectedHomeGoals +
+        expectedAwayGoals,
+    },
 
-    over15:
-      over15 /
-      probabilityMass,
-
-    over25:
-      over25 /
-      probabilityMass,
-
-    btts:
-      btts /
-      probabilityMass,
-
-    scoreDistribution
+    likelyScores:
+      scores.slice(0, 5),
   };
 }
 
 
-// ===================================================
-// SCORES EXACTS
-//
-// Dixon-Coles construit la forme des scores.
-//
-// Ensuite nous réalignons chaque famille de scores
-// sur les probabilités 1N2 finales de V0.7.
-//
-// Ainsi :
-//
-// somme des scores domicile = P(1)
-// somme des scores nuls     = P(N)
-// somme des scores extérieur= P(2)
-//
-// Cela ne modifie PAS V0.7.
-// ===================================================
-
-function scoreOutcome(
-  score
-) {
-
-  if (
-    score.homeGoals >
-    score.awayGoals
-  ) {
-
-    return 'home';
-  }
-
-
-  if (
-    score.homeGoals ===
-    score.awayGoals
-  ) {
-
-    return 'draw';
-  }
-
-
-  return 'away';
-}
-
-
-function alignScoreDistribution(
-  scores,
-  dcProbability,
-  finalProbability
-) {
-
-  if (
-    !Array.isArray(
-      scores
-    )
-    ||
-    !scores.length
-  ) {
-
-    return [];
-  }
-
-
-  const ratios = {
-
-    home:
-
-      finalProbability.home
-
-      /
-
-      Math.max(
-        1e-12,
-        dcProbability.home
-      ),
-
-
-    draw:
-
-      finalProbability.draw
-
-      /
-
-      Math.max(
-        1e-12,
-        dcProbability.draw
-      ),
-
-
-    away:
-
-      finalProbability.away
-
-      /
-
-      Math.max(
-        1e-12,
-        dcProbability.away
-      )
-  };
-
-
-  const adjusted =
-    scores.map(
-      score => {
-
-        const outcome =
-          scoreOutcome(
-            score
-          );
-
-
-        return {
-
-          homeGoals:
-            score.homeGoals,
-
-          awayGoals:
-            score.awayGoals,
-
-          probability:
-
-            score.probability
-
-            *
-
-            ratios[
-              outcome
-            ]
-        };
-      }
-    );
-
-
-  const total =
-    adjusted.reduce(
-      (
-        sum,
-        score
-      ) =>
-
-        sum +
-        score.probability,
-
-      0
-    );
-
-
-  if (
-    !Number.isFinite(
-      total
-    )
-    ||
-    total <= 0
-  ) {
-
-    return [];
-  }
-
-
-  return adjusted.map(
-    score => ({
-
-      homeGoals:
-        score.homeGoals,
-
-      awayGoals:
-        score.awayGoals,
-
-      probability:
-
-        score.probability
-
-        /
-
-        total
-    })
-  );
-}
-
-
-function topExactScores(
-  distribution,
-  limit = 5
-) {
-
-  return [
-
-    ...distribution
-
-  ]
-
-    .sort(
-      (
-        first,
-        second
-      ) =>
-
-        second.probability
-
-        -
-
-        first.probability
-    )
-
-    .slice(
-      0,
-      limit
-    )
-
-    .map(
-      score => ({
-
-        score:
-          `${score.homeGoals}-${score.awayGoals}`,
-
-        homeGoals:
-          score.homeGoals,
-
-        awayGoals:
-          score.awayGoals,
-
-        probability:
-          score.probability
-      })
-    );
-}
-
-  // ===================================================
-  // ELO
-  // ===================================================
-
-  function buildEloTimeline(
-    history,
-    config
-  ) {
-    const ratings =
-      new Map();
-
-    const preMatch =
-      new Map();
-
-    const chronological =
-      [...history]
-        .filter(
-          match =>
-            MODEL_LEAGUES.has(
-              match.competition
-            )
-        )
-        .filter(
-          match =>
-            Number.isFinite(
-              matchTime(match)
-            )
-        )
-        .sort(
-          (first, second) =>
-            matchTime(first)
-            -
-            matchTime(second)
-        );
-
-    const getRating =
-      key =>
-        ratings.has(key)
-          ? ratings.get(key)
-          : 1500;
-
-    chronological.forEach(match => {
-      const homeKey = teamKey(
-        match.competition,
-        match.home
-      );
-
-      const awayKey = teamKey(
-        match.competition,
-        match.away
-      );
-
-      const homeRating =
-        getRating(homeKey);
-
-      const awayRating =
-        getRating(awayKey);
-
-      preMatch.set(
-        String(match.id),
-        {
-          homeRating,
-          awayRating
-        }
-      );
-
-      const expectedHome =
-        1
-        /
-        (
-          1
-          +
-          Math.pow(
-            10,
-            -(
-              homeRating
-              +
-              config.eloHomeAdv
-              -
-              awayRating
-            )
-            /
-            400
-          )
-        );
-
-      const homeGoals =
-        num(
-          match?.score?.home
-        );
-
-      const awayGoals =
-        num(
-          match?.score?.away
-        );
-
-      if (
-        homeGoals === null ||
-        awayGoals === null
-      ) {
-        return;
-      }
-
-      const actualHome =
-        homeGoals > awayGoals
-          ? 1
-          : homeGoals === awayGoals
-            ? 0.5
-            : 0;
-
-      const goalDifference =
-        Math.abs(
-          homeGoals -
-          awayGoals
-        );
-
-      const marginMultiplier =
-        goalDifference <= 1
-          ? 1
-          : Math.sqrt(
-              goalDifference
-            );
-
-      const delta =
-        config.eloK
-        *
-        marginMultiplier
-        *
-        (
-          actualHome -
-          expectedHome
-        );
-
-      ratings.set(
-        homeKey,
-        homeRating +
-        delta
-      );
-
-      ratings.set(
-        awayKey,
-        awayRating -
-        delta
-      );
-    });
-
-    return {
-      ratings,
-      preMatch
-    };
-  }
-
-  function eloProbability(
-    target,
-    baseline,
-    eloState,
-    config
-  ) {
-    const snapshot =
-      eloState.preMatch.get(
-        String(target.id)
-      );
-
-    let homeRating;
-    let awayRating;
-
-    if (snapshot) {
-      homeRating =
-        snapshot.homeRating;
-
-      awayRating =
-        snapshot.awayRating;
-    } else {
-      homeRating =
-        eloState.ratings.get(
-          teamKey(
-            target.competition,
-            target.home
-          )
-        )
-        ??
-        1500;
-
-      awayRating =
-        eloState.ratings.get(
-          teamKey(
-            target.competition,
-            target.away
-          )
-        )
-        ??
-        1500;
-    }
-
-    const expectedHome =
-      1
-      /
-      (
-        1
-        +
-        Math.pow(
-          10,
-          -(
-            homeRating
-            +
-            config.eloHomeAdv
-            -
-            awayRating
-          )
-          /
-          400
-        )
-      );
-
-    const closeness =
-      1
-      -
-      Math.min(
-        1,
-        Math.abs(
-          expectedHome -
-          0.5
-        )
-        *
-        2
-      );
-
-    const draw =
-      clamp(
-        baseline
-          .resultPrior
-          .draw
-        *
-        (
-          0.88
-          +
-          0.24 *
-          closeness
-        ),
-        0.16,
-        0.34
-      );
-
-    const remainder =
-      1 - draw;
-
-    return {
-      home:
-        remainder *
-        expectedHome,
-
-      draw,
-
-      away:
-        remainder *
-        (
-          1 -
-          expectedHome
-        ),
-
-      homeRating,
-      awayRating
-    };
-  }
-
-  // ===================================================
-  // TEMPÉRATURE / CALIBRATION
-  // ===================================================
-
-  function temperatureScale(
-    probability,
-    temperature
-  ) {
-    const temp =
-      Math.max(
-        0.6,
-        temperature
-      );
-
-    const home =
-      Math.pow(
-        Math.max(
-          1e-9,
-          probability.home
-        ),
-        1 / temp
-      );
-
-    const draw =
-      Math.pow(
-        Math.max(
-          1e-9,
-          probability.draw
-        ),
-        1 / temp
-      );
-
-    const away =
-      Math.pow(
-        Math.max(
-          1e-9,
-          probability.away
-        ),
-        1 / temp
-      );
-
-    const total =
-      home +
-      draw +
-      away;
-
-    return {
-      home:
-        home /
-        total,
-
-      draw:
-        draw /
-        total,
-
-      away:
-        away /
-        total
-    };
-  }
-
-  function applyClassCalibration(
-    probability,
-    factors
-  ) {
-    const home =
-      probability.home *
-      factors.home;
-
-    const draw =
-      probability.draw *
-      factors.draw;
-
-    const away =
-      probability.away *
-      factors.away;
-
-    const total =
-      home +
-      draw +
-      away;
-
-    return {
-      home:
-        home /
-        total,
-
-      draw:
-        draw /
-        total,
-
-      away:
-        away /
-        total
-    };
-  }
-
-  function calibrationForLeague(
-    calibration,
-    competition
-  ) {
-    return (
-      calibration?.[
-        competition
-      ]
-      ||
-      calibration?.GLOBAL
-      ||
-      {
-        home: 1,
-        draw: 1,
-        away: 1
-      }
-    );
-  }
-
-  // ===================================================
-  // MODÈLE V0.7
-  // ===================================================
-
-  function buildModel(
-  history,
-  target,
-  beforeTime,
-  config,
-  eloState,
+/* ============================================================
+   CALIBRATION
+   ============================================================ */
+
+function calibrateProbabilities(
+  probabilities,
   calibration = null,
-  includeScores = false
+  strength = 0.55
 ) {
-  ) {
-    const referenceTimestamp =
-      Number.isFinite(beforeTime)
-        ? beforeTime
-        : Date.now();
-
-    const baseline =
-      leagueBaseline(
-        history,
-        target.competition,
-        beforeTime,
-        config.halfLife
-      );
-
-    const homeAll =
-      weightedSummary(
-        teamMatchesBefore(
-          history,
-          target.home,
-          target.competition,
-          beforeTime,
-          'all',
-          10,
-          target.id
-        ),
-        target.home,
-        referenceTimestamp,
-        config.halfLife
-      );
-
-    const awayAll =
-      weightedSummary(
-        teamMatchesBefore(
-          history,
-          target.away,
-          target.competition,
-          beforeTime,
-          'all',
-          10,
-          target.id
-        ),
-        target.away,
-        referenceTimestamp,
-        config.halfLife
-      );
-
-    const homeVenue =
-      weightedSummary(
-        teamMatchesBefore(
-          history,
-          target.home,
-          target.competition,
-          beforeTime,
-          'home',
-          8,
-          target.id
-        ),
-        target.home,
-        referenceTimestamp,
-        config.halfLife
-      );
-
-    const awayVenue =
-      weightedSummary(
-        teamMatchesBefore(
-          history,
-          target.away,
-          target.competition,
-          beforeTime,
-          'away',
-          8,
-          target.id
-        ),
-        target.away,
-        referenceTimestamp,
-        config.halfLife
-      );
-
-    const leagueTeamAverage =
-      (
-        baseline.homeGoalAvg
-        +
-        baseline.awayGoalAvg
-      )
-      /
-      2;
-
-    const homeAttackVenue =
-      shrinkRate(
-        homeVenue.gf,
-        homeVenue.weight,
-        baseline.homeGoalAvg,
-        config.shrink
-      );
-
-    const awayDefenseVenue =
-      shrinkRate(
-        awayVenue.ga,
-        awayVenue.weight,
-        baseline.homeGoalAvg,
-        config.shrink
-      );
-
-    const awayAttackVenue =
-      shrinkRate(
-        awayVenue.gf,
-        awayVenue.weight,
-        baseline.awayGoalAvg,
-        config.shrink
-      );
-
-    const homeDefenseVenue =
-      shrinkRate(
-        homeVenue.ga,
-        homeVenue.weight,
-        baseline.awayGoalAvg,
-        config.shrink
-      );
-
-    const homeAttackAll =
-      shrinkRate(
-        homeAll.gf,
-        homeAll.weight,
-        leagueTeamAverage,
-        config.shrink
-      );
-
-    const awayDefenseAll =
-      shrinkRate(
-        awayAll.ga,
-        awayAll.weight,
-        leagueTeamAverage,
-        config.shrink
-      );
-
-    const awayAttackAll =
-      shrinkRate(
-        awayAll.gf,
-        awayAll.weight,
-        leagueTeamAverage,
-        config.shrink
-      );
-
-    const homeDefenseAll =
-      shrinkRate(
-        homeAll.ga,
-        homeAll.weight,
-        leagueTeamAverage,
-        config.shrink
-      );
-
-    const venueHome =
-      Math.sqrt(
-        Math.max(
-          0.05,
-          homeAttackVenue *
-          awayDefenseVenue
-        )
-      );
-
-    const venueAway =
-      Math.sqrt(
-        Math.max(
-          0.05,
-          awayAttackVenue *
-          homeDefenseVenue
-        )
-      );
-
-    const generalHome =
-      Math.sqrt(
-        Math.max(
-          0.05,
-          homeAttackAll *
-          awayDefenseAll
-        )
-      );
-
-    const generalAway =
-      Math.sqrt(
-        Math.max(
-          0.05,
-          awayAttackAll *
-          homeDefenseAll
-        )
-      );
-
-    let lambdaHome =
-      config.venueShare *
-      venueHome
-      +
-      (
-        1 -
-        config.venueShare
-      )
-      *
-      generalHome;
-
-    let lambdaAway =
-      config.venueShare *
-      venueAway
-      +
-      (
-        1 -
-        config.venueShare
-      )
-      *
-      generalAway;
-
-    const homePPG =
-      shrinkRate(
-        homeAll.points,
-        homeAll.weight,
-        1.35,
-        config.shrink
-      );
-
-    const awayPPG =
-      shrinkRate(
-        awayAll.points,
-        awayAll.weight,
-        1.35,
-        config.shrink
-      );
-
-    const formDifference =
-      clamp(
-        (
-          homePPG -
-          awayPPG
-        )
-        /
-        3,
-        -1,
-        1
-      );
-
-    lambdaHome *=
-      1
-      +
-      config.formImpact *
-      formDifference;
-
-    lambdaAway *=
-      1
-      -
-      config.formImpact *
-      formDifference;
-
-    lambdaHome =
-      clamp(
-        lambdaHome,
-        0.30,
-        3.30
-      );
-
-    lambdaAway =
-      clamp(
-        lambdaAway,
-        0.25,
-        3.10
-      );
-
-    const dc =
-       dixonColesMarkets(
-    lambdaHome,
-    lambdaAway,
-    config.rho,
-    includeScores
-  );
-      );
-
-    const elo =
-      eloProbability(
-        target,
-        baseline,
-        eloState,
-        config
-      );
-
-    let probability = {
-      home:
-        (
-          1 -
-          config.eloBlend
-        )
-        *
-        dc.home
-        +
-        config.eloBlend *
-        elo.home,
-
-      draw:
-        (
-          1 -
-          config.eloBlend
-        )
-        *
-        dc.draw
-        +
-        config.eloBlend *
-        elo.draw,
-
-      away:
-        (
-          1 -
-          config.eloBlend
-        )
-        *
-        dc.away
-        +
-        config.eloBlend *
-        elo.away
-    };
-
-    const generalCoverage =
-      clamp(
-        Math.min(
-          homeAll.played,
-          awayAll.played
-        )
-        /
-        8,
-        0,
-        1
-      );
-
-    const venueCoverage =
-      clamp(
-        Math.min(
-          homeVenue.played,
-          awayVenue.played
-        )
-        /
-        5,
-        0,
-        1
-      );
-
-    const leagueCoverage =
-      clamp(
-        baseline.n /
-        100,
-        0,
-        1
-      );
-
-    const quality =
-      Math.round(
-        25
-        +
-        35 *
-        generalCoverage
-        +
-        25 *
-        venueCoverage
-        +
-        15 *
-        leagueCoverage
-      );
-
-    const priorBlend =
-      clamp(
-        config.priorBlend
-        +
-        (
-          1 -
-          quality / 100
-        )
-        *
-        0.16,
-        0.06,
-        0.38
-      );
-
-    probability = {
-      home:
-        (
-          1 -
-          priorBlend
-        )
-        *
-        probability.home
-        +
-        priorBlend *
-        baseline
-          .resultPrior
-          .home,
-
-      draw:
-        (
-          1 -
-          priorBlend
-        )
-        *
-        probability.draw
-        +
-        priorBlend *
-        baseline
-          .resultPrior
-          .draw,
-
-      away:
-        (
-          1 -
-          priorBlend
-        )
-        *
-        probability.away
-        +
-        priorBlend *
-        baseline
-          .resultPrior
-          .away
-    };
-
-    const total =
-      probability.home
-      +
-      probability.draw
-      +
-      probability.away;
-
-    probability = {
-      home:
-        probability.home /
-        total,
-
-      draw:
-        probability.draw /
-        total,
-
-      away:
-        probability.away /
-        total
-    };
-
-    probability =
-      temperatureScale(
-        probability,
-        config.temperature
-      );
-
-    if (calibration) {
-      probability =
-        applyClassCalibration(
-          probability,
-          calibrationForLeague(
-            calibration,
-            target.competition
-          )
-        );
-    }
-    const scoreDistribution =
-
-  includeScores
-
-    ? alignScoreDistribution(
-        dc.scoreDistribution,
-        {
-          home:
-            dc.home,
-
-          draw:
-            dc.draw,
-
-          away:
-            dc.away
-        },
-        probability
-      )
-
-    : [];
-
-
-const topScores =
-
-  includeScores
-
-    ? topExactScores(
-        scoreDistribution,
-        5
-      )
-
-    : [];
-
-
-const mostLikelyScore =
-
-  topScores.length
-
-    ? topScores[0]
-
-    : null;
-    return {
-      ...probability,
-
-      over15:
-        dc.over15,
-
-      over25:
-        dc.over25,
-
-      btts:
-        dc.btts,
-
-      lambdaHome,
-      lambdaAway,
-
-      quality,
-
-      eloHome:
-        elo.homeRating,
-
-      eloAway:
-        elo.awayRating,
-
-      sample: {
-        homeAll:
-          homeAll.played,
-
-        awayAll:
-          awayAll.played,
-
-        homeVenue:
-          homeVenue.played,
-
-        awayVenue:
-          awayVenue.played,
-
-        league:
-          baseline.n
-      },
-
-      baseline:
-        baseline.resultPrior
-    };
+  if (!calibration) {
+    return probabilities;
   }
 
-  // ===================================================
-  // PARAMÈTRES CANDIDATS — IDENTIQUES À V0.7
-  // ===================================================
+  const p = {
+    ...probabilities,
+  };
 
-  function candidateConfigs() {
-    return [
-      {
-        halfLife: 55,
-        rho: -0.10,
-        temperature: 1.04,
-        venueShare: 0.52,
-        shrink: 4,
-        formImpact: 0.04,
-        priorBlend: 0.14,
-        eloBlend: 0.15,
-        eloHomeAdv: 60,
-        eloK: 20
-      },
 
-      {
-        halfLife: 55,
-        rho: -0.06,
-        temperature: 1.06,
-        venueShare: 0.58,
-        shrink: 4,
-        formImpact: 0.05,
-        priorBlend: 0.14,
-        eloBlend: 0.20,
-        eloHomeAdv: 60,
-        eloK: 20
-      },
+  for (const key of [
+    "home",
+    "draw",
+    "away",
+  ]) {
+    const cal =
+      calibration[key];
 
-      {
-        halfLife: 75,
-        rho: -0.10,
-        temperature: 1.04,
-        venueShare: 0.52,
-        shrink: 4,
-        formImpact: 0.04,
-        priorBlend: 0.16,
-        eloBlend: 0.20,
-        eloHomeAdv: 60,
-        eloK: 20
-      },
-
-      {
-        halfLife: 75,
-        rho: -0.06,
-        temperature: 1.06,
-        venueShare: 0.58,
-        shrink: 4,
-        formImpact: 0.05,
-        priorBlend: 0.16,
-        eloBlend: 0.25,
-        eloHomeAdv: 65,
-        eloK: 20
-      },
-
-      {
-        halfLife: 90,
-        rho: -0.08,
-        temperature: 1.04,
-        venueShare: 0.50,
-        shrink: 5,
-        formImpact: 0.04,
-        priorBlend: 0.16,
-        eloBlend: 0.20,
-        eloHomeAdv: 65,
-        eloK: 18
-      },
-
-      {
-        halfLife: 90,
-        rho: -0.04,
-        temperature: 1.08,
-        venueShare: 0.58,
-        shrink: 5,
-        formImpact: 0.05,
-        priorBlend: 0.18,
-        eloBlend: 0.25,
-        eloHomeAdv: 65,
-        eloK: 18
-      },
-
-      {
-        halfLife: 120,
-        rho: -0.08,
-        temperature: 1.05,
-        venueShare: 0.50,
-        shrink: 5,
-        formImpact: 0.04,
-        priorBlend: 0.18,
-        eloBlend: 0.25,
-        eloHomeAdv: 70,
-        eloK: 18
-      },
-
-      {
-        halfLife: 120,
-        rho: -0.04,
-        temperature: 1.08,
-        venueShare: 0.56,
-        shrink: 5,
-        formImpact: 0.05,
-        priorBlend: 0.18,
-        eloBlend: 0.30,
-        eloHomeAdv: 70,
-        eloK: 18
-      }
-    ];
-  }
-
-  // ===================================================
-  // BACKTEST / CALIBRATION
-  // ===================================================
-
-  function predictionRows(
-    history,
-    matchesToPredict,
-    config,
-    eloState,
-    calibration = null
-  ) {
-    const rows = [];
-
-    matchesToPredict.forEach(match => {
-      const model =
-        buildModel(
-          history,
-          match,
-          matchTime(match),
-          config,
-          eloState,
-          calibration
-        );
-
-      if (
-        model.sample.homeAll < 4 ||
-        model.sample.awayAll < 4 ||
-        model.sample.league < 25
-      ) {
-        return;
-      }
-
-      if (
-        ![
-          '1',
-          'N',
-          '2'
-        ].includes(
-          match.actualResult
-        )
-      ) {
-        return;
-      }
-
-      rows.push({
-        match,
-        model
-      });
-    });
-
-    return rows;
-  }
-
-  function fitOneCalibration(
-    rows
-  ) {
-    if (!rows.length) {
-      return {
-        home: 1,
-        draw: 1,
-        away: 1
-      };
+    if (
+      cal === undefined ||
+      cal === null
+    ) {
+      continue;
     }
 
-    let predictedHome = 0;
-    let predictedDraw = 0;
-    let predictedAway = 0;
+    /*
+      calibration[key] représente
+      une correction multiplicative.
 
-    let actualHome = 0;
-    let actualDraw = 0;
-    let actualAway = 0;
-
-    rows.forEach(
-      ({
-        match,
-        model
-      }) => {
-        predictedHome +=
-          model.home;
-
-        predictedDraw +=
-          model.draw;
-
-        predictedAway +=
-          model.away;
-
-        if (
-          match.actualResult === '1'
-        ) {
-          actualHome += 1;
-        }
-
-        if (
-          match.actualResult === 'N'
-        ) {
-          actualDraw += 1;
-        }
-
-        if (
-          match.actualResult === '2'
-        ) {
-          actualAway += 1;
-        }
+      Exemple :
+      {
+        home: 1.02,
+        draw: 0.96,
+        away: 1.01
       }
-    );
-
-    const n =
-      rows.length;
+    */
 
     const factor =
-      (
-        actualRate,
-        predictedRate
-      ) =>
-        clamp(
-          actualRate
-          /
-          Math.max(
-            0.05,
-            predictedRate
-          ),
-          0.88,
-          1.12
-        );
+      1 +
+      (safeNumber(cal, 1) - 1) *
+        strength;
 
-    return {
+    p[key] *= factor;
+  }
+
+
+  return normalizeProbabilities(p);
+}
+
+
+/* ============================================================
+   CONSTRUCTION MODÈLE
+   ============================================================ */
+
+export function buildModel({
+  matches = [],
+  leagueId = null,
+  referenceDate = new Date(),
+  config = {},
+} = {}) {
+  const cfg = {
+    ...DEFAULT_CONFIG,
+    ...config,
+  };
+
+
+  const history =
+    prepareHistory(
+      matches,
+      {
+        leagueId,
+        referenceDate,
+        historyDays:
+          cfg.historyDays,
+      }
+    );
+
+
+  const stats =
+    computeStats(
+      history,
+      referenceDate,
+      cfg
+    );
+
+
+  const elo =
+    computeElo(
+      history,
+      cfg
+    );
+
+
+  return {
+    version: "0.7",
+
+    leagueId,
+
+    referenceDate,
+
+    history,
+
+    stats,
+
+    elo,
+
+    config: cfg,
+  };
+}
+
+
+/* ============================================================
+   PREDICTION V0.7
+   ============================================================ */
+
+export function predictV07({
+  homeTeamId,
+  awayTeamId,
+
+  matches = null,
+  model = null,
+
+  leagueId = null,
+
+  date = new Date(),
+
+  calibration = null,
+
+  config = {},
+} = {}) {
+  if (
+    homeTeamId === undefined ||
+    awayTeamId === undefined
+  ) {
+    throw new Error(
+      "predictV07 : homeTeamId et awayTeamId sont obligatoires."
+    );
+  }
+
+
+  const cfg = {
+    ...DEFAULT_CONFIG,
+    ...config,
+  };
+
+
+  const activeModel =
+    model ||
+    buildModel({
+      matches: matches || [],
+      leagueId,
+      referenceDate: date,
+      config: cfg,
+    });
+
+
+  const stats =
+    activeModel.stats;
+
+  const elo =
+    activeModel.elo;
+
+
+  const homeStrength =
+    teamStrengths(
+      String(homeTeamId),
+      stats,
+      cfg
+    );
+
+  const awayStrength =
+    teamStrengths(
+      String(awayTeamId),
+      stats,
+      cfg
+    );
+
+
+  /*
+    Dixon-Coles / Poisson
+    ---------------------
+
+    xG domicile =
+      moyenne buts domicile ligue
+      × attaque domicile équipe A
+      × défense extérieure équipe B
+
+    xG extérieur =
+      moyenne buts extérieur ligue
+      × attaque extérieure équipe B
+      × défense domicile équipe A
+  */
+
+  let lambdaHome =
+    stats.leagueHomeAvg *
+    homeStrength.homeAttack *
+    awayStrength.awayDefense;
+
+
+  let lambdaAway =
+    stats.leagueAwayAvg *
+    awayStrength.awayAttack *
+    homeStrength.homeDefense;
+
+
+  /* ========================================================
+     CORRECTION ELO
+     ======================================================== */
+
+  const homeElo =
+    elo.get(String(homeTeamId)) ??
+    cfg.initialElo;
+
+  const awayElo =
+    elo.get(String(awayTeamId)) ??
+    cfg.initialElo;
+
+
+  const eloHomeProbability =
+    eloExpected(
+      homeElo,
+      awayElo,
+      cfg
+    );
+
+
+  /*
+    0.50 = forces égales.
+
+    On transforme ensuite l'avantage
+    Elo en multiplicateur modéré sur
+    les xG.
+  */
+
+  const eloSignal =
+    (eloHomeProbability - 0.5) * 2;
+
+
+  const homeEloFactor =
+    Math.exp(
+      eloSignal *
+      cfg.eloWeight
+    );
+
+
+  const awayEloFactor =
+    Math.exp(
+      -eloSignal *
+      cfg.eloWeight
+    );
+
+
+  lambdaHome *= homeEloFactor;
+  lambdaAway *= awayEloFactor;
+
+
+  lambdaHome =
+    clamp(
+      lambdaHome,
+      cfg.minLambda,
+      cfg.maxLambda
+    );
+
+  lambdaAway =
+    clamp(
+      lambdaAway,
+      cfg.minLambda,
+      cfg.maxLambda
+    );
+
+
+  /* ========================================================
+     MATRICE DIXON-COLES
+     ======================================================== */
+
+  const matrix =
+    createScoreMatrix(
+      lambdaHome,
+      lambdaAway,
+      cfg
+    );
+
+
+  const derived =
+    matrixToProbabilities(
+      matrix
+    );
+
+
+  /* ========================================================
+     CALIBRATION FINALE
+     ======================================================== */
+
+  const rawProbabilities =
+    derived.probabilities;
+
+
+  const calibrated =
+    calibrateProbabilities(
+      rawProbabilities,
+      calibration,
+      cfg.calibrationStrength
+    );
+
+
+  const confidence =
+    calculateConfidence({
+      model: activeModel,
+
+      homeStrength,
+      awayStrength,
+
+      probabilities: calibrated,
+
+      homeTeamId,
+      awayTeamId,
+    });
+
+
+  return {
+    version: "0.7",
+
+    leagueId,
+
+    homeTeamId:
+      String(homeTeamId),
+
+    awayTeamId:
+      String(awayTeamId),
+
+    predictionDate: date,
+
+    probabilities: calibrated,
+
+    rawProbabilities,
+
+    percentages: {
       home:
-        factor(
-          actualHome / n,
-          predictedHome / n
-        ),
+        calibrated.home * 100,
 
       draw:
-        factor(
-          actualDraw / n,
-          predictedDraw / n
-        ),
+        calibrated.draw * 100,
 
       away:
-        factor(
-          actualAway / n,
-          predictedAway / n
-        )
+        calibrated.away * 100,
+    },
+
+    expectedGoals: {
+      home:
+        lambdaHome,
+
+      away:
+        lambdaAway,
+
+      total:
+        lambdaHome +
+        lambdaAway,
+    },
+
+    markets: {
+      over25:
+        derived.over25,
+
+      under25:
+        derived.under25,
+
+      bttsYes:
+        derived.bttsYes,
+
+      bttsNo:
+        derived.bttsNo,
+    },
+
+    percentagesMarkets: {
+      over25:
+        derived.over25 * 100,
+
+      under25:
+        derived.under25 * 100,
+
+      bttsYes:
+        derived.bttsYes * 100,
+
+      bttsNo:
+        derived.bttsNo * 100,
+    },
+
+    likelyScores:
+      derived.likelyScores.map(
+        (score) => ({
+          ...score,
+
+          percentage:
+            score.probability *
+            100,
+        })
+      ),
+
+    elo: {
+      home: homeElo,
+
+      away: awayElo,
+
+      difference:
+        homeElo -
+        awayElo,
+
+      homeExpected:
+        eloHomeProbability,
+    },
+
+    strengths: {
+      home: homeStrength,
+      away: awayStrength,
+    },
+
+    league: {
+      averageHomeGoals:
+        stats.leagueHomeAvg,
+
+      averageAwayGoals:
+        stats.leagueAwayAvg,
+
+      historyMatches:
+        stats.matchCount,
+    },
+
+    confidence,
+
+    bestPick:
+      bestPick(
+        calibrated
+      ),
+
+    scoreMatrix:
+      matrix,
+  };
+}
+
+
+/* ============================================================
+   CONFIANCE
+   ============================================================ */
+
+function calculateConfidence({
+  model,
+  homeStrength,
+  awayStrength,
+  probabilities,
+}) {
+  const historyQuality =
+    clamp(
+      model.stats.matchCount /
+        120,
+      0,
+      1
+    );
+
+
+  const teamQuality =
+    (
+      homeStrength.dataQuality +
+      awayStrength.dataQuality
+    ) /
+    2;
+
+
+  const sorted =
+    Object.values(
+      probabilities
+    ).sort(
+      (a, b) => b - a
+    );
+
+
+  const separation =
+    sorted.length >= 2
+      ? sorted[0] - sorted[1]
+      : 0;
+
+
+  const separationQuality =
+    clamp(
+      separation / 0.25,
+      0,
+      1
+    );
+
+
+  const confidence =
+    (
+      historyQuality *
+        0.35 +
+
+      teamQuality *
+        0.40 +
+
+      separationQuality *
+        0.25
+    );
+
+
+  return {
+    score:
+      Math.round(
+        confidence * 100
+      ),
+
+    historyQuality:
+      Math.round(
+        historyQuality * 100
+      ),
+
+    teamDataQuality:
+      Math.round(
+        teamQuality * 100
+      ),
+
+    separation:
+      Math.round(
+        separationQuality * 100
+      ),
+
+    level:
+      confidence >= 0.75
+        ? "HIGH"
+        : confidence >= 0.50
+        ? "MEDIUM"
+        : "LOW",
+  };
+}
+
+
+/* ============================================================
+   BEST PICK
+   ============================================================ */
+
+export function bestPick(
+  probabilities
+) {
+  if (!probabilities) {
+    return null;
+  }
+
+  const entries = [
+    {
+      outcome: "HOME",
+      label: "1",
+      probability:
+        safeNumber(
+          probabilities.home
+        ),
+    },
+
+    {
+      outcome: "DRAW",
+      label: "X",
+      probability:
+        safeNumber(
+          probabilities.draw
+        ),
+    },
+
+    {
+      outcome: "AWAY",
+      label: "2",
+      probability:
+        safeNumber(
+          probabilities.away
+        ),
+    },
+  ];
+
+
+  entries.sort(
+    (a, b) =>
+      b.probability -
+      a.probability
+  );
+
+
+  const best = entries[0];
+
+  return {
+    ...best,
+
+    percentage:
+      best.probability *
+      100,
+
+    second:
+      entries[1],
+  };
+}
+
+
+/* ============================================================
+   BRIER SCORE 1X2
+   ============================================================ */
+
+export function brier3(
+  prediction,
+  actual
+) {
+  let result;
+
+  if (
+    actual === "H" ||
+    actual === "HOME" ||
+    actual === 1
+  ) {
+    result = {
+      home: 1,
+      draw: 0,
+      away: 0,
     };
   }
 
-  function fitLeagueCalibrations(
-    rows
+  else if (
+    actual === "D" ||
+    actual === "DRAW" ||
+    actual === "X"
   ) {
-    const result = {
-      GLOBAL:
-        fitOneCalibration(
-          rows
-        )
+    result = {
+      home: 0,
+      draw: 1,
+      away: 0,
     };
-
-    MODEL_LEAGUES.forEach(
-      league => {
-        const leagueRows =
-          rows.filter(
-            row =>
-              row
-                .match
-                .competition ===
-              league
-          );
-
-        result[
-          league
-        ] =
-          leagueRows.length >= 20
-            ? fitOneCalibration(
-                leagueRows
-              )
-            : result.GLOBAL;
-      }
-    );
-
-    return result;
   }
 
-  function evaluateRows(
-    rows
+  else if (
+    actual === "A" ||
+    actual === "AWAY" ||
+    actual === 2
   ) {
-    if (!rows.length) {
-      return {
-        tested: 0,
-        accuracy: null,
-        brier: null,
-        referenceBrier: null,
-        byLeague: {}
-      };
-    }
+    result = {
+      home: 0,
+      draw: 0,
+      away: 1,
+    };
+  }
 
-    let correct = 0;
-    let totalBrier = 0;
-    let totalReference = 0;
+  else if (
+    typeof actual === "object"
+  ) {
+    result = actual;
+  }
 
-    const buckets = {};
+  else {
+    throw new Error(
+      "brier3 : résultat réel non reconnu."
+    );
+  }
 
-    rows.forEach(
-      ({
-        match,
-        model
-      }) => {
-        const rowBrier =
-          brier3(
-            model,
-            match.actualResult
-          );
 
-        const referenceBrier =
-          brier3(
-            model.baseline,
-            match.actualResult
-          );
-
-        if (
-          bestPick(model)
-          ===
-          match.actualResult
-        ) {
-          correct += 1;
-        }
-
-        totalBrier +=
-          rowBrier;
-
-        totalReference +=
-          referenceBrier;
-
-        const league =
-          match.competition;
-
-        if (
-          !buckets[
-            league
-          ]
-        ) {
-          buckets[
-            league
-          ] = {
-            tested: 0,
-            correct: 0,
-            brier: 0,
-            reference: 0
-          };
-        }
-
-        buckets[
-          league
-        ].tested += 1;
-
-        buckets[
-          league
-        ].brier +=
-          rowBrier;
-
-        buckets[
-          league
-        ].reference +=
-          referenceBrier;
-
-        if (
-          bestPick(model)
-          ===
-          match.actualResult
-        ) {
-          buckets[
-            league
-          ].correct += 1;
-        }
-      }
+  const p =
+    normalizeProbabilities(
+      prediction
     );
 
-    const byLeague = {};
 
-    Object.entries(
-      buckets
+  return (
+    Math.pow(
+      p.home -
+        result.home,
+      2
+    ) +
+
+    Math.pow(
+      p.draw -
+        result.draw,
+      2
+    ) +
+
+    Math.pow(
+      p.away -
+        result.away,
+      2
     )
-      .forEach(
-        (
-          [
-            league,
-            item
-          ]
-        ) => {
-          byLeague[
-            league
-          ] = {
-            tested:
-              item.tested,
+  ) / 3;
+}
 
-            accuracy:
-              item.correct
-              /
-              item.tested,
 
-            brier:
-              item.brier
-              /
-              item.tested,
+/* ============================================================
+   BACKTEST
+   ============================================================ */
 
-            referenceBrier:
-              item.reference
-              /
-              item.tested
-          };
-        }
-      );
-
+function backtestConfig(
+  matches,
+  config
+) {
+  if (
+    !Array.isArray(matches) ||
+    matches.length < 20
+  ) {
     return {
-      tested:
-        rows.length,
-
-      accuracy:
-        correct
-        /
-        rows.length,
-
-      brier:
-        totalBrier
-        /
-        rows.length,
-
-      referenceBrier:
-        totalReference
-        /
-        rows.length,
-
-      byLeague
+      brier: Infinity,
+      predictions: 0,
     };
   }
 
-  function tuneModel(
-    history
+
+  const history =
+    matches
+      .map(normalizeMatch)
+      .filter(Boolean)
+      .sort(
+        (a, b) =>
+          new Date(a.date) -
+          new Date(b.date)
+      );
+
+
+  let totalBrier = 0;
+  let count = 0;
+
+
+  /*
+    On démarre après suffisamment
+    de matchs afin de ne pas tester
+    sur un modèle totalement vide.
+  */
+
+  const startIndex =
+    Math.min(
+      30,
+      Math.floor(
+        history.length * 0.25
+      )
+    );
+
+
+  for (
+    let i = startIndex;
+    i < history.length;
+    i++
   ) {
-    if (tuningCache) {
-      return tuningCache;
-    }
+    const target =
+      history[i];
 
-    const chronological =
-      [...history]
-        .filter(
-          match =>
-            MODEL_LEAGUES.has(
-              match.competition
-            )
-        )
-        .filter(
-          match =>
-            Number.isFinite(
-              matchTime(match)
-            )
-        )
-        .filter(
-          match =>
-            num(
-              match?.score?.home
-            ) !== null
-            &&
-            num(
-              match?.score?.away
-            ) !== null
-        )
-        .sort(
-          (first, second) =>
-            matchTime(first)
-            -
-            matchTime(second)
-        );
 
-    const splitIndex =
-      Math.max(
-        1,
-        Math.floor(
-          chronological.length
-          *
-          0.78
-        )
-      );
-
-    const tuningMatches =
-      chronological.slice(
+    const previous =
+      history.slice(
         0,
-        splitIndex
+        i
       );
 
-    const holdoutMatches =
-      chronological.slice(
-        splitIndex
+
+    const model =
+      buildModel({
+        matches: previous,
+
+        leagueId:
+          target.leagueId,
+
+        referenceDate:
+          target.date,
+
+        config,
+      });
+
+
+    const prediction =
+      predictV07({
+        homeTeamId:
+          target.homeTeamId,
+
+        awayTeamId:
+          target.awayTeamId,
+
+        model,
+
+        leagueId:
+          target.leagueId,
+
+        date:
+          target.date,
+
+        config,
+      });
+
+
+    const actual =
+      target.homeGoals >
+      target.awayGoals
+        ? "HOME"
+
+        : target.homeGoals <
+          target.awayGoals
+        ? "AWAY"
+
+        : "DRAW";
+
+
+    const score =
+      brier3(
+        prediction.probabilities,
+        actual
       );
 
-    let winner = null;
 
-    candidateConfigs()
-      .forEach(
-        config => {
-          const eloState =
-            buildEloTimeline(
-              history,
+    if (
+      Number.isFinite(score)
+    ) {
+      totalBrier += score;
+      count += 1;
+    }
+  }
+
+
+  return {
+    brier:
+      count > 0
+        ? totalBrier / count
+        : Infinity,
+
+    predictions: count,
+  };
+}
+
+
+/* ============================================================
+   OPTIMISATION AUTOMATIQUE
+   ============================================================ */
+
+export function tuneModel({
+  matches = [],
+  baseConfig = {},
+} = {}) {
+  const normalized =
+    matches
+      .map(normalizeMatch)
+      .filter(Boolean);
+
+
+  if (normalized.length < 30) {
+    return {
+      config: {
+        ...DEFAULT_CONFIG,
+        ...baseConfig,
+      },
+
+      brier: null,
+
+      tested: 0,
+
+      message:
+        "Pas assez de matchs pour calibrer correctement le modèle.",
+    };
+  }
+
+
+  /*
+    Grille volontairement modérée :
+    suffisamment large pour améliorer
+    le modèle sans exploser le temps
+    de calcul côté Netlify.
+  */
+
+  const halfLives = [
+    90,
+    120,
+    150,
+  ];
+
+  const eloKs = [
+    18,
+    24,
+    30,
+  ];
+
+  const eloWeights = [
+    0.10,
+    0.16,
+    0.22,
+  ];
+
+  const rhos = [
+    -0.12,
+    -0.08,
+    -0.04,
+  ];
+
+
+  let best = null;
+
+  let tested = 0;
+
+
+  for (
+    const decayHalfLifeDays
+    of halfLives
+  ) {
+    for (
+      const eloK
+      of eloKs
+    ) {
+      for (
+        const eloWeight
+        of eloWeights
+      ) {
+        for (
+          const rho
+          of rhos
+        ) {
+          const config = {
+            ...DEFAULT_CONFIG,
+            ...baseConfig,
+
+            decayHalfLifeDays,
+
+            eloK,
+
+            eloWeight,
+
+            rho,
+          };
+
+
+          const evaluation =
+            backtestConfig(
+              normalized,
               config
             );
 
-          const rawRows =
-            predictionRows(
-              history,
-              tuningMatches,
-              config,
-              eloState,
-              null
-            );
+
+          tested += 1;
+
 
           if (
-            rawRows.length < 40
+            !best ||
+            evaluation.brier <
+              best.brier
           ) {
-            return;
-          }
-
-          const calibration =
-            fitLeagueCalibrations(
-              rawRows
-            );
-
-          const calibratedRows =
-            predictionRows(
-              history,
-              tuningMatches,
+            best = {
               config,
-              eloState,
-              calibration
-            );
+              brier:
+                evaluation.brier,
 
-          const score =
-            evaluateRows(
-              calibratedRows
-            );
-
-          if (
-            !winner
-            ||
-            score.brier
-            <
-            winner
-              .score
-              .brier
-          ) {
-            winner = {
-              config,
-              eloState,
-              calibration,
-              score
+              predictions:
+                evaluation.predictions,
             };
           }
         }
-      );
-
-    if (!winner) {
-      const config =
-        candidateConfigs()[0];
-
-      winner = {
-        config,
-
-        eloState:
-          buildEloTimeline(
-            history,
-            config
-          ),
-
-        calibration: {
-          GLOBAL: {
-            home: 1,
-            draw: 1,
-            away: 1
-          }
-        },
-
-        score: {
-          tested: 0,
-          brier: null
-        }
-      };
+      }
     }
-
-    const holdoutRows =
-      predictionRows(
-        history,
-        holdoutMatches,
-        winner.config,
-        winner.eloState,
-        winner.calibration
-      );
-
-    const holdout =
-      evaluateRows(
-        holdoutRows
-      );
-
-    tuningCache = {
-      ...winner,
-
-      holdout,
-
-      totalHistoricalMatches:
-        chronological.length,
-
-      targetReached:
-        holdout.brier !== null
-        &&
-        holdout.brier
-        <
-        TARGET_BRIER
-    };
-
-    return tuningCache;
   }
 
-  // ===================================================
-  // PRÉDICTION SERVEUR
-  // ===================================================
 
-  function predictV07(
-    history,
-    match
-  ) {
-    resetTuningCache();
+  return {
+    ...best,
 
-    const tuning =
-      tuneModel(
-        history
+    tested,
+
+    version: "0.7",
+  };
+}
+
+
+/* ============================================================
+   CALIBRATION PAR LIGUE
+   ============================================================ */
+
+export function calculateLeagueCalibration({
+  matches = [],
+  config = {},
+} = {}) {
+  const history =
+    matches
+      .map(normalizeMatch)
+      .filter(Boolean)
+      .sort(
+        (a, b) =>
+          new Date(a.date) -
+          new Date(b.date)
       );
+
+
+  if (history.length < 40) {
+    return {
+      home: 1,
+      draw: 1,
+      away: 1,
+
+      sampleSize: 0,
+    };
+  }
+
+
+  let predictedHome = 0;
+  let predictedDraw = 0;
+  let predictedAway = 0;
+
+  let actualHome = 0;
+  let actualDraw = 0;
+  let actualAway = 0;
+
+  let count = 0;
+
+
+  const start =
+    Math.min(
+      30,
+      Math.floor(
+        history.length * 0.25
+      )
+    );
+
+
+  for (
+    let i = start;
+    i < history.length;
+    i++
+  ) {
+    const target =
+      history[i];
+
+
+    const training =
+      history.slice(
+        0,
+        i
+      );
+
 
     const model =
-      buildModel(
-        history,
-        match,
-        Infinity,
-        tuning.config,
-        tuning.eloState,
-        tuning.calibration
-      );
+      buildModel({
+        matches: training,
 
-    return {
-      model,
+        leagueId:
+          target.leagueId,
 
-      validation: {
-        totalHistoricalMatches:
-          tuning.totalHistoricalMatches,
+        referenceDate:
+          target.date,
 
-        holdout:
-          tuning.holdout,
+        config,
+      });
 
-        targetReached:
-          tuning.targetReached
-      }
-    };
-  }
 
-  // ===================================================
-  // EXPORT SERVEUR
-  // ===================================================
+    const prediction =
+      predictV07({
+        homeTeamId:
+          target.homeTeamId,
 
-  if (IS_SERVER) {
-    module.exports = {
-      MODEL_VERSION,
-      TARGET_BRIER,
-      MODEL_LEAGUES,
-      matchTime,
-      buildModel,
-      tuneModel,
-      predictV07,
-      resetTuningCache,
-      brier3,
-      bestPick
-    };
+        awayTeamId:
+          target.awayTeamId,
 
-    return;
-  }
-
-  // ===================================================
-  // PARTIE NAVIGATEUR
-  // ===================================================
-
-  let historyPromise = null;
-
-  async function loadHistory() {
-    if (!historyPromise) {
-      historyPromise =
-        fetch(
-          '/.netlify/functions/modelhistory?v=073',
-          {
-            cache: 'no-store'
-          }
-        )
-          .then(
-            async response => {
-              let data = {};
-
-              try {
-                data =
-                  await response.json();
-              } catch (error) {
-                throw new Error(
-                  'Réponse modelhistory illisible.'
-                );
-              }
-
-              if (!response.ok) {
-                throw new Error(
-                  data.details
-                  ||
-                  data.error
-                  ||
-                  `Erreur modelhistory ${response.status}`
-                );
-              }
-
-              if (
-                data.engineVersion !==
-                MODEL_HISTORY_VERSION
-              ) {
-                throw new Error(
-                  `Ancienne version modelhistory reçue (${data.engineVersion || 'inconnue'}). Recharge le site après le déploiement Netlify.`
-                );
-              }
-
-              if (
-                Number(data.days) !==
-                365
-              ) {
-                throw new Error(
-                  `Historique modèle incomplet : ${data.days ?? '—'} jours reçus au lieu de 365.`
-                );
-              }
-
-              if (
-                !Array.isArray(
-                  data.matches
-                )
-              ) {
-                throw new Error(
-                  'modelhistory ne renvoie pas de liste de matchs.'
-                );
-              }
-
-              return {
-                matches:
-                  data.matches,
-
-                meta: {
-                  count:
-                    Number(
-                      data.count
-                    )
-                    ||
-                    data.matches.length,
-
-                  chunks:
-                    Number(
-                      data.chunks
-                    )
-                    ||
-                    0,
-
-                  chunkDays:
-                    Number(
-                      data.chunkDays
-                    )
-                    ||
-                    0,
-
-                  leagues:
-                    data.leagues
-                    ||
-                    {},
-
-                  source:
-                    data.source
-                    ||
-                    'inconnue'
-                }
-              };
-            }
-          );
-    }
-
-    return historyPromise;
-  }
-
-  // ===================================================
-  // INTERFACE
-  // ===================================================
-
-  function updateMainUI(
-    match,
-    model
-  ) {
-    const set =
-      (
-        selector,
-        value
-      ) => {
-        const element =
-          document.querySelector(
-            selector
-          );
-
-        if (element) {
-          element.textContent =
-            value;
-        }
-      };
-
-    set(
-      '#pHome',
-      pct(
-        model.home
-      )
-    );
-
-    set(
-      '#pDraw',
-      pct(
-        model.draw
-      )
-    );
-
-    set(
-      '#pAway',
-      pct(
-        model.away
-      )
-    );
-
-    set(
-      '#confidence',
-      `${model.quality}%`
-    );
-
-    set(
-      '#modelVersion',
-      `Moteur ${MODEL_VERSION} • Dixon-Coles + Elo`
-    );
-
-    const probabilitySection =
-      document
-        .querySelector(
-          '#pHome'
-        )
-        ?.closest(
-          '.sports-section'
-        );
-
-    const probabilityLabel =
-      probabilitySection
-        ?.querySelector(
-          '.section-label'
-        );
-
-    if (
-      probabilityLabel
-    ) {
-      probabilityLabel.textContent =
-        'PROBABILITÉS DU MODÈLE V0.7';
-    }
-
-    match.probs = {
-      home:
-        model.home * 100,
-
-      draw:
-        model.draw * 100,
-
-      away:
-        model.away * 100
-    };
-
-    const badge =
-      document.querySelector(
-        '#qualityBadge'
-      );
-
-    if (badge) {
-      badge.textContent =
-        `QUALITÉ DONNÉES ${model.quality}%`;
-
-      badge.className =
-        `pill ${
-          model.quality >= 70
-            ? 'success'
-            : 'warn'
-        }`;
-    }
-
-    const markets =
-      document.querySelector(
-        '#marketList'
-      );
-
-    if (markets) {
-      markets.innerHTML = `
-        <div class="market">
-          <div>
-            <strong>
-              +1,5 buts
-            </strong>
-            <p>
-              Probabilité ${MODEL_VERSION}
-            </p>
-          </div>
-          <div class="market-prob">
-            <b>
-              ${pct(model.over15)}
-            </b>
-          </div>
-        </div>
-
-        <div class="market">
-          <div>
-            <strong>
-              +2,5 buts
-            </strong>
-            <p>
-              Probabilité ${MODEL_VERSION}
-            </p>
-          </div>
-          <div class="market-prob">
-            <b>
-              ${pct(model.over25)}
-            </b>
-          </div>
-        </div>
-
-        <div class="market">
-          <div>
-            <strong>
-              Les deux marquent
-            </strong>
-            <p>
-              BTTS
-            </p>
-          </div>
-          <div class="market-prob">
-            <b>
-              ${pct(model.btts)}
-            </b>
-          </div>
-        </div>
-
-        <div class="market">
-          <div>
-            <strong>
-              Buts attendus modèle
-            </strong>
-            <p>
-              ${match.home}
-              /
-              ${match.away}
-            </p>
-          </div>
-          <div class="market-prob">
-            <b>
-              ${model.lambdaHome.toFixed(2)}
-              -
-              ${model.lambdaAway.toFixed(2)}
-            </b>
-          </div>
-        </div>
-
-        <div class="market">
-          <div>
-            <strong>
-              Rating Elo
-            </strong>
-            <p>
-              Force historique
-            </p>
-          </div>
-          <div class="market-prob">
-            <b>
-              ${Math.round(model.eloHome)}
-              -
-              ${Math.round(model.eloAway)}
-            </b>
-          </div>
-        </div>
-      `;
-    }
-  }
-
-  async function waitForPreanalysis() {
-    for (
-      let index = 0;
-      index < 50;
-      index += 1
-    ) {
-      const panel =
-        document.querySelector(
-          '#preMatchInsights .preanalysis-panel'
-        );
-
-      if (panel) {
-        return panel;
-      }
-
-      await new Promise(
-        resolve =>
-          setTimeout(
-            resolve,
-            100
-          )
-      );
-    }
-
-    return document.querySelector(
-      '#preMatchInsights .panel-card'
-    );
-  }
-
-  function leagueName(
-    code
-  ) {
-    if (code === 'PL') {
-      return 'Premier League';
-    }
-
-    if (code === 'BL') {
-      return 'Bundesliga';
-    }
-
-    if (code === 'LL') {
-      return 'La Liga';
-    }
-
-    return code;
-  }
-
-  async function renderValidation(
-    model,
-    tuning,
-    meta
-  ) {
-    const panel =
-      await waitForPreanalysis();
-
-    if (!panel) {
-      return;
-    }
-
-    panel
-      .querySelector(
-        '.model-validation-card'
-      )
-      ?.remove();
-
-    const footnote =
-      panel.querySelector(
-        '.pre-footnote'
-      );
-
-    if (footnote) {
-      footnote.textContent =
-        'Ces statistiques alimentent le modèle probabiliste V0.7. La qualité mesure la quantité de données disponibles, pas la certitude du résultat.';
-    }
-
-    const holdout =
-      tuning.holdout;
-
-    const targetText =
-      tuning.targetReached
-        ? 'OBJECTIF < 0,620 ATTEINT'
-        : 'OBJECTIF < 0,620 PAS ENCORE ATTEINT';
-
-    const targetColor =
-      tuning.targetReached
-        ? 'var(--green)'
-        : 'var(--yellow)';
-
-    let gain = null;
-
-    if (
-      holdout.brier !== null
-      &&
-      holdout.referenceBrier !== null
-      &&
-      holdout.referenceBrier > 0
-    ) {
-      gain =
-        (
-          (
-            holdout.referenceBrier
-            -
-            holdout.brier
-          )
-          /
-          holdout.referenceBrier
-        )
-        *
-        100;
-    }
-
-    const leagueRows =
-      Object.entries(
-        holdout.byLeague
-        ||
-        {}
-      )
-        .map(
-          (
-            [
-              league,
-              item
-            ]
-          ) => `
-            <div class="pre-stat">
-              <span>
-                ${leagueName(league)}
-                •
-                ${item.tested}
-                matchs
-              </span>
-
-              <strong>
-                ${item.brier.toFixed(3)}
-              </strong>
-
-              <small>
-                1N2 :
-                ${pct(item.accuracy)}
-              </small>
-            </div>
-          `
-        )
-        .join('');
-
-    const card =
-      document.createElement(
-        'div'
-      );
-
-    card.className =
-      'model-validation-card';
-
-    card.innerHTML = `
-      <div
-        style="
-          margin-top:12px;
-          padding:11px;
-          border:1px solid rgba(0,232,107,.30);
-          border-radius:8px;
-          background:#071009;
-        "
-      >
-        <div
-          style="
-            display:flex;
-            justify-content:space-between;
-            gap:8px;
-            align-items:center;
-          "
-        >
-          <strong
-            style="
-              font-size:10px;
-              color:var(--green);
-            "
-          >
-            PROBABILITÉS V0.7
-          </strong>
-
-          <span
-            style="
-              font-size:8px;
-              color:var(--muted);
-            "
-          >
-            QUALITÉ ${model.quality}%
-          </span>
-        </div>
-
-        <div
-          class="pre-stat-grid"
-          style="margin-top:8px"
-        >
-          <div class="pre-stat">
-            <span>
-              1
-            </span>
-
-            <strong>
-              ${pct(model.home)}
-            </strong>
-          </div>
-
-          <div class="pre-stat">
-            <span>
-              N
-            </span>
-
-            <strong>
-              ${pct(model.draw)}
-            </strong>
-          </div>
-
-          <div class="pre-stat">
-            <span>
-              2
-            </span>
-
-            <strong>
-              ${pct(model.away)}
-            </strong>
-          </div>
-
-          <div class="pre-stat">
-            <span>
-              Buts attendus
-            </span>
-
-            <strong>
-              ${model.lambdaHome.toFixed(2)}
-              -
-              ${model.lambdaAway.toFixed(2)}
-            </strong>
-          </div>
-
-          <div class="pre-stat">
-            <span>
-              Elo domicile
-            </span>
-
-            <strong>
-              ${Math.round(model.eloHome)}
-            </strong>
-          </div>
-
-          <div class="pre-stat">
-            <span>
-              Elo extérieur
-            </span>
-
-            <strong>
-              ${Math.round(model.eloAway)}
-            </strong>
-          </div>
-        </div>
-      </div>
-
-      <div
-        style="
-          margin-top:9px;
-          padding:11px;
-          border:1px solid var(--line);
-          border-radius:8px;
-          background:#071009;
-        "
-      >
-        <div
-          style="
-            display:flex;
-            justify-content:space-between;
-            gap:8px;
-            align-items:flex-start;
-          "
-        >
-          <strong
-            style="
-              font-size:10px;
-              color:var(--cyan);
-            "
-          >
-            VALIDATION INDÉPENDANTE V0.7
-          </strong>
-
-          <span
-            style="
-              font-size:8px;
-              color:${targetColor};
-              text-align:right;
-            "
-          >
-            ${targetText}
-          </span>
-        </div>
-
-        ${
-          holdout.tested
-
-            ? `
-              <div
-                class="pre-stat-grid"
-                style="margin-top:8px"
-              >
-                <div class="pre-stat">
-                  <span>
-                    Matchs holdout
-                  </span>
-
-                  <strong>
-                    ${holdout.tested}
-                  </strong>
-                </div>
-
-                <div class="pre-stat">
-                  <span>
-                    1N2 correct
-                  </span>
-
-                  <strong>
-                    ${pct(
-                      holdout.accuracy
-                    )}
-                  </strong>
-                </div>
-
-                <div class="pre-stat">
-                  <span>
-                    Brier V0.7
-                  </span>
-
-                  <strong>
-                    ${holdout.brier.toFixed(3)}
-                  </strong>
-                </div>
-
-                <div class="pre-stat">
-                  <span>
-                    Brier référence
-                  </span>
-
-                  <strong>
-                    ${holdout.referenceBrier.toFixed(3)}
-                  </strong>
-                </div>
-
-                <div class="pre-stat">
-                  <span>
-                    Historique modèle
-                  </span>
-
-                  <strong>
-                    ${meta.count}
-                  </strong>
-
-                  <small>
-                    ${
-                      meta.source ===
-                      'supabase'
-
-                        ? 'Base MatchScope / Supabase'
-
-                        : `${meta.chunks} blocs de ${meta.chunkDays} jours max`
-                    }
-                  </small>
-                </div>
-
-                <div class="pre-stat">
-                  <span>
-                    Gain Brier
-                  </span>
-
-                  <strong>
-                    ${
-                      gain === null
-
-                        ? '—'
-
-                        : `${
-                            gain >= 0
-                              ? '+'
-                              : ''
-                          }${gain.toFixed(1)}%`
-                    }
-                  </strong>
-                </div>
-              </div>
-
-              <div
-                style="
-                  margin-top:12px;
-                  padding-top:10px;
-                  border-top:1px solid var(--line);
-                "
-              >
-                <strong
-                  style="
-                    font-size:9px;
-                    color:white;
-                  "
-                >
-                  PERFORMANCE PAR CHAMPIONNAT
-                </strong>
-
-                <div
-                  class="pre-stat-grid"
-                  style="margin-top:8px"
-                >
-                  ${
-                    leagueRows
-
-                    ||
-
-                    `
-                      <div class="pre-stat">
-                        <span>
-                          Données
-                        </span>
-
-                        <strong>
-                          —
-                        </strong>
-                      </div>
-                    `
-                  }
-                </div>
-              </div>
-
-              <p
-                style="
-                  font-size:8px;
-                  color:var(--muted);
-                  line-height:1.5;
-                  margin:10px 0 0;
-                "
-              >
-                Les paramètres sont choisis sur la partie ancienne de l'historique.
-                Les matchs holdout les plus récents ne servent pas au réglage.
-                C'est leur Brier qui permet de contrôler objectivement V0.7.
-              </p>
-            `
-
-            : `
-              <p
-                style="
-                  font-size:8px;
-                  color:var(--muted);
-                  line-height:1.5;
-                  margin:10px 0 0;
-                "
-              >
-                Pas encore assez de matchs pour constituer le holdout.
-              </p>
-            `
-        }
-      </div>
-    `;
-
-    panel.appendChild(
-      card
-    );
-  }
-
-  async function showModelError(
-    error
-  ) {
-    const panel =
-      await waitForPreanalysis();
-
-    if (!panel) {
-      return;
-    }
-
-    panel
-      .querySelector(
-        '.model-validation-card'
-      )
-      ?.remove();
-
-    const warning =
-      document.createElement(
-        'div'
-      );
-
-    warning.className =
-      'pre-warning model-validation-card';
-
-    warning.textContent =
-      `Erreur moteur V0.7 : ${error?.message || error}`;
-
-    panel.appendChild(
-      warning
-    );
-  }
-
-  // ===================================================
-  // EXÉCUTION NAVIGATEUR
-  // ===================================================
-
-  async function runForMatch(
-    match
-  ) {
-    if (
-      !MODEL_LEAGUES.has(
-        match.competition
-      )
-    ) {
-      return;
-    }
-
-    try {
-      const historyData =
-        await loadHistory();
-
-      const history =
-        historyData.matches;
-
-      if (!history.length) {
-        throw new Error(
-          'Historique modèle vide.'
-        );
-      }
-
-      const tuning =
-        tuneModel(
-          history
-        );
-
-      const model =
-        buildModel(
-          history,
-          match,
-          Infinity,
-          tuning.config,
-          tuning.eloState,
-          tuning.calibration
-        );
-
-      updateMainUI(
-        match,
-        model
-      );
-
-      await renderValidation(
         model,
-        tuning,
-        historyData.meta
-      );
 
-    } catch (error) {
-      console.error(
-        'MatchScope V0.7 :',
-        error
-      );
+        date:
+          target.date,
 
-      await showModelError(
-        error
-      );
+        config,
+
+        calibration: null,
+      });
+
+
+    predictedHome +=
+      prediction.probabilities.home;
+
+    predictedDraw +=
+      prediction.probabilities.draw;
+
+    predictedAway +=
+      prediction.probabilities.away;
+
+
+    if (
+      target.homeGoals >
+      target.awayGoals
+    ) {
+      actualHome += 1;
     }
+
+    else if (
+      target.homeGoals <
+      target.awayGoals
+    ) {
+      actualAway += 1;
+    }
+
+    else {
+      actualDraw += 1;
+    }
+
+
+    count += 1;
   }
 
-  // ===================================================
-  // BOUTON ANALYSER
-  // ===================================================
 
-  openAnalysis =
-    function (
-      id
-    ) {
-      previousOpenAnalysis(
-        id
-      );
+  if (!count) {
+    return {
+      home: 1,
+      draw: 1,
+      away: 1,
 
-      if (
-        typeof currentMode !==
-        'undefined'
-        &&
-        currentMode !==
-        'live'
-      ) {
-        return;
-      }
-
-      if (
-        typeof matches ===
-        'undefined'
-      ) {
-        return;
-      }
-
-      const match =
-        matches.find(
-          item =>
-            String(
-              item.id
-            )
-            ===
-            String(
-              id
-            )
-        );
-
-      if (!match) {
-        return;
-      }
-
-      runForMatch(
-        match
-      );
+      sampleSize: 0,
     };
+  }
 
-})();
+
+  const observedHome =
+    actualHome / count;
+
+  const observedDraw =
+    actualDraw / count;
+
+  const observedAway =
+    actualAway / count;
+
+
+  const modelHome =
+    predictedHome / count;
+
+  const modelDraw =
+    predictedDraw / count;
+
+  const modelAway =
+    predictedAway / count;
+
+
+  return {
+    home:
+      clamp(
+        observedHome /
+          Math.max(
+            modelHome,
+            0.01
+          ),
+        0.80,
+        1.20
+      ),
+
+    draw:
+      clamp(
+        observedDraw /
+          Math.max(
+            modelDraw,
+            0.01
+          ),
+        0.80,
+        1.20
+      ),
+
+    away:
+      clamp(
+        observedAway /
+          Math.max(
+            modelAway,
+            0.01
+          ),
+        0.80,
+        1.20
+      ),
+
+    sampleSize: count,
+
+    observed: {
+      home: observedHome,
+      draw: observedDraw,
+      away: observedAway,
+    },
+
+    predicted: {
+      home: modelHome,
+      draw: modelDraw,
+      away: modelAway,
+    },
+  };
+}
+
+
+/* ============================================================
+   EXPORT DEFAULT
+   ============================================================ */
+
+export default {
+  version: "0.7",
+
+  buildModel,
+
+  predictV07,
+
+  tuneModel,
+
+  brier3,
+
+  bestPick,
+
+  calculateLeagueCalibration,
+};
