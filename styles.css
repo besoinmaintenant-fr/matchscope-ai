@@ -3645,3 +3645,61 @@ strong{
   .scorer-row { padding: 11px; }
   .scorer-head h4 { font-size: 13px; }
 }
+
+
+/* SPORTMONKS — état des compositions fourni par l'API */
+.lineup-check-box {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: #0b1d14;
+  border: 1px solid var(--line, #334239);
+  border-radius: 12px;
+  padding: 13px;
+  margin-bottom: 16px;
+}
+.lineup-check-box strong {
+  font-size: 13px;
+}
+#lineupCheckStatus {
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 610px;
+  color: var(--muted, #b1bdb4);
+  margin: 7px 0 0;
+}
+#lineupCheckStatus[data-status="success"] { color: #55e9a0; }
+#lineupCheckStatus[data-status="warn"] { color: #f2c57d; }
+.lineup-refresh {
+  border: 1px solid var(--line, #344a3b);
+  border-radius: 8px;
+  background: #123824;
+  color: #e9fff1;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.lineup-refresh:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+.lineup-category {
+  margin: 14px 0 8px;
+  font-size: 12px;
+  color: #5de9a7;
+}
+.lineup-number {
+  display: inline-block;
+  min-width: 20px;
+  color: #9bc8ac;
+  font-variant-numeric: tabular-nums;
+}
+.lineup-empty {
+  font-size: 12px;
+  color: var(--muted, #a4b5aa);
+  line-height: 1.4;
+}
