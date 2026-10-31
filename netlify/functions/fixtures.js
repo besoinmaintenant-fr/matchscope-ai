@@ -1293,41 +1293,24 @@ exports.handler =
     try {
 
       // ===================================
-      // RÉSOLUTION DES COMPÉTITIONS
+      // CHAMPIONNATS DU PLAN
       // ===================================
 
-      const {
-
-        resolved,
-
-        missing,
-
-        availableLeagueCount
-
-      } =
-        await resolveTargetLeagues(
-          token
+      // Les IDs sont confirmés dans MySportmonks.
+      // Ne pas bloquer les matchs sur un appel préalable
+      // à /leagues : un tableau vide n'est pas une preuve
+      // de l'absence d'abonnement. Le vrai statut d'accès
+      // sera fourni par l'endpoint fixtures lui-même.
+      const resolved =
+        TARGET_LEAGUES.map(
+          league => ({
+            ...league,
+            apiName: league.label
+          })
         );
 
+      const missing = [];
 
-      if (
-        !resolved.length
-      ) {
-
-        return jsonResponse(
-          403,
-          {
-
-            error:
-              'Le jeton Sportmonks utilisé par Netlify ne donne accès à aucun des cinq championnats sélectionnés. Vérifie que cette clé est liée à un abonnement actif (et non résilié ou expiré) dans MySportmonks.',
-
-            missingCompetitions:
-              missing,
-
-            availableLeagueCount
-          }
-        );
-      }
 
 
       const leagueIds =
@@ -1466,7 +1449,7 @@ exports.handler =
 
               error:
                 response.status === 403
-                  ? 'Sportmonks refuse les données des matchs pour ce jeton API. Vérifie le statut et la date de fin de l’abonnement dans MySportmonks.'
+                  ? 'Sportmonks refuse cette requête de matchs avec le jeton Netlify (HTTP 403). Cela ne prouve pas que ton abonnement est absent : vérifie que le jeton de production est le même que celui du test Sportmonks et que cet endpoint est autorisé.'
                   : 'Erreur Sportmonks',
 
               status:
