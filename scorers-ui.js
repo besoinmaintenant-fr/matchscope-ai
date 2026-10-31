@@ -27,8 +27,13 @@
     }
   }
 
-  function draw(payload) {
+  function draw(payload, fixtureId) {
     const players = Array.isArray(payload.players) ? payload.players : [];
+    // Les deux API sont chargées indépendamment. L'ID Sportmonks
+    // permet de relier chaque estimation à la bonne fiche joueur.
+    window.dispatchEvent(new CustomEvent('matchscope:scorers-ready', {
+      detail: { fixtureId: String(fixtureId), players }
+    }));
     const estimated = players.filter(p => Number.isFinite(p.probability)).length;
     $('scorerDataState').textContent =
       estimated ? estimated + ' ESTIMATIONS' : 'STATS INCOMPLÈTES';
@@ -97,7 +102,7 @@
     // Évite les appels API répétés quand on rouvre un match.
     const cached = cache.get(String(fixtureId));
     if (cached && Date.now() - cached.at < CACHE_MS) {
-      draw(cached.data);
+      draw(cached.data, fixtureId);
       return;
     }
 
@@ -114,7 +119,7 @@
           'Statistiques buteurs indisponibles (HTTP ' + response.status + ')');
       }
       cache.set(String(fixtureId), { at: Date.now(), data });
-      draw(data);
+      draw(data, fixtureId);
     } catch (error) {
       if (sequence !== requestNumber || error.name === 'AbortError') return;
       if ($('scorerDataState')) {
