@@ -4,11 +4,11 @@ const {
 
 
 const LEAGUE_CODES = {
-  8: 'PL',
-  82: 'BL',
+  301: 'L1',
   564: 'LL',
-  1251: 'SC',
-  1101: 'CF1'
+  384: 'SA',
+  8: 'PL',
+  82: 'BL'
 };
 
 
