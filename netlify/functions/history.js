@@ -558,6 +558,8 @@ exports.handler =
                 mode:
                   'history',
 
+                finished: true,
+                stateId: Number(fixture.state_id),
 
                 competition:
                   league?.code ||
