@@ -4,6 +4,8 @@
   const previousOpenAnalysis = openAnalysis;
   let requestNumber = 0;
   let controller = null;
+  const cache = new Map();
+  const CACHE_MS = 10 * 60 * 1000;
   const $ = id => document.getElementById(id);
   const escape = value => String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -86,6 +88,13 @@
     controller = new AbortController();
     reset();
 
+    // Évite les appels API répétés quand on rouvre un match.
+    const cached = cache.get(String(fixtureId));
+    if (cached && Date.now() - cached.at < CACHE_MS) {
+      draw(cached.data);
+      return;
+    }
+
     try {
       const response = await fetch(
         '/.netlify/functions/scorers?fixtureId=' +
@@ -98,6 +107,7 @@
         throw new Error(data.error ||
           'Statistiques buteurs indisponibles (HTTP ' + response.status + ')');
       }
+      cache.set(String(fixtureId), { at: Date.now(), data });
       draw(data);
     } catch (error) {
       if (sequence !== requestNumber || error.name === 'AbortError') return;
