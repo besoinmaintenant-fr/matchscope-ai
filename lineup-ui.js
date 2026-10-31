@@ -17,6 +17,7 @@
   let selectedPlayerId = null;
   let view = 'pitch';
   let scorers = new Map();
+  let scorersArchived = false;
 
   const statusLabel = {
     official: 'Composition officielle',
@@ -154,20 +155,41 @@
       return;
     }
     const stat = scorerFor(player);
+    const prematch = Number.isFinite(stat?.probability);
+    const seasonReference = !prematch &&
+      Number.isFinite(stat?.referenceProbability);
+    const mode = prematch ? 'prematch'
+      : seasonReference ? 'reference' : 'unknown';
     const rate = p => {
       const n = percent(p);
       return n === null ? '—' : n + ' %';
     };
+    const playerRate = (key, referenceKey) =>
+      rate(mode === 'prematch' ? stat?.[key] :
+        mode === 'reference' ? stat?.[referenceKey] : null);
     const value = v => v === null || v === undefined ? '—' : escape(v);
+    const heading = mode === 'prematch'
+      ? (scorersArchived ? 'Pronostic buteur archivé avant match'
+        : 'Estimation avant-match')
+      : mode === 'reference'
+        ? 'Repère statistique de saison (hors pré-match)'
+        : 'Probabilité non calculable avec les données disponibles';
+    const explanation = mode === 'prematch'
+      ? 'Estimation conditionnelle à la participation, non calibrée pour le pari.'
+      : mode === 'reference'
+        ? 'Calcul effectué après le coup d’envoi à partir des statistiques de saison : ce n’est pas un pronostic pré-match ni une probabilité pour parier en direct.'
+        : 'Aucune probabilité inventée : les données individuelles ou les compositions vérifiées ne permettent pas de calcul fiable.';
     target.innerHTML =
       '<div class="lineup-detail-head"><strong>' + escape(player.name) +
         '</strong><span>' + escape(team.name || '') + '</span></div>' +
       '<p class="lineup-detail-role">' +
         escape(statusLabel[currentData?.status] || 'Participation à confirmer') + '</p>' +
+      '<p class="lineup-detail-mode lineup-detail-mode-' + mode + '">' +
+        escape(heading) + '</p>' +
       '<div class="lineup-detail-stats">' +
-        '<div><b>' + rate(stat?.probability) + '</b><small>1+ but</small></div>' +
-        '<div><b>' + rate(stat?.probability2) + '</b><small>2+ buts</small></div>' +
-        '<div><b>' + rate(stat?.probability3) + '</b><small>3+ buts</small></div>' +
+        '<div><b>' + playerRate('probability', 'referenceProbability') + '</b><small>1+ but</small></div>' +
+        '<div><b>' + playerRate('probability2', 'referenceProbability2') + '</b><small>2+ buts</small></div>' +
+        '<div><b>' + playerRate('probability3', 'referenceProbability3') + '</b><small>3+ buts</small></div>' +
       '</div>' +
       '<div class="lineup-detail-facts">' +
         '<span>Buts <b>' + value(stat?.goals) + '</b></span>' +
@@ -176,7 +198,7 @@
         '<span>Tirs <b>' + value(stat?.shots) + '</b></span>' +
         '<span>xG <b>' + value(stat?.xg) + '</b></span>' +
       '</div>' +
-      '<small class="lineup-detail-footnote">Probabilités indicatives si le joueur participe, non calibrées pour le pari.</small>';
+      '<small class="lineup-detail-footnote">' + escape(explanation) + '</small>';
   }
 
   function closePlayerDialog() {
@@ -409,6 +431,7 @@
   window.addEventListener('matchscope:scorers-ready', event => {
     const detail = event.detail || {};
     if (String(detail.fixtureId) !== activeFixtureId) return;
+    scorersArchived = detail.archived === true;
     scorers = new Map((Array.isArray(detail.players) ? detail.players : [])
       .filter(p => Number.isSafeInteger(Number(p.playerId)))
       .map(p => [String(p.playerId), p]));
@@ -432,6 +455,7 @@
     selectedPlayerId = null;
     currentData = null;
     scorers = new Map();
+    scorersArchived = false;
     const pitch = $('lineupPitchPlayers');
     if (pitch) pitch.innerHTML = '';
     const info = $('lineupPitchInfo');
