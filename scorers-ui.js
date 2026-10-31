@@ -27,7 +27,10 @@
 
     const cached = cache.get(String(fixtureId));
     if (cached && Date.now() - cached.at < CACHE_MS) {
-      publish(fixtureId, cached.data);
+      // Attendre que lineup-ui.js ait réinitialisé l'ID du match.
+      // Sinon une archive déjà en cache est publiée trop tôt et perdue.
+      await Promise.resolve();
+      if (sequence === serial) publish(fixtureId, cached.data);
       return;
     }
 
