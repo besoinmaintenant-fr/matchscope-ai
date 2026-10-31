@@ -118,7 +118,11 @@
         throw new Error(data.error ||
           'Statistiques buteurs indisponibles (HTTP ' + response.status + ')');
       }
-      cache.set(String(fixtureId), { at: Date.now(), data });
+      // Ne pas mettre en cache une composition encore inconnue :
+      // les XI peuvent devenir officiels d'une minute à l'autre.
+      if (data.lineupsOfficial === true && data.beforeKickoff === true) {
+        cache.set(String(fixtureId), { at: Date.now(), data });
+      }
       draw(data, fixtureId);
     } catch (error) {
       if (sequence !== requestNumber || error.name === 'AbortError') return;
