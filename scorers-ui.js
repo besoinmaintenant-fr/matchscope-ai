@@ -1,138 +1,50 @@
-// MatchScope — fiche buteurs, chargée uniquement à l'ouverture d'un match.
+// MatchScope AI — charge les données buteurs pour la fiche du joueur sur le terrain.
+// Aucun classement ni texte de statistiques n'est affiché dans la page principale.
 (() => {
   if (typeof openAnalysis !== 'function') return;
   const previousOpenAnalysis = openAnalysis;
-  let requestNumber = 0;
-  let controller = null;
   const cache = new Map();
   const CACHE_MS = 10 * 60 * 1000;
-  const $ = id => document.getElementById(id);
-  const escape = value => String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+  let serial = 0;
+  let controller = null;
 
-  const formatStat = value =>
-    value === null || value === undefined ? '—' : String(value);
-
-  function reset() {
-    if ($('scorerList')) $('scorerList').innerHTML = '';
-    if ($('scorerStatus'))
-      $('scorerStatus').textContent = 'Chargement des joueurs et statistiques Sportmonks…';
-    if ($('scorerDataState')) {
-      $('scorerDataState').textContent = 'CHARGEMENT';
-      $('scorerDataState').className = 'pill neutral';
-    }
-  }
-
-  function draw(payload, fixtureId) {
-    const players = Array.isArray(payload.players) ? payload.players : [];
-    // Les deux API sont chargées indépendamment. L'ID Sportmonks
-    // permet de relier chaque estimation à la bonne fiche joueur.
+  function publish(fixtureId, players) {
     window.dispatchEvent(new CustomEvent('matchscope:scorers-ready', {
-      detail: { fixtureId: String(fixtureId), players }
+      detail: {
+        fixtureId: String(fixtureId),
+        players: Array.isArray(players) ? players : []
+      }
     }));
-    const estimated = players.filter(p => Number.isFinite(p.probability)).length;
-    $('scorerDataState').textContent =
-      estimated ? estimated + ' ESTIMATIONS' : 'STATS INCOMPLÈTES';
-    $('scorerDataState').className = 'pill ' + (estimated ? 'success' : 'warn');
-
-    const warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
-    const intro = players.length
-      ? players.length + ' joueurs identifiés · ' + estimated +
-        ' avec une estimation indicative · ' +
-        (payload.lineupsAvailable
-          ? 'Compositions disponibles (validation officielle à vérifier).'
-          : 'Compositions non disponibles : titularisations inconnues.')
-      : 'Aucun joueur exploitable récupéré pour ce match.';
-    $('scorerStatus').textContent = [intro, ...warnings].join(' ');
-
-    if (!players.length) {
-      $('scorerList').innerHTML =
-        '<p class="scorer-empty">Aucun pourcentage inventé : réessaie quand les statistiques individuelles sont disponibles.</p>';
-      return;
-    }
-
-    // Le classement est global, sans cacher les effectifs d'une équipe.
-    // Les joueurs sans taux mesurable restent visibles après les autres.
-    $('scorerList').innerHTML = players.map(p => {
-      const percentage = Number.isFinite(p.probability)
-        ? escape(p.probability) + ' %'
-        : '—';
-      const status = String(p.lineupStatus || 'Participation à confirmer');
-      const disputed = /non confirmée|à confirmer/i.test(status);
-      const measures = [
-        'Buts : ' + formatStat(p.goals),
-        'Matchs joués : ' + formatStat(p.appearances),
-        'Min. : ' + formatStat(p.minutes),
-        'Min./match : ' + formatStat(p.averageMinutes),
-        'Tirs : ' + formatStat(p.shots),
-        'xG : ' + formatStat(p.xg)
-      ].join(' · ');
-      const extraOutcomes = Number.isFinite(p.probability)
-        ? '<small>2+ buts : ' + escape(p.probability2) +
-          ' % · 3+ buts : ' + escape(p.probability3) + ' %</small>'
-        : '';
-      return '<div class="scorer-row">' +
-        '<div class="scorer-identity">' +
-        '<strong>' + escape(p.name) + '</strong>' +
-        '<span>' + escape(p.team) + '</span>' +
-        '<small>' + escape(measures) + '</small>' +
-        '<small class="' + (disputed ? 'scorer-uncertain' : '') + '">' +
-          escape(status) + '</small>' +
-        extraOutcomes +
-        '</div>' +
-        '<div class="scorer-rate">' +
-          '<b>' + percentage + '</b>' +
-          '<span>' + (percentage === '—'
-            ? 'Non calculable' : '1+ but si joue') + '</span>' +
-        '</div>' +
-      '</div>';
-    }).join('');
   }
 
   async function load(fixtureId) {
-    const sequence = ++requestNumber;
+    const sequence = ++serial;
     if (controller) controller.abort();
     controller = new AbortController();
-    reset();
 
-    // Évite les appels API répétés quand on rouvre un match.
     const cached = cache.get(String(fixtureId));
     if (cached && Date.now() - cached.at < CACHE_MS) {
-      draw(cached.data, fixtureId);
+      publish(fixtureId, cached.data.players);
       return;
     }
 
     try {
       const response = await fetch(
         '/.netlify/functions/scorers?fixtureId=' +
-        encodeURIComponent(String(fixtureId)),
+          encodeURIComponent(String(fixtureId)),
         { signal: controller.signal }
       );
       const data = await response.json();
-      if (sequence !== requestNumber) return;
-      if (!response.ok) {
-        throw new Error(data.error ||
-          'Statistiques buteurs indisponibles (HTTP ' + response.status + ')');
-      }
-      // Ne pas mettre en cache une composition encore inconnue :
-      // les XI peuvent devenir officiels d'une minute à l'autre.
+      if (sequence !== serial) return;
+      if (!response.ok) throw new Error(data.error || 'Buteurs indisponibles');
+
       if (data.lineupsOfficial === true && data.beforeKickoff === true) {
         cache.set(String(fixtureId), { at: Date.now(), data });
       }
-      draw(data, fixtureId);
+      publish(fixtureId, data.players);
     } catch (error) {
-      if (sequence !== requestNumber || error.name === 'AbortError') return;
-      if ($('scorerDataState')) {
-        $('scorerDataState').textContent = 'INDISPONIBLE';
-        $('scorerDataState').className = 'pill warn';
-      }
-      if ($('scorerStatus')) $('scorerStatus').textContent =
-        'Impossible de charger les buteurs : ' + String(error.message || error) +
-        '. Les autres analyses du match restent accessibles.';
+      if (sequence !== serial || error.name === 'AbortError') return;
+      publish(fixtureId, []);
     }
   }
 
@@ -140,7 +52,6 @@
     previousOpenAnalysis(id);
     if (typeof currentMode !== 'undefined' && currentMode !== 'live') return;
     if (!/^[1-9][0-9]{0,11}$/.test(String(id))) return;
-    if (!$('scorerSection')) return;
     load(id);
   };
 })();
