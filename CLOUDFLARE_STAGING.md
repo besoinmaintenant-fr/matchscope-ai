@@ -1,10 +1,10 @@
 # MatchScope AI — migration Cloudflare : état vérifié
 
-> Relevé du **31 octobre 2026** à partir des API GitHub, Cloudflare, Netlify et Supabase. Ce document remplace les annonces historiques non prouvées. Toutes les heures indiquées sont en UTC. Ne jamais publier la valeur d'un secret.
+> Relevé des **31 octobre–1er novembre 2026** à partir des API GitHub, Cloudflare, Netlify et Supabase. Ce document remplace les annonces historiques non prouvées. Toutes les heures indiquées sont en UTC. Ne jamais publier la valeur d'un secret.
 
 ## Décision immédiate
 
-**Migration NON terminée : garder `MATCHSCOPE_CRON_ENABLED=false`.** Un déclencheur Cloudflare installé ne prouve ni collecte effective ni écriture Supabase. Aucune activation Cloudflare tant que Netlify n'est pas réellement neutralisé et que l'accès privé n'est pas testé de bout en bout.
+**Phase Netlify validée ; migration Cloudflare NON terminée : garder `MATCHSCOPE_CRON_ENABLED=false`.** Le déploiement Netlify publié utilise désormais `main/netlify.toml` sans tâches planifiées. Un déclencheur Cloudflare installé et son contrôle GET ne prouvent ni POST de collecte ni écriture Supabase ; ne pas l'activer avant le test contrôlé.
 
 ## Ressources et commits vérifiés
 
@@ -15,18 +15,18 @@
 | Projet Pages | `matchscope-ai-staging`, URL `https://matchscope-ai-staging.pages.dev` |
 | Pages déploiement | `fbfc4c24-bcc7-4eaf-aa75-5cb1c332f359`, réussi le 31/10 à 17:48 |
 | Worker | `matchscope-ai-collector`, cron `*/5 * * * *` présent |
-| Netlify | site `matchscope-ai-2`, déploiement publié `6ae5eb27804528edd9809154` du commit `70287961b2cf999daf95a22359ef93fe7dcdf694` |
-| GitHub main | le commit `c124311480f1a81a0ac330ee963725c90e63e1ec` retire les quatre schedules ; PR #1 fusionnée par `ecb580ef650f7c45b6b52bc8fbc9a2766c7bad9c` pour tenter une synchronisation |
+| Netlify | site `matchscope-ai-2`, **nouveau déploiement publié `6ae674ba8454c2a27b109a12`**, commit `ecb580ef650f7c45b6b52bc8fbc9a2766c7bad9c`, `main`, `ready`, publié le 31/10/2026 à 23:08:05 UTC |
+| GitHub main | le commit `c124311480f1a81a0ac330ee963725c90e63e1ec` retire les quatre schedules ; la PR #1 a publié le commit `ecb580ef650f7c45b6b52bc8fbc9a2766c7bad9c` sur Netlify |
 | Base | Supabase `mlqrfowveayyxcuasfkh` (reste en place) |
 
-**Netlify :** l'API Get Project indique encore le déploiement `6ae5eb...` après la fusion de la PR #1. La publication de `main` et l'arrêt effectif des tâches ne sont **pas démontrés**. La disponibilité des fonctions dans le déploiement ne prouve pas leur dernier déclenchement, mais son `netlify.toml` au commit publié contient bien les quatre planifications : `collect-lineups`, `collect-prematch-snapshots`, `postmatch-auto`, `trigger-enrichment`.
+**Netlify :** l'API Get Project et Get Deploy confirment le déploiement `6ae674...`, commit `ecb580ef...`, publié en production. Le `netlify.toml` à ce commit n'a **plus aucun bloc schedule** et les quatre fonctions ne portent pas de métadonnée `schedule` dans `available_functions` : la programmation automatique par ce déploiement est neutralisée. Les fonctions existent encore en HTTP et d'autres déclencheurs externes ne peuvent pas être exclus par cette seule preuve. Aucune écriture/mise à jour n'a été constatée dans `matches` (`updated_at`), `lineups`, `prematch_snapshots`, `predictions` et `scorer_predictions` après 23:08:05 UTC lors de la vérification, faite peu après la publication ; fenêtre d'observation courte.
 
 ## Cloudflare : configuration vérifiée, limites
 
 - Pages utilise la branche `cloudflare-staging`, `nodejs_compat` et la compatibility date `2026-10-31` ; le nom de ces quatre variables serveur a été vérifié : `SPORTMONKS_API_TOKEN`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `MATCHSCOPE_SYNC_SECRET`. Ne jamais imprimer leurs valeurs.
 - Worker : secrets nommés `CF_ACCESS_CLIENT_ID` et `CF_ACCESS_CLIENT_SECRET` ; `MATCHSCOPE_CRON_ENABLED=false` ; sous-domaine `workers.dev` désactivé.
-- Cloudflare Access : application de service dédiée à `matchscope-ai-staging.pages.dev/__cron/*` ; application séparée avec accès e-mail au domaine principal. Ne modifier ni domaines, ni politiques.
-- **Previews Pages** : la configuration source `preview_deployment_setting` vaut `none` (prévisualisations automatiques désactivées), même si `preview_branch_includes` liste `*`. Ce dernier champ seul ne prouve donc pas que les previews sont actives. Ne jamais réactiver ces previews sans vérifier leur protection Access.
+- Cloudflare Access : application dédiée à `matchscope-ai-staging.pages.dev/__cron/*` dont la politique `non_identity` inclut uniquement `service_token` ; application séparée avec politique d'accès par e-mail au domaine principal. Lecture API confirmée. Ne modifier ni domaines, ni politiques.
+- **Previews Pages** : `preview_deployment_setting=none`, cependant des objets de déploiement `environment=preview`, `latest_stage.status=idle`, ont été observés après des commits sur des branches secondaires. Ils ne sont pas des déploiements de production ; leur protection réseau spécifique n'a pas été validée. Ne pas les publier ni assouplir Access.
 - Logs Workers Observability : 60 événements de contrôle de 17:50:50 à 22:45:49 UTC, avec `ready:true`, `pagesRouteStatus:405`, `cronEnabled:false`. Cela étaye l'authentification de service pour le GET de contrôle, **pas** un POST de collecte ni une écriture Supabase.
 - Le refus d'un appel sans token, l'accès authentifié aux trois autres routes et le traitement complet d'un POST de collecte ne sont pas encore prouvés indépendamment.
 - Le script `scripts/build-cloudflare.mjs` génère les routes privées `functions/__cron/{lineups,snapshots,postmatch,enrichment}`. Les anciennes fonctions sous `netlify/functions` sont regroupées pour Pages ; vérifier la compatibilité effective de chacune avant bascule.
@@ -55,9 +55,9 @@
 
 ## Procédure de bascule : ordre impératif
 
-1. **Neutraliser Netlify** en publiant réellement une version sans les quatre schedules (ou désactivation sur le tableau de bord) ; relire l'identifiant du déploiement **publié**, son commit et la liste des planifications. L'accès Netlify actuel via le connecteur est en lecture seule pour les déploiements ; il manque une action de publication/désactivation.
-2. Contrôler les autres déclencheurs (GitHub Actions, autres Workers, services externes). Les deux branches inspectées ne contiennent pas `.github/workflows` ; cela n'exclut pas des tâches externes.
-3. Vérifier le refus sans token et l'autorisation avec service token sur les quatre routes. Un GET `405` authentifié n'autorise pas à conclure sur les POST.
+1. **FAIT** — Neutralisation des quatre schedules Netlify par publication effective du commit `ecb580ef...`, déploiement `6ae674...` en production le 31/10 à 23:08:05 UTC ; les fonctions restent présentes mais non planifiées par `netlify.toml`.
+2. **PARTIEL** — Contrôler les autres déclencheurs (GitHub Actions, autres Workers, services externes). Les deux branches inspectées ne contiennent pas `.github/workflows`; Supabase ne montre pas de table `cron.job` ; cela n'exclut pas les services externes. Aucun nouveau changement dans les cinq tables contrôlées juste après la publication.
+3. **PARTIEL** — La politique Access `service_token` est confirmée et le GET `405` authentifié a été observé historiquement pour `lineups`. Vérifier le refus sans token, l'accès avec jeton aux quatre routes et une requête POST contrôlée ; le connecteur présent n'expose pas les secrets ni un moyen d'envoyer une requête HTTP authentifiée arbitraire.
 4. Tester **un seul POST contrôlé** après l'arrêt Netlify, observer un JSON structuré avec les erreurs individuelles, puis vérifier une écriture Supabase avant coup d'envoi et l'absence de doublon.
 5. Seulement si 1–4 sont établis, activer `MATCHSCOPE_CRON_ENABLED=true` puis observer une exécution **planifiée** et ses données en base. Dans les logs, séparer `échec`, `source indisponible`, `compositions non confirmées`, `traité`.
 6. En cas de problème, repasser d'abord `MATCHSCOPE_CRON_ENABLED=false`, confirmer l'arrêt, puis seulement envisager de réactiver Netlify. Jamais deux collecteurs.
