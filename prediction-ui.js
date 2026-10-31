@@ -636,33 +636,10 @@
     );
 
 
-    const badge =
-      document.querySelector(
-        '#officialBadge'
-      );
-
-
-    if (badge) {
-
-      if (
-        data.officialLineups
-      ) {
-
-        badge.textContent =
-          'COMPOS OFFICIELLES';
-
-        badge.className =
-          'pill success';
-
-      } else {
-
-        badge.textContent =
-          'PRELINEUP FIGÉE';
-
-        badge.className =
-          'pill neutral';
-      }
-    }
+    // Le statut des compositions est vérifié directement
+    // auprès de Sportmonks par lineup-ui.js. Un état du
+    // modèle PRELINEUP/FINAL n'est pas une preuve que
+    // Sportmonks a confirmé les onze titulaires.
 
 
     renderMarkets(
