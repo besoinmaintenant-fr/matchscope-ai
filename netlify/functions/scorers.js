@@ -1,4 +1,5 @@
 'use strict';
+const { lineupStatus } = require('./lib/memory');
 
 // MatchScope — indicateurs de buteurs basés sur les statistiques Sportmonks.
 // Un score chiffré n'est calculé que si buts ET apparitions sont disponibles.
@@ -68,7 +69,7 @@ function lineupState(fixture) {
   return known;
 }
 
-function playerRow(squadEntry, team, lineup) {
+function playerRow(squadEntry, team, lineup, authorized) {
   const details = squadEntry?.details;
   const goals = metric(details, METRICS.goals);
   const appearances = metric(details, METRICS.appearances);
@@ -84,8 +85,11 @@ function playerRow(squadEntry, team, lineup) {
   // Poisson avec exposition au temps de jeu si les minutes sont connues.
   // C'est une probabilité CONDITIONNELLE à la participation, pas un marché
   // calibré. Sans temps de jeu attendu fiable, l'estimation est indicative.
-  const usable = goals !== null && appearances !== null
-    && appearances >= 5 && goals <= appearances * 3;
+  // Aucun pourcentage avant les XI officiels ni pour un remplaçant.
+  const starter = lineup.get(playerId) === 'Titulaire annoncé / probable';
+  const usable = authorized && starter &&
+    goals !== null && appearances !== null &&
+    appearances >= 5 && goals <= appearances * 3;
   const validMinutes = Number.isFinite(minutes) && minutes > 0
     && minutes <= appearances * 130;
   const averageMinutes = validMinutes
@@ -145,7 +149,7 @@ function playerRow(squadEntry, team, lineup) {
   };
 }
 
-async function squadForTeam(seasonId, team, token, lineup) {
+async function squadForTeam(seasonId, team, token, lineup, authorized) {
   const path = '/squads/seasons/' + seasonId + '/teams/' + team.id;
   let raw;
   let dataWarning = null;
@@ -168,7 +172,7 @@ async function squadForTeam(seasonId, team, token, lineup) {
   }
   const rows = Array.isArray(raw) ? raw : [];
   return {
-    players: rows.map(row => playerRow(row, team, lineup)).filter(Boolean),
+    players: rows.map(row => playerRow(row, team, lineup, authorized)).filter(Boolean),
     warning: dataWarning
   };
 }
@@ -212,11 +216,20 @@ exports.handler = async event => {
   }
 
   const knownLineups = lineupState(fixture);
+  const official = lineupStatus(fixture).official;
+  // Pas de pronostic rétroactif : aucun nouveau taux après kickoff.
+  const kickoff = String(fixture.starting_at || '');
+  const parsedKickoff = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(kickoff)
+    ? Date.parse(kickoff.replace(' ', 'T') + 'Z')
+    : Date.parse(kickoff);
+  const beforeKickoff = Number.isFinite(parsedKickoff) &&
+    Date.now() < parsedKickoff;
+  const authorized = official && beforeKickoff;
   const teams = [home, away].map(team => ({
     id: Number(team.id), name: String(team.name || 'Équipe')
   }));
   const results = await Promise.all(teams.map(team =>
-    squadForTeam(seasonId, team, token, knownLineups)
+    squadForTeam(seasonId, team, token, knownLineups, authorized)
   ));
   const players = results.flatMap(r => r.players)
     .sort((a, b) => {
@@ -227,6 +240,12 @@ exports.handler = async event => {
       return (b.goals || 0) - (a.goals || 0);
     });
   const warnings = results.map(r => r.warning).filter(Boolean);
+  if (!official) warnings.unshift(
+    'Pronostics buteurs en attente des 22 titulaires officiellement confirmés par Sportmonks.'
+  );
+  else if (!beforeKickoff) warnings.unshift(
+    'Coup d’envoi déjà passé : aucun nouveau pourcentage buteur créé après le match.'
+  );
   if (!players.length) {
     warnings.push('Aucune statistique individuelle accessible pour ce match.');
   }
@@ -237,6 +256,8 @@ exports.handler = async event => {
     teams,
     players,
     lineupsAvailable: knownLineups.size > 0,
+    lineupsOfficial: official,
+    beforeKickoff,
     estimatedCount: players.filter(p => p.probability !== null).length,
     warnings,
     methodology: 'Poisson lissé à partir des buts, minutes et xG de saison si disponibles. Les probabilités de 1+, 2+ et 3+ buts sont conditionnelles à la participation, calculées avec le temps de jeu moyen. Estimations expérimentales non calibrées, sans prise en compte de la défense adverse, du temps de jeu prévu, des blessures ni des cotes.'
