@@ -1432,6 +1432,26 @@ async function tryLive() {
             ' [ID ' + league.id + '] : ' + league.count
           ).join(' ; ')
         : 'information indisponible';
+      const plans = Array.isArray(stats.subscriptionPlans)
+        ? stats.subscriptionPlans
+        : [];
+      const subscriptionInfo = plans.length
+        ? plans.map(p =>
+            p.plan + (p.category ? ' (' + p.category + ')' : '')
+          ).join(' ; ')
+        : 'Non communiqué';
+      const leagueAccess = stats.allowedLeagues;
+      const leagueAccessInfo = leagueAccess
+        ? (' Accès /leagues : HTTP ' +
+          (leagueAccess.httpStatus ?? '?') +
+          ', ligues autorisées : ' +
+          (Array.isArray(leagueAccess.leagues) &&
+           leagueAccess.leagues.length
+            ? leagueAccess.leagues.map(l =>
+                l.name + ' [ID ' + l.id + ']'
+              ).join(' ; ')
+            : 'aucune liste obtenue') + '.')
+        : '';
       const check = stats.referenceFixture;
       const referenceStatus = check
         ? ('Test du match Tottenham–Crystal Palace (Premier League) : HTTP ' +
@@ -1446,6 +1466,9 @@ async function tryLive() {
         ', retenus : ' + (stats.selected ?? 0) +
         ', pages : ' + (stats.pages ?? '?') + '.' +
         ' Ligues reçues : ' + receivedLeagues + '.' +
+        ' Abonnement détecté pour la clé Netlify : ' +
+        subscriptionInfo + '.' +
+        leagueAccessInfo +
         ' ' + referenceStatus;
 
       if (dataMode) {
