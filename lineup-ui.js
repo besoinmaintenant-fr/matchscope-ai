@@ -237,7 +237,6 @@
       const number = player.jersey === null || player.jersey === undefined
         ? '' : '#' + player.jersey + ' ';
       const playerId = player.id ? String(player.id) : '';
-      const scoring = playerLabel(player);
       const selected = playerId && playerId === selectedPlayerId;
       const avatar = photo
         ? '<img loading="lazy" referrerpolicy="no-referrer" src="' +
@@ -249,13 +248,11 @@
         ' style="--x:' + x.toFixed(2) + ';--y:' + y.toFixed(2) + '"' +
         ' data-player-id="' + escape(playerId) + '"' +
         ' aria-label="' + escape(number + player.name +
-          ', buteur 1+ : ' + scoring + ', voir le détail') + '"' +
+          ', voir ses statistiques buteur') + '"' +
         ' aria-pressed="' + String(Boolean(selected)) + '">' +
           '<span class="pitch-player-avatar">' + avatar + '</span>' +
           '<span class="pitch-player-name"><span class="pitch-player-number">' +
             escape(number) + '</span>' + escape(player.name) + '</span>' +
-          '<span class="pitch-player-rate">' +
-            escape(scoring) + '<small>1+ but</small></span>' +
         '</button>';
     }).join('');
     renderSelectedPlayer();
