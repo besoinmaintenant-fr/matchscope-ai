@@ -53,6 +53,15 @@
 - Une branche de travail `ops/cloudflare-collector-guards-20261031` prépare un contrôle des erreurs partielles dans le Worker avec tests unitaires. **Cette correction n'est pas déployée** tant qu'elle n'est pas fusionnée et que le Worker n'a pas été redéployé. Six tests Node ont passé localement ; test d'intégration réel non effectué.
 - Les verrous atomiques, reprises après 429, reports et corrections de composition exigent un audit supplémentaire. Aucune réécriture de pronostics déjà enregistrés.
 
+## Test d'intégration réel du 31/10/2026 à 23:30 UTC
+
+- **FAIT — Worker → Cloudflare Access → Pages Function privée `__cron/lineups`** : un seul POST déclenché par un Worker temporaire à 23:30:49 UTC ; HTTP **200**, réponse JSON avec `success:true`, `errors:0`, zéro échec partiel et `checkedAt:2026-10-31T23:30:51.213Z`. Le Worker a utilisé les bindings de service secrets existants hérités ; aucun token n'a été lu ou publié.
+- **Aucune donnée candidate pendant ce test** : `candidates:0`, `saved:0`, `predictionsSaved:0`, `scorerSnapshotsSaved:0`. Les vérifications SQL juste après le test confirment **0 écriture** dans `matches`, `lineups`, `prematch_snapshots`, `predictions` et `scorer_predictions`. Cela **ne démontre pas** la capacité à enregistrer une nouvelle ligne dans Supabase lors d'une collecte effective.
+- **Le premier créneau à 23:25 UTC n'a déclenché que le contrôle GET 405** : une comparaison trop stricte de l'heure de planification a empêché son POST. Le test corrigé a tenu compte du décalage réel de livraison de Cloudflare ; un seul POST a eu lieu.
+- **Rollback confirmé** : Worker original `451b95e5-e44d-44a5-8a31-9e6a4c4aae98` redéployé à 100 %, déploiement `79cbd44a-12e8-494b-885e-00fb84e7c1b2` ; `MATCHSCOPE_CRON_ENABLED=false` et cron `*/5 * * * *` (readiness seulement) inchangés, les deux bindings secrets toujours présents.
+- Netlify garde le déploiement publié `6ae674ba8454c2a27b109a12`, commit sans schedules. Aucune tâche automatique Netlify réactivée.
+- **Portée probante** : authentification et POST réussis pour `lineups` ; ni les trois autres routes, ni la persistance sur une collecte non vide, ni la robustesse de l'archivage buteurs ne sont encore validées. Ne pas activer la collecte automatique sur la seule base de ce POST vide.
+
 ## Procédure de bascule : ordre impératif
 
 1. **FAIT** — Neutralisation des quatre schedules Netlify par publication effective du commit `ecb580ef...`, déploiement `6ae674...` en production le 31/10 à 23:08:05 UTC ; les fonctions restent présentes mais non planifiées par `netlify.toml`.
