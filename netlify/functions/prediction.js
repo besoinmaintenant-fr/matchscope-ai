@@ -1860,7 +1860,9 @@ exports.handler =
       // En revanche une PRELINEUP réellement enregistrée avant
       // le match reste consultable (même après sa fin).
       if (Date.now() >= target.kickoffTs) {
-        const stages = ['PRELINEUP', 'FINAL'];
+        // Si deux anciennes versions existent, privilégier le
+        // pronostic calculé après confirmation des XI.
+        const stages = ['FINAL', 'PRELINEUP'];
         let archived = null;
         for (const oldStage of stages) {
           const stored = await findPrediction(
