@@ -1423,15 +1423,30 @@ async function tryLive() {
 
     if (!matches.length && data.notice) {
       const stats = data.sourceDiagnostics || {};
+      const leagues = Array.isArray(stats.upstreamLeagues)
+        ? stats.upstreamLeagues
+        : [];
+      const receivedLeagues = leagues.length
+        ? leagues.map(league =>
+            (league.name || 'Ligue inconnue') +
+            ' [ID ' + league.id + '] : ' + league.count
+          ).join(' ; ')
+        : 'information indisponible';
+      const check = stats.referenceFixture;
+      const referenceStatus = check
+        ? ('Test du match Tottenham–Crystal Palace (Premier League) : HTTP ' +
+          (check.httpStatus ?? '?') +
+          (check.leagueId
+            ? ', ligue ' + check.leagueId
+            : '') + '.')
+        : '';
       lastError =
         data.notice +
-        ' (Reçus depuis Sportmonks : ' +
-        (stats.received ?? '?') +
-        ', retenus : ' +
-        (stats.selected ?? 0) +
-        ', pages : ' +
-        (stats.pages ?? '?') +
-        ').';
+        ' Reçus : ' + (stats.received ?? '?') +
+        ', retenus : ' + (stats.selected ?? 0) +
+        ', pages : ' + (stats.pages ?? '?') + '.' +
+        ' Ligues reçues : ' + receivedLeagues + '.' +
+        ' ' + referenceStatus;
 
       if (dataMode) {
         dataMode.textContent = 'AUCUN MATCH RETOURNÉ';
