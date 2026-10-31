@@ -799,6 +799,7 @@ async function fetchFixture(
       'participants',
       'venue',
       'lineups.player',
+      'metadata',
       'formations'
     ].join(';')
   );
@@ -1915,13 +1916,22 @@ exports.handler =
         );
 
 
-      const stage =
-
-        lineup.official
-
-          ? 'FINAL'
-
-          : 'PRELINEUP';
+      // Seule une composition officiellement confirmée par
+      // Sportmonks (metadata 572 + 11 titulaires par équipe)
+      // autorise désormais le calcul d'un pronostic.
+      if (!lineup.official) {
+        return jsonResponse(409, {
+          success: false,
+          error: 'LINEUPS_PENDING',
+          message: 'Pronostic en attente : Sportmonks n’a pas encore ' +
+            'confirmé les 11 titulaires des deux équipes. ' +
+            'Aucun pronostic n’est calculé sans composition officielle.',
+          fixtureId,
+          startersFound: lineup.starters.length,
+          providerConfirmed: lineup.providerConfirmed === true
+        });
+      }
+      const stage = 'FINAL';
 
 
       // =================================================
@@ -2163,12 +2173,12 @@ exports.handler =
 
 
       // =================================================
-      // 10. PRELINEUP
+      // 10. PRÉDICTION FIGÉE APRÈS XI OFFICIELS
       // =================================================
 
       if (
         stage ===
-        'PRELINEUP'
+        'FINAL'
       ) {
 
         const saved =
@@ -2180,7 +2190,7 @@ exports.handler =
               MODEL_VERSION,
 
             stage:
-              'PRELINEUP',
+              'FINAL',
 
             prediction:
               predictionPayload(
@@ -2227,10 +2237,14 @@ exports.handler =
 
               lineupEffectApplied:
                 false,
+              lineupBasis:
+                'XI officiels vérifiés avant le calcul',
+              modelScope:
+                'Modèle historique : effet individuel des joueurs non calibré.',
 
               /*
                * Le score exact est maintenant conservé
-               * avec la PRELINEUP figée.
+               * avec la prédiction figée après confirmation des XI.
                */
               exactScore:
 
@@ -2292,16 +2306,16 @@ exports.handler =
               MODEL_VERSION,
 
             stage:
-              'PRELINEUP',
+              'FINAL',
 
             officialLineups:
-              false,
+              true,
 
             startersFound:
               lineup.starters.length,
 
             lineupsStored:
-              false,
+              true,
 
             runtime: {
 
@@ -2340,76 +2354,6 @@ exports.handler =
 
 
       // =================================================
-      // 11. XI OFFICIELS
-      //
-      // Les XI sont mémorisés mais aucun faux modèle
-      // FINAL n'est créé tant que leur impact n'a pas
-      // été validé.
-      // =================================================
-
-      return jsonResponse(
-        200,
-        {
-
-          success:
-            true,
-
-          saved:
-            false,
-
-          alreadyExists:
-            false,
-
-          fixtureId,
-
-          modelVersion:
-            MODEL_VERSION,
-
-          stage:
-            'FINAL',
-
-          officialLineups:
-            true,
-
-          startersFound:
-            lineup.starters.length,
-
-          lineupsStored:
-            true,
-
-          reason:
-            'FINAL_LINEUP_MODEL_PENDING',
-
-          message:
-            'Les compositions officielles sont enregistrées dans la mémoire MatchScope. La base V0.7 est calculée avec le runtime figé, mais aucune prédiction FINAL n’est enregistrée tant que l’effet des compositions n’a pas été validé.',
-
-          runtime: {
-
-            trainedAt:
-              runtime.trained_at
-              ||
-              null,
-
-            historyCount:
-              runtime.history_count
-              ||
-              null
-          },
-
-          history:
-            historyInfo,
-
-          baseModel:
-            model,
-
-          validation:
-            runtime.validation
-            ||
-            null
-        }
-      );
-
-
     } catch (
       error
     ) {
