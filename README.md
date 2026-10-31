@@ -63,3 +63,7 @@ Les clés restent côté fonctions Netlify : elles ne sont pas exposées dans le
 
 ## Important
 Aucune méthode ne peut garantir 100 % de réussite sur des matchs de football. Une application sérieuse cherche à être bien calibrée et à mesurer ses erreurs, pas à promettre un résultat certain.
+
+## Déploiement après changement de clé Sportmonks
+
+Quand `SPORTMONKS_API_TOKEN` est modifié dans Netlify (contexte **Production**, portée **Functions**), publier un nouveau déploiement : la fonction déjà publiée conserve les variables d’environnement de son déploiement. Vérifier ensuite la réponse de `/.netlify/functions/fixtures` sans jamais exposer la clé dans le navigateur ni dans les journaux.
