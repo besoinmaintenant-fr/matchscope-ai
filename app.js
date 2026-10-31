@@ -1389,19 +1389,34 @@ async function tryLive() {
       await fetch(
         '/.netlify/functions/fixtures',
         {
-          cache:'no-store'
+          cache: 'no-store',
+          credentials: 'same-origin'
         }
       );
 
+    // La protection SSO Netlify peut répondre 401 avant d'appeler
+    // la fonction. Cette page d'erreur n'est pas nécessairement JSON.
+    if (response.status === 401) {
+      throw new Error(
+        'Accès refusé par Netlify (HTTP 401). ' +
+        'Le site exige actuellement une connexion à l’équipe Netlify. ' +
+        'Ouvre MatchScope dans le navigateur où tu es connecté à Netlify, ' +
+        'ou désactive cette protection dans les paramètres Netlify.'
+      );
+    }
 
-    const data =
-      await response.json();
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('json')) {
+      throw new Error(
+        'Netlify a renvoyé une page à la place des données de matchs ' +
+        '(HTTP ' + response.status + '). ' +
+        'Vérifie la connexion au site et ses restrictions d’accès.'
+      );
+    }
 
+    const data = await response.json();
 
-    if (
-      !response.ok
-    ) {
-
+    if (!response.ok) {
       throw new Error(
         data.details ||
         data.error ||
@@ -1492,11 +1507,12 @@ async function tryLive() {
       false;
 
 
-    lastError =
-      String(
-        error?.message ||
-        error
-      );
+    const message = String(error?.message || error);
+    lastError = /string did not match the expected pattern/i.test(message)
+      ? 'Le navigateur n’a pas pu accéder aux données de matchs. ' +
+        'Le site est actuellement protégé par la connexion SSO de Netlify : ' +
+        'vérifie que cette connexion est ouverte dans le même navigateur.'
+      : message;
 
 
     if (dataMode) {
@@ -1581,13 +1597,25 @@ async function tryHistory(
       await fetch(
         `/.netlify/functions/history?days=${days}`,
         {
-          cache:'no-store'
+          cache: 'no-store',
+          credentials: 'same-origin'
         }
       );
 
+    if (response.status === 401) {
+      throw new Error(
+        'Accès refusé par Netlify (HTTP 401) : ' +
+        'connecte-toi à l’équipe Netlify dans ce navigateur.'
+      );
+    }
+    if (!(response.headers.get('content-type') || '').includes('json')) {
+      throw new Error(
+        'Réponse Netlify non JSON (HTTP ' + response.status +
+        '). Vérifie l’accès au site.'
+      );
+    }
 
-    const data =
-      await response.json();
+    const data = await response.json();
 
 
     if (
