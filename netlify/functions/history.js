@@ -3,32 +3,23 @@ const API =
 
 
 const LEAGUES = {
-
-  '82': {
-    code: 'BL',
-    name: 'Bundesliga'
-  },
-
-  '564': {
-    code: 'LL',
-    name: 'La Liga'
-  },
-
-  '1251': {
-    code: 'SC',
-    name: 'Super Cup'
-  },
-
-  '8': {
-    code: 'PL',
-    name: 'Premier League'
-  },
-
-  '1101': {
-    code: 'CF1',
-    name: 'Club Friendlies 1'
-  }
+  '301': { code: 'L1', name: 'Ligue 1' },
+  '564': { code: 'LL', name: 'La Liga' },
+  '384': { code: 'SA', name: 'Serie A' },
+  '8': { code: 'PL', name: 'Premier League' },
+  '82': { code: 'BL', name: 'Bundesliga' }
 };
+
+// Statuts terminaux officiels Sportmonks :
+// 5 FT, 7 AET, 8 FT_PEN.
+// Ne jamais se baser sur un score CURRENT : il peut être 0-0 avant le match.
+const FINISHED_STATES = new Set([5, 7, 8]);
+
+function fixtureIsFinished(fixture, now = Date.now()) {
+  const kickoff = parseKickoff(fixture?.starting_at);
+  return FINISHED_STATES.has(Number(fixture?.state_id)) &&
+    kickoff !== null && kickoff.getTime() <= now;
+}
 
 
 const LEAGUE_IDS =
@@ -150,12 +141,10 @@ function getFinalScore(
           ?.participant;
 
 
-      const goals =
-        Number(
-          item
-            ?.score
-            ?.goals
-        );
+      const rawGoals = item?.score?.goals;
+      // Number(null) vaut 0 : ce n'est pas un score connu.
+      const goals = rawGoals === null || rawGoals === undefined ||
+        rawGoals === '' ? NaN : Number(rawGoals);
 
 
       if (
@@ -471,7 +460,9 @@ exports.handler =
 
           .map(
             fixture => {
-
+              if (!fixtureIsFinished(fixture)) {
+                return null;
+              }
 
               const participants =
 
