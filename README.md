@@ -67,3 +67,30 @@ Aucune méthode ne peut garantir 100 % de réussite sur des matchs de football. 
 ## Déploiement après changement de clé Sportmonks
 
 Quand `SPORTMONKS_API_TOKEN` est modifié dans Netlify (contexte **Production**, portée **Functions**), publier un nouveau déploiement : la fonction déjà publiée conserve les variables d’environnement de son déploiement. Vérifier ensuite la réponse de `/.netlify/functions/fixtures` sans jamais exposer la clé dans le navigateur ni dans les journaux.
+
+## Ordre de calcul : compositions avant pronostics (31 octobre 2026)
+
+Le collecteur Netlify `collect-lineups` surveille automatiquement les matchs à venir
+des **cinq championnats** toutes les **10 minutes**. Dans les 90 minutes avant
+le coup d'envoi, il vérifie le statut Sportmonks : `metadata.type_id=572`,
+`values.confirmed=true`, et exactement **11 titulaires dans chaque équipe**.
+
+1. Si les XI ne sont pas officiels, **aucune nouvelle prédiction 1/N/2** n'est générée.
+2. Si les XI sont officiels avant le coup d'envoi, ils sont enregistrés
+   dans Supabase avec le snapshot FINAL ; le collecteur appelle ensuite
+   le moteur et fige une prédiction FINAL, **si le modèle est calibré**.
+3. Après le coup d'envoi, seuls les pronostics enregistrés à temps
+   peuvent être consultés. **Aucun pronostic rétroactif** n'est créé.
+4. Le modèle actuel V0.7 utilise l'historique collectif et **ne modélise
+   pas encore l'effet individuel des onze joueurs**. Ne pas confondre
+   « XI confirmés avant le calcul » et « modèle ajusté aux XI ».
+5. **Premier League, La Liga et Bundesliga** : modèle V0.7 calibré.
+   **Ligue 1 et Serie A** : collecte des XI et snapshots activée ;
+   prédictions 1/N/2 indisponibles jusqu'à complétude et validation
+   de l'historique de ces ligues.
+6. Les estimations expérimentales de buteurs ne s'affichent qu'aux
+   titulaires confirmés, avant le coup d'envoi, et uniquement si
+   leurs statistiques individuelles sont exploitables.
+
+Le code exécute l'appel de prédiction en interne dans la fonction Netlify
+programmée, sans passer par une URL publique et sans exposer la clé.
