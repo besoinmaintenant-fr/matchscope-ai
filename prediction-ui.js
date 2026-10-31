@@ -635,6 +635,13 @@
       versionText
     );
 
+    setText(
+      '#predictionStatus',
+      data.archived
+        ? 'Pronostic pré-match archivé : calcul enregistré avant le coup d’envoi. Aucune donnée du match en cours n’a été utilisée.'
+        : 'Probabilités pré-match issues du modèle MatchScope. Estimations statistiques, non garanties.'
+    );
+
 
     // Le statut des compositions est vérifié directement
     // auprès de Sportmonks par lineup-ui.js. Un état du
@@ -673,6 +680,10 @@
     setText(
       '#modelVersion',
       'Chargement V0.7 serveur…'
+    );
+    setText(
+      '#predictionStatus',
+      'Chargement des probabilités pré-match…'
     );
 
 
@@ -719,6 +730,10 @@
     setText(
       '#modelVersion',
       `V0.7 indisponible • ${message}`
+    );
+    setText(
+      '#predictionStatus',
+      message
     );
 
 
