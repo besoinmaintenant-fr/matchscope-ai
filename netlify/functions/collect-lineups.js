@@ -11,6 +11,7 @@ const {
 // Même moteur que la consultation du match, exécuté côté serveur :
  // pas d'HTTP public et pas d'exposition du token.
 const { handler: generatePrediction } = require('./prediction');
+const { handler: generateScorers } = require('./scorers');
 
 const API =
   'https://api.sportmonks.com/v3/football';
@@ -33,6 +34,12 @@ const MODEL_LEAGUE_IDS = new Set([8, 82, 564]);
 const LOOKAHEAD_MINUTES = 90;
 
 const AFTER_KICKOFF_MINUTES = 0;
+
+// Limiter les appels de statistiques individuelles : un match demande
+// la fiche Sportmonks et deux effectifs de saison (3 appels en général).
+const SCORER_MAX_PER_RUN = 3;
+const SCORER_EARLIEST_MINUTES = 75;
+const SCORER_LATEST_MINUTES = 2;
 
 
 // =====================================================
@@ -450,6 +457,40 @@ async function getFinalPredictionIds(fixtureIds) {
     Number(row.sportmonks_fixture_id)).filter(Number.isSafeInteger));
 }
 
+
+// =====================================================
+// PRONOSTICS BUTEURS FIGÉS : indépendants du modèle 1/N/2.
+// Valable pour les 5 championnats pris en charge.
+// =====================================================
+
+async function getSavedScorerIds(fixtureIds) {
+  const ids = fixtureIds.filter(Number.isSafeInteger);
+  if (!ids.length) return new Set();
+  const rows = await supabaseRequest('scorer_predictions', {
+    method: 'GET',
+    query: '?select=sportmonks_fixture_id' +
+      '&sportmonks_fixture_id=in.(' + ids.join(',') + ')'
+  });
+  return new Set(array(rows).map(row =>
+    Number(row.sportmonks_fixture_id)).filter(Number.isSafeInteger));
+}
+
+async function collectScorerSnapshot(fixtureId) {
+  const response = await generateScorers({
+    httpMethod: 'GET',
+    queryStringParameters: { fixtureId: String(fixtureId) }
+  });
+  const result = JSON.parse(response?.body || '{}');
+  return {
+    fixtureId,
+    status: Number(response?.statusCode) !== 200
+      ? 'SOURCE_UNAVAILABLE'
+      : result.archived === true
+        ? 'SCORERS_FROZEN'
+        : 'NOT_FROZEN',
+    estimatedCount: Number(result.estimatedCount) || 0
+  };
+}
 
 // =====================================================
 // SNAPSHOT FINAL DÉJÀ PRÉSENT
@@ -1296,7 +1337,8 @@ exports.handler =
       const [
         confirmedIds,
         finalSnapshotIds,
-        finalPredictionIds
+        finalPredictionIds,
+        savedScorerIds
       ] =
         await Promise.all([
 
@@ -1309,6 +1351,10 @@ exports.handler =
           ),
 
           getFinalPredictionIds(
+            fixtureIds
+          ),
+
+          getSavedScorerIds(
             fixtureIds
           )
         ]);
@@ -1421,7 +1467,46 @@ exports.handler =
 
 
       // -------------------------------------------------
-      // F. RÉSUMÉ
+      // F. CAPTURE BUTEURS PRÉ-MATCH (maximum 3 matchs par tick)
+      // -------------------------------------------------
+      // Réutilise le même collecteur déjà actif. Ne crée PAS de
+      // deuxième cron. Les prédictions individuelles sont figées
+      // uniquement si 22 titulaires officiels sont connus et si
+      // Sportmonks renvoie des statistiques avant le coup d'envoi.
+      const savedXiThisRun = new Set(
+        results.filter(item => item.status === 'SAVED')
+          .map(item => Number(item.fixtureId))
+      );
+      const scorerCandidates = candidates
+        .filter(fixture => {
+          const id = Number(fixture?.id);
+          const kickoff = parseKickoff(fixture?.starting_at);
+          if (!Number.isSafeInteger(id) || !kickoff ||
+              savedScorerIds.has(id) ||
+              !(confirmedIds.has(id) || savedXiThisRun.has(id))) return false;
+          const minutesToKickoff = (kickoff.getTime() - Date.now()) / 60000;
+          return minutesToKickoff >= SCORER_LATEST_MINUTES &&
+            minutesToKickoff <= SCORER_EARLIEST_MINUTES;
+        })
+        .sort((a, b) =>
+          parseKickoff(a.starting_at) - parseKickoff(b.starting_at)
+        )
+        .slice(0, SCORER_MAX_PER_RUN);
+      const scorerResults = [];
+      for (const fixture of scorerCandidates) {
+        try {
+          scorerResults.push(await collectScorerSnapshot(Number(fixture.id)));
+        } catch (_error) {
+          scorerResults.push({
+            fixtureId: Number(fixture.id),
+            status: 'SOURCE_UNAVAILABLE',
+            estimatedCount: 0
+          });
+        }
+      }
+
+      // -------------------------------------------------
+      // G. RÉSUMÉ
       // -------------------------------------------------
 
       const summary = {
@@ -1478,6 +1563,12 @@ exports.handler =
               item.status ===
               'ERROR'
           ).length,
+
+        scorerCandidates: scorerCandidates.length,
+        scorerSnapshotsSaved: scorerResults.filter(
+          item => item.status === 'SCORERS_FROZEN'
+        ).length,
+        scorerResults,
 
         finalSnapshotsSaved:
           results.filter(
