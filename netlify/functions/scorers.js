@@ -81,14 +81,42 @@ function playerRow(squadEntry, team, lineup) {
     || player.common_name || '';
   if (!name || !Number.isSafeInteger(playerId)) return null;
 
-  // Un modèle de Poisson lissé par 2 rencontres fictives et 0,2 but.
-  // Conditionné au fait de participer. Non ajusté à la défense adverse,
-  // au temps de jeu prévu, aux penalties, aux blessures ou aux cotes.
+  // Poisson avec exposition au temps de jeu si les minutes sont connues.
+  // C'est une probabilité CONDITIONNELLE à la participation, pas un marché
+  // calibré. Sans temps de jeu attendu fiable, l'estimation est indicative.
   const usable = goals !== null && appearances !== null
-    && appearances >= 3 && goals <= appearances * 5;
-  const lambda = usable ? (goals + 0.2) / (appearances + 2) : null;
+    && appearances >= 5 && goals <= appearances * 3;
+  const validMinutes = Number.isFinite(minutes) && minutes > 0
+    && minutes <= appearances * 130;
+  const averageMinutes = validMinutes
+    ? Math.min(90, minutes / appearances)
+    : null;
+  const minutesExposure = validMinutes
+    ? minutes / 90
+    : appearances;
+  const goalsRate = usable
+    ? (goals + 0.25) / (minutesExposure + 2)
+    : null;
+  // Un xG de saison n'est pris en compte que s'il est plausible et
+  // cohérent avec les buts et la durée jouée.
+  const validXg = usable && xg !== null && xg >= 0
+    && xg <= minutesExposure * 3;
+  const xgRate = validXg
+    ? (xg + 0.25) / (minutesExposure + 2)
+    : null;
+  const blendedRate = goalsRate === null ? null
+    : xgRate === null ? goalsRate
+    : 0.45 * goalsRate + 0.55 * xgRate;
+  const lambda = blendedRate === null ? null
+    : Math.max(0, Math.min(3, blendedRate *
+      (averageMinutes === null ? 1 : averageMinutes / 90)));
+  const cdf0 = lambda === null ? null : Math.exp(-lambda);
   const probability = lambda === null ? null
-    : Math.round(100 * (1 - Math.exp(-lambda)));
+    : Math.round(100 * (1 - cdf0));
+  const probability2 = lambda === null ? null
+    : Math.round(100 * (1 - cdf0 * (1 + lambda)));
+  const probability3 = lambda === null ? null
+    : Math.round(100 * (1 - cdf0 * (1 + lambda + lambda * lambda / 2)));
   const lineupText = lineup.get(playerId) ||
     (lineup.size ? 'Présence non confirmée dans le XI disponible'
       : 'Participation à confirmer');
@@ -104,9 +132,16 @@ function playerRow(squadEntry, team, lineup) {
     shots,
     xg,
     probability,
+    probability2,
+    probability3,
+    averageMinutes: averageMinutes === null
+      ? null : Math.round(averageMinutes),
+    lambda: lambda === null ? null : Number(lambda.toFixed(4)),
     lineupStatus: lineupText,
     model: probability === null ? 'données insuffisantes'
-      : 'Poisson lissé par apparition, indicatif non calibré'
+      : validXg
+        ? 'Poisson lissé buts/xG, minutes moyennes, non calibré'
+        : 'Poisson lissé buts/minutes, non calibré'
   };
 }
 
@@ -204,6 +239,6 @@ exports.handler = async event => {
     lineupsAvailable: knownLineups.size > 0,
     estimatedCount: players.filter(p => p.probability !== null).length,
     warnings,
-    methodology: 'Probabilité indicative de marquer au moins un but lors d’une participation : 1−exp(−(buts+0,2)/(apparitions+2)). Données de saison, non calibrées ; ne tient pas compte de la défense adverse, du temps de jeu prévu, des blessures ni des cotes.'
+    methodology: 'Poisson lissé à partir des buts, minutes et xG de saison si disponibles. Les probabilités de 1+, 2+ et 3+ buts sont conditionnelles à la participation, calculées avec le temps de jeu moyen. Estimations expérimentales non calibrées, sans prise en compte de la défense adverse, du temps de jeu prévu, des blessures ni des cotes.'
   });
 };
