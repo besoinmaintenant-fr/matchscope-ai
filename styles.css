@@ -4160,3 +4160,26 @@ strong{
     border-radius: 20px;
   }
 }
+
+/* Fiche buteur : distinction visible entre archive pré-match et repère de saison. */
+.lineup-detail-mode {
+  margin: 5px 0 12px !important;
+  border: 1px solid rgba(81, 210, 134, .30);
+  border-radius: 9px;
+  padding: 9px 11px;
+  background: #112a1c;
+  color: #82efae !important;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.lineup-detail-mode-reference {
+  color: #f7d48e !important;
+  background: #292414;
+  border-color: rgba(245, 185, 76, .42);
+}
+.lineup-detail-mode-unknown {
+  color: #d4d9cf !important;
+  background: #263028;
+  border-color: #465549;
+}
