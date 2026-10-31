@@ -56,14 +56,15 @@ function mainTeam(participants, place, fallback) {
     || participants[fallback] || null;
 }
 
-function lineupState(fixture) {
+function lineupState(fixture, official = false) {
   // Les lineups Sportmonks peuvent être prédictifs avant leur validation.
   const lineup = Array.isArray(fixture.lineups) ? fixture.lineups : [];
   const known = new Map();
   for (const entry of lineup) {
     const id = Number(entry.player_id);
     if (!Number.isSafeInteger(id)) continue;
-    if (Number(entry.type_id) === 11) known.set(id, 'Titulaire annoncé / probable');
+    if (Number(entry.type_id) === 11) known.set(id,
+      official ? 'Titulaire officiel' : 'Titulaire annoncé / probable');
     if (Number(entry.type_id) === 12) known.set(id, 'Remplaçant annoncé / probable');
   }
   return known;
@@ -86,7 +87,7 @@ function playerRow(squadEntry, team, lineup, authorized) {
   // C'est une probabilité CONDITIONNELLE à la participation, pas un marché
   // calibré. Sans temps de jeu attendu fiable, l'estimation est indicative.
   // Aucun pourcentage avant les XI officiels ni pour un remplaçant.
-  const starter = lineup.get(playerId) === 'Titulaire annoncé / probable';
+  const starter = lineup.get(playerId) === 'Titulaire officiel';
   const usable = authorized && starter &&
     goals !== null && appearances !== null &&
     appearances >= 5 && goals <= appearances * 3;
@@ -215,8 +216,8 @@ exports.handler = async event => {
     });
   }
 
-  const knownLineups = lineupState(fixture);
   const official = lineupStatus(fixture).official;
+  const knownLineups = lineupState(fixture, official);
   // Pas de pronostic rétroactif : aucun nouveau taux après kickoff.
   const kickoff = String(fixture.starting_at || '');
   const parsedKickoff = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(kickoff)
