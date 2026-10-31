@@ -638,7 +638,9 @@
     setText(
       '#predictionStatus',
       data.archived
-        ? 'Pronostic archivé : calcul enregistré avant le coup d’envoi, sans données du match en cours.'
+        ? (data.stage === 'FINAL'
+          ? 'Pronostic archivé : calcul enregistré après confirmation des 22 titulaires, avant le coup d’envoi.'
+          : 'Ancien pronostic pré-match archivé sans XI officiels. Il précède le nouveau protocole « compositions avant pronostics ».')
         : data.stage === 'FINAL'
           ? 'Les 22 titulaires Sportmonks étaient confirmés AVANT le calcul. Modèle V0.7 historique : l’effet individuel des joueurs n’est pas encore pris en compte.'
           : 'Ancienne estimation pré-match historique : compositions pas encore confirmées lors du calcul.'
@@ -770,7 +772,7 @@
     ) {
 
       renderError(
-        'championnat hors modèle'
+        'modèle historique non encore calibré pour ce championnat ; les compositions restent accessibles'
       );
 
       return;
