@@ -552,67 +552,20 @@
         </section>
 
 
-        <!-- PRONOSTICS BUTEURS -->
-        <section class="sports-section" id="scorerSection">
-          <div class="section-label">⚽ PRONOSTICS BUTEURS — JOUEURS</div>
-          <div class="panel-card">
-            <div class="scorer-head">
-              <h4>Buteur à tout moment · candidats du match</h4>
-              <span class="pill neutral" id="scorerDataState">EN ATTENTE</span>
-            </div>
-            <p class="scorer-explain">
-              Indicateurs calculés à partir des statistiques Sportmonks de la
-              saison. Les estimations ne sont pas calibrées pour le pari et
-              supposent que le joueur participe au match.
-            </p>
-            <p id="scorerStatus" class="scorer-status" role="status">
-              Ouvre un match pour charger les données individuelles.
-            </p>
-            <div id="scorerList" class="scorer-list"></div>
-            <p class="scorer-disclaimer">
-              Un joueur non présent dans la composition officielle ne doit
-              pas être retenu pour un pari buteur. La composition et les
-              blessures restent à vérifier avant tout pari.
-            </p>
-          </div>
-        </section>
-
+        <!-- Indicateurs buteurs chargés pour les joueurs du terrain. -->
 
         <!-- COMPOSITIONS -->
 
         <section class="sports-section">
 
           <div class="section-label">
-            COMPOSITIONS & ABSENCES
+            ⚽ COMPOSITIONS · PRONOS BUTEURS
           </div>
 
 
           <div class="panel-card">
 
-            <div class="lineup-check-box">
-              <div>
-                <strong>Vérification Sportmonks</strong>
-                <p id="lineupCheckStatus" role="status">
-                  Ouvre un match pour vérifier si Sportmonks a fourni les compositions.
-                </p>
-              </div>
-              <button
-                type="button"
-                id="lineupRefreshButton"
-                class="lineup-refresh"
-              >
-                Vérifier à nouveau
-              </button>
-            </div>
-
-            <div class="lineup-view-switch" aria-label="Mode d'affichage des compositions">
-              <button type="button" id="lineupPitchView" class="active" aria-pressed="true">
-                <span aria-hidden="true">⚽</span> Terrain
-              </button>
-              <button type="button" id="lineupListView" aria-pressed="false">
-                <span aria-hidden="true">☷</span> Liste
-              </button>
-            </div>
+            <div class="lineup-compact-toolbar"><span id="lineupCheckStatus" role="status">Compositions en attente</span><button type="button" id="lineupRefreshButton" class="lineup-refresh">Actualiser</button></div>
 
             <div id="lineupPitchArea" class="lineup-visual">
               <div class="lineup-team-tabs" aria-label="Choisir une équipe">
@@ -628,15 +581,16 @@
                 </div>
                 <div id="lineupPitchPlayers" class="lineup-pitch-players"></div>
               </div>
-              <div id="lineupSelectedPlayer" class="lineup-player-detail" aria-live="polite">
-                Sélectionne un joueur pour voir ses statistiques buteur.
-              </div>
-              <p id="lineupPitchNote" class="lineup-pitch-note">
-                Les pourcentages sont indicatifs, uniquement si le joueur participe.
-              </p>
             </div>
 
-            <div class="lineup-columns lineup-list-hidden">
+            <dialog id="lineupPlayerDialog" class="lineup-player-dialog" aria-label="Statistiques du joueur">
+              <div class="lineup-dialog-bar"><span>⚽ Fiche buteur</span><button type="button" id="lineupDialogClose" class="lineup-dialog-close" aria-label="Fermer la fiche">✕</button></div>
+              <div id="lineupSelectedPlayer" class="lineup-player-detail" aria-live="polite"></div>
+            </dialog>
+
+            <p class="lineup-visual-note" id="lineupPitchNote">Touchez un joueur pour voir ses statistiques.</p>
+
+            <div class="lineup-columns lineup-list-hidden" hidden>
 
               <div>
 
@@ -678,7 +632,7 @@
 
             <div
               id="absences"
-              class="note-box"
+              class="note-box" hidden
             >
             </div>
 
