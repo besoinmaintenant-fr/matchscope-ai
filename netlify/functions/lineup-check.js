@@ -55,6 +55,26 @@ function formationFor(fixture, team) {
 function playerFromEntry(entry) {
   const name = entry?.player_name || entry?.player?.display_name ||
     entry?.player?.name || entry?.player?.common_name;
+
+  // Le terrain s'appuie sur formation_field au format rang:colonne.
+  // formation_position est seulement un ordre dans l'équipe.
+  const field = String(entry?.formation_field || '');
+  const formationField = /^[1-9]:[1-9][0-9]?$/.test(field)
+    ? field : null;
+
+  const rawPhoto = entry?.player?.image_path;
+  let photo = null;
+  try {
+    if (typeof rawPhoto === 'string') {
+      const url = new URL(rawPhoto);
+      if (url.protocol === 'https:' &&
+        (url.hostname === 'cdn.sportmonks.com' ||
+          url.hostname === 'assets.sportmonks.com')) {
+        photo = url.href;
+      }
+    }
+  } catch { /* Source photo absente ou URL invalide. */ }
+
   return {
     id: Number(entry?.player_id) || null,
     name: name ? String(name) : 'Nom non communiqué',
@@ -63,7 +83,9 @@ function playerFromEntry(entry) {
       ? Number(entry.jersey_number) : null,
     position: Number.isInteger(Number(entry?.formation_position))
       && entry?.formation_position !== null
-      ? Number(entry.formation_position) : null
+      ? Number(entry.formation_position) : null,
+    formationField,
+    photo
   };
 }
 
@@ -101,12 +123,21 @@ exports.handler = async event => {
   const url = new URL(API + '/fixtures/' + fixtureId);
   url.searchParams.set('api_token', token);
   // Ces quatre includes sont disponibles sur les fiches Sportmonks.
-  url.searchParams.set('include', 'participants;lineups;metadata;formations');
+  // La photo vient du profil imbriqué, lorsque le forfait l'autorise.
+  // Sinon repli sur la fiche sans relation player : on ne doit jamais
+  // faire disparaître une composition à cause d'un include facultatif.
+  url.searchParams.set('include', 'participants;lineups.player;metadata;formations');
 
   let upstream;
   let payload;
+  let photosAccessible = true;
   try {
     upstream = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!upstream.ok && [400, 403, 422].includes(upstream.status)) {
+      photosAccessible = false;
+      url.searchParams.set('include', 'participants;lineups;metadata;formations');
+      upstream = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    }
     if (!upstream.ok) {
       return reply(502, {
         error: 'Sportmonks a refusé ou n’a pas pu fournir les compositions',
@@ -163,6 +194,7 @@ exports.handler = async event => {
     providerStatus: upstream.status,
     lineupFieldPresent: Object.prototype.hasOwnProperty.call(fixture, 'lineups'),
     playerCount: entries.length,
+    photosAccessible,
     confirmation: confirmed,
     status,
     explanation,
