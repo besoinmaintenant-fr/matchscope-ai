@@ -1834,6 +1834,33 @@ document
   );
 
 
+// La fiche buteur peut créer une archive pré-match à la demande.
+// Son Top 2 apparaît au retour de l'analyse, sans recharger la page.
+window.addEventListener('matchscope:scorers-ready', event => {
+  const data = event.detail || {};
+  if (data.archived !== true) return;
+  const match = matches.find(item => String(item.id) === String(data.fixtureId));
+  if (!match) return;
+  const candidates = (Array.isArray(data.players) ? data.players : [])
+    .filter(p => p?.lineupStatus === 'Titulaire officiel' &&
+      typeof p?.name === 'string' && p.name.trim() &&
+      p.probability !== null && p.probability !== undefined &&
+      Number.isFinite(Number(p.probability)) &&
+      Number(p.probability) >= 0 && Number(p.probability) <= 100
+    )
+    .sort((a,b) => Number(b.probability) - Number(a.probability))
+    .slice(0, 2)
+    .map(p => ({
+      playerId: String(p.playerId), name: p.name,
+      team: p.team || '', probability: Math.round(Number(p.probability)),
+      sample: p.sampleLevel || null
+    }));
+  if (!candidates.length) return;
+  match.topScorers = candidates;
+  match.scorerPredictionStored = true;
+  // Le panneau d'analyse reste ouvert ; le retour relit match.topScorers.
+});
+
 // =====================================================
 // RETOUR
 // =====================================================
