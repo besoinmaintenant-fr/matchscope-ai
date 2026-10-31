@@ -1375,7 +1375,8 @@ exports.handler =
       const upstreamCounts = {
         pages: 0,
         received: 0,
-        upstreamLeagues: []
+        upstreamLeagues: [],
+        subscriptionPlans: []
       };
 
 
@@ -1503,6 +1504,24 @@ exports.handler =
         }
 
 
+        // Le statut réel de l'abonnement est fourni avec
+        // la réponse API, comme dans le test Sportmonks.
+        // On n'affiche que le nom du forfait : jamais
+        // le jeton, les en-têtes ni les coordonnées.
+        if (Array.isArray(payload.subscription)) {
+          const names = payload.subscription.flatMap(
+            item => Array.isArray(item.plans)
+              ? item.plans.map(p => ({
+                  plan: String(p.plan || 'Inconnu'),
+                  category: String(p.category || '')
+                }))
+              : []
+          );
+          if (names.length) {
+            upstreamCounts.subscriptionPlans = names;
+          }
+        }
+
         if (
           Array.isArray(
             payload.data
@@ -1573,6 +1592,56 @@ exports.handler =
       const upstreamLeagues = [...leagueCounts.values()]
         .sort((a, b) => b.count - a.count)
         .slice(0, 20);
+
+      // Un appel léger, seulement lorsque la recherche
+      // reste vide, permet de vérifier l'accès aux ligues
+      // avec le jeton réellement chargé par Netlify.
+      let allowedLeagues = null;
+      if (!filteredFixtures.length) {
+        try {
+          const leaguesUrl = new URL(
+            SPORTMONKS_API + '/leagues'
+          );
+          leaguesUrl.searchParams.set('api_token', token);
+          leaguesUrl.searchParams.set('per_page', '50');
+          const leaguesRes = await fetch(leaguesUrl, {
+            signal: AbortSignal.timeout(8000)
+          });
+          allowedLeagues = {
+            httpStatus: leaguesRes.status,
+            leagues: []
+          };
+          if (leaguesRes.ok) {
+            const body = await leaguesRes.json();
+            allowedLeagues.leagues = Array.isArray(body.data)
+              ? body.data.slice(0, 20).map(l => ({
+                  id: l.id,
+                  name: l.name
+                }))
+              : [];
+            if (
+              !upstreamCounts.subscriptionPlans.length &&
+              Array.isArray(body.subscription)
+            ) {
+              upstreamCounts.subscriptionPlans =
+                body.subscription.flatMap(item =>
+                  Array.isArray(item.plans)
+                    ? item.plans.map(p => ({
+                        plan: String(p.plan || 'Inconnu'),
+                        category: String(p.category || '')
+                      }))
+                    : []
+                );
+            }
+          }
+        } catch (error) {
+          allowedLeagues = {
+            httpStatus: null,
+            error: error?.name || 'request failed',
+            leagues: []
+          };
+        }
+      }
 
       // Vérification supplémentaire : l'identifiant du
       // match Tottenham-Crystal Palace vient du test
@@ -2041,6 +2110,8 @@ exports.handler =
             pages:
               upstreamCounts.pages,
             upstreamLeagues,
+            subscriptionPlans: upstreamCounts.subscriptionPlans,
+            allowedLeagues,
             referenceFixture
           },
 
