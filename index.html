@@ -601,7 +601,38 @@
               </button>
             </div>
 
-            <div class="lineup-columns">
+            <div class="lineup-view-switch" aria-label="Mode d'affichage des compositions">
+              <button type="button" id="lineupPitchView" class="active" aria-pressed="true">
+                <span aria-hidden="true">⚽</span> Terrain
+              </button>
+              <button type="button" id="lineupListView" aria-pressed="false">
+                <span aria-hidden="true">☷</span> Liste
+              </button>
+            </div>
+
+            <div id="lineupPitchArea" class="lineup-visual">
+              <div class="lineup-team-tabs" aria-label="Choisir une équipe">
+                <button type="button" id="lineupHomeTab" class="active" aria-pressed="true">Domicile</button>
+                <button type="button" id="lineupAwayTab" aria-pressed="false">Extérieur</button>
+              </div>
+              <div id="lineupPitchInfo" class="lineup-pitch-info">Chargement de la composition…</div>
+              <div class="lineup-pitch" id="lineupPitch" role="group" aria-label="Disposition des titulaires">
+                <div class="lineup-pitch-markings" aria-hidden="true">
+                  <div class="lineup-pitch-center"></div>
+                  <div class="lineup-pitch-area lineup-pitch-area-top"></div>
+                  <div class="lineup-pitch-area lineup-pitch-area-bottom"></div>
+                </div>
+                <div id="lineupPitchPlayers" class="lineup-pitch-players"></div>
+              </div>
+              <div id="lineupSelectedPlayer" class="lineup-player-detail" aria-live="polite">
+                Sélectionne un joueur pour voir ses statistiques buteur.
+              </div>
+              <p id="lineupPitchNote" class="lineup-pitch-note">
+                Les pourcentages sont indicatifs, uniquement si le joueur participe.
+              </p>
+            </div>
+
+            <div class="lineup-columns lineup-list-hidden">
 
               <div>
 
