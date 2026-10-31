@@ -548,6 +548,32 @@
         </section>
 
 
+        <!-- PRONOSTICS BUTEURS -->
+        <section class="sports-section" id="scorerSection">
+          <div class="section-label">⚽ PRONOSTICS BUTEURS — JOUEURS</div>
+          <div class="panel-card">
+            <div class="scorer-head">
+              <h4>Buteur à tout moment · candidats du match</h4>
+              <span class="pill neutral" id="scorerDataState">EN ATTENTE</span>
+            </div>
+            <p class="scorer-explain">
+              Indicateurs calculés à partir des statistiques Sportmonks de la
+              saison. Les estimations ne sont pas calibrées pour le pari et
+              supposent que le joueur participe au match.
+            </p>
+            <p id="scorerStatus" class="scorer-status" role="status">
+              Ouvre un match pour charger les données individuelles.
+            </p>
+            <div id="scorerList" class="scorer-list"></div>
+            <p class="scorer-disclaimer">
+              Un joueur non présent dans la composition officielle ne doit
+              pas être retenu pour un pari buteur. La composition et les
+              blessures restent à vérifier avant tout pari.
+            </p>
+          </div>
+        </section>
+
+
         <!-- COMPOSITIONS -->
 
         <section class="sports-section">
@@ -782,6 +808,7 @@
 <script src="/app.js"></script>
 <script src="/preanalysis.js"></script>
 <script src="/prediction-ui.js"></script>
+<script src="/scorers-ui.js"></script>
 
 </body>
 
