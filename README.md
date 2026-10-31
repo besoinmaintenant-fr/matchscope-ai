@@ -1,5 +1,12 @@
 # MatchScope AI — MVP v0.1
 
+> **Migration des tâches automatisées — 31 octobre 2026 :** les quatre
+> déclarations de tâches planifiées ont été retirées du `netlify.toml` de
+> `main`. La désactivation réelle ne prend effet qu'après publication du
+> déploiement Netlify correspondant et vérification du déploiement publié.
+> La collecte Cloudflare doit rester désactivée jusque-là, afin d'éviter deux
+> collecteurs actifs sur la même base Supabase.
+
 Application web mobile-first d'analyse probabiliste de matchs de football.
 
 ## Compétitions prévues
