@@ -2000,8 +2000,10 @@ exports.handler =
                   false,
 
 
+                // Aucune couverture de données supposée tant que
+                // le modèle n'a pas réellement produit de pronostic.
                 quality:
-                  50,
+                  null,
 
 
                 confidence:
