@@ -168,6 +168,28 @@
       rate(mode === 'prematch' ? stat?.[key] :
         mode === 'reference' ? stat?.[referenceKey] : null);
     const value = v => v === null || v === undefined ? '—' : escape(v);
+    const minutes = Number(stat?.minutes);
+    const appearances = Number(stat?.appearances);
+    const validSample = stat?.minutes !== null && stat?.minutes !== undefined &&
+      stat?.appearances !== null && stat?.appearances !== undefined &&
+      Number.isFinite(minutes) && minutes > 0 && Number.isFinite(appearances) &&
+      appearances > 0;
+    const sampleLevel = ['limité', 'moyen', 'étendu'].includes(stat?.sampleLevel)
+      ? stat.sampleLevel
+      : validSample && appearances >= 10 && minutes >= 900 ? 'étendu'
+      : validSample && appearances >= 8 && minutes >= 450 ? 'moyen'
+      : validSample ? 'limité' : null;
+    const per90 = (provided, total) => {
+      if (Number.isFinite(provided)) return provided.toFixed(2).replace('.', ',');
+      if (!validSample || total === null || total === undefined ||
+          !Number.isFinite(Number(total))) return '—';
+      return (Number(total) * 90 / minutes).toFixed(2).replace('.', ',');
+    };
+    const sampleLine = sampleLevel
+      ? 'Historique ' + sampleLevel +
+        ' · ' + per90(stat?.goalsPer90, stat?.goals) + ' but/90' +
+        ' · ' + per90(stat?.shotsPer90, stat?.shots) + ' tirs/90'
+      : '';
     const heading = mode === 'prematch'
       ? (scorersArchived ? 'Pronostic buteur archivé avant match'
         : 'Estimation avant-match')
@@ -198,6 +220,8 @@
         '<span>Tirs <b>' + value(stat?.shots) + '</b></span>' +
         '<span>xG <b>' + value(stat?.xg) + '</b></span>' +
       '</div>' +
+      (sampleLine ? '<p class="lineup-detail-sample">' +
+        escape(sampleLine) + '</p>' : '') +
       '<small class="lineup-detail-footnote">' + escape(explanation) + '</small>';
   }
 
