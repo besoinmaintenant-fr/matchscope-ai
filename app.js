@@ -1602,12 +1602,17 @@ async function tryHistory(
     }
 
 
+    // Double garde-fou : seul le serveur peut confirmer la fin.
+    // Un score 0-0 reçu pour un match futur ou en cours
+    // ne doit JAMAIS apparaître comme résultat final.
     matches =
-      Array.isArray(
-        data.matches
-      )
-        ? data.matches
-        : [];
+      (Array.isArray(data.matches) ? data.matches : [])
+        .filter(match => {
+          const ts = Number(match?.kickoffTs);
+          return match?.finished === true &&
+            [5, 7, 8].includes(Number(match?.stateId)) &&
+            Number.isFinite(ts) && ts > 0 && ts <= Date.now();
+        });
 
 
     loading =
