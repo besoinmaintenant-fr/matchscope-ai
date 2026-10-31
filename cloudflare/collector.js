@@ -96,7 +96,7 @@ const worker = {
         throw new Error('MatchScope cron ' + task + ' returned non-JSON response');
       }
       const result = await response.json();
-      if (result?.success === false) {
+      if (result?.success !== true) {
         throw new Error('MatchScope cron ' + task + ' returned unsuccessful result');
       }
       const failureCounts = collectorFailureCounts(result);
