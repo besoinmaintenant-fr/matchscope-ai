@@ -724,6 +724,45 @@ function renderLiveMatches() {
           : 'COUV. —';
 
 
+      // Deux candidats BUTEURS ayant une estimation réellement figée
+      // avant le coup d'envoi. Ne jamais afficher de calcul rétroactif.
+      const scorerList = node.querySelector('.top-scorers-list');
+      const scorerOrigin = node.querySelector('.top-scorers-origin');
+      const candidates = Array.isArray(match.topScorers)
+        ? match.topScorers.filter(p =>
+            p && typeof p.name === 'string' &&
+            Number.isFinite(Number(p.probability)) &&
+            Number(p.probability) >= 0 && Number(p.probability) <= 100
+          ).slice(0, 2)
+        : [];
+      if (scorerList) {
+        if (candidates.length) {
+          scorerList.innerHTML = candidates.map((p, index) =>
+            '<div class="top-scorer">' +
+              '<span class="top-scorer-rank">' + (index + 1) + '</span>' +
+              '<span class="top-scorer-player"><strong>' +
+                escapeHtml(p.name) + '</strong><small>' +
+                escapeHtml(p.team || 'Équipe') + '</small></span>' +
+              '<span class="top-scorer-rate">' +
+                Math.round(Number(p.probability)) + '%</span>' +
+            '</div>'
+          ).join('');
+          if (scorerOrigin) {
+            scorerOrigin.textContent = match.started
+              ? 'ARCHIVÉ AVANT MATCH' : 'XI OFFICIELS';
+          }
+        } else {
+          const label = match.started
+            ? 'Aucun pronostic buteur archivé avant le coup d’envoi'
+            : match.official
+              ? 'Estimations buteurs en cours de préparation'
+              : 'En attente des compositions officielles';
+          scorerList.innerHTML = '<p class="top-scorer-empty">' +
+            escapeHtml(label) + '</p>';
+          if (scorerOrigin) scorerOrigin.textContent = 'EN ATTENTE';
+        }
+      }
+
       const signal =
         node.querySelector(
           '.signal'
