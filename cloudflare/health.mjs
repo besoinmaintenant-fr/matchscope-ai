@@ -14,7 +14,7 @@ async function checkSupabase(env) {
   }
   try {
     const url = new URL('/rest/v1/matches', env.SUPABASE_URL);
-    url.searchParams.set('select', 'id');
+    url.searchParams.set('select', 'sportmonks_fixture_id');
     url.searchParams.set('limit', '1');
 
     const headers = {
