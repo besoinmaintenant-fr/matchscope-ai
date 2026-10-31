@@ -308,6 +308,16 @@ function renderTabs() {
 // FILTRAGE
 // =====================================================
 
+// Défense côté navigateur, même si un ancien serveur renvoie des matchs finis.
+function isLiveMatchVisible(match, now = Date.now()) {
+  const kickoff = Number(match?.kickoffTs);
+  if (!Number.isFinite(kickoff) || kickoff <= 0) return false;
+  if (match?.finished === true || [5, 7, 8].includes(Number(match?.stateId))) {
+    return false;
+  }
+  return kickoff > now - 4 * 60 * 60 * 1000;
+}
+
 function visibleMatches() {
 
   return matches
@@ -320,6 +330,10 @@ function visibleMatches() {
 
         match.competition ===
         selectedLeague
+    )
+
+    .filter(
+      match => currentMode === 'history' || isLiveMatchVisible(match)
     )
 
     .filter(
