@@ -12,6 +12,14 @@ const assets = ['index.html', 'styles.css', 'app.js', 'preanalysis.js',
   'prediction-ui.js', 'scorers-ui.js', 'lineup-ui.js'];
 const routes = ['fixtures', 'history', 'modelhistory', 'prediction',
   'scorers', 'lineup-check'];
+// Internal server-only endpoints: secured separately with a Cloudflare
+// Access Service Auth application for /__cron/* before enabling any Cron.
+const cronRoutes = {
+  lineups: 'collect-lineups',
+  snapshots: 'collect-prematch-snapshots',
+  postmatch: 'postmatch-auto',
+  enrichment: 'trigger-enrichment'
+};
 
 await Promise.all([dist, tmp, path.join(root, 'functions')].map(
   dir => rm(dir, {recursive:true,force:true})));
@@ -20,7 +28,7 @@ for(const asset of assets)
   await copyFile(path.join(root,asset),path.join(dist,asset));
 
 await writeFile(path.join(dist,'_routes.json'),JSON.stringify({
-  version:1,include:['/.netlify/functions/*'],exclude:[]
+  version:1,include:['/.netlify/functions/*','/__cron/*'],exclude:[]
 },null,2)+'\n');
 
 const entryPoints = [];
@@ -45,6 +53,31 @@ for(const name of routes){
     "}"
   ].join('\n')+'\n';
   await writeFile(file,code);entryPoints.push(file);
+}
+// These endpoints must ONLY be reachable via a dedicated Cloudflare Access
+// app with Service Auth. Normal visitors cannot execute scheduled jobs.
+for (const [route, handlerName] of Object.entries(cronRoutes)) {
+  const file = path.join(tmp, '__cron', route + '.mjs');
+  await mkdir(path.dirname(file), { recursive: true });
+  const code = [
+    "import { handler } from '../../netlify/functions/" + handlerName + ".js';",
+    "export async function onRequest({request,env}) {",
+    "  if(request.method !== 'POST') return new Response('Method not allowed',{status:405});",
+    "  // Cloudflare Access verifies the Service Auth JWT before this handler.",
+    "  if (!request.headers.get('cf-access-jwt-assertion')) return new Response('Access required',{status:403});",
+    "  try {",
+    "    const result = await handler({}, {env});",
+    "    const status = Number(result?.statusCode) || 500;",
+    "    const headers = new Headers({'content-type':'application/json; charset=utf-8','cache-control':'no-store'});",
+    "    return new Response(result?.body ?? '{}',{status,headers});",
+    "  } catch(error) {",
+    "    console.error('MatchScope cron job failed:'," + JSON.stringify(route) + ",error?.name);",
+    "    return new Response(JSON.stringify({error:'Scheduled job failed'}),{status:502,headers:{'content-type':'application/json','cache-control':'no-store'}});",
+    "  }",
+    "}"
+  ].join('\\n') + '\\n';
+  await writeFile(file,code);
+  entryPoints.push(file);
 }
 // The protected readiness endpoint checks the actual providers on demand.
 const health = path.join(tmp, 'health.mjs');
