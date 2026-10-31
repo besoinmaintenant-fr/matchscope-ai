@@ -35,16 +35,17 @@
 # -----------------------------------------------------
 # COMPOSITIONS OFFICIELLES + SNAPSHOT FINAL
 #
-# Toutes les 15 minutes entre 10h00 et 22h45 UTC.
+# Toutes les 10 minutes, en continu (heures de match internationales).
 #
 # Dès que les 22 titulaires sont disponibles :
 # - XI enregistrés
 # - match enregistré
 # - snapshot FINAL enregistré
+# - calcul 1/N/2 figé avant le coup d'envoi si modèle calibré
 # -----------------------------------------------------
 
 [functions."collect-lineups"]
-  schedule = "*/15 10-22 * * *"
+  schedule = "*/10 * * * *"
 
 
 # -----------------------------------------------------
