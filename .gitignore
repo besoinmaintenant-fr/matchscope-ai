@@ -1,0 +1,8 @@
+# Generated Cloudflare Pages artifacts (cloudflare-staging only)
+node_modules/
+dist/
+.cloudflare-generated/
+functions/
+.env
+.env.*
+!.env.example
