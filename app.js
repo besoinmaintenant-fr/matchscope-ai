@@ -1421,14 +1421,25 @@ async function tryLive() {
     loading =
       false;
 
+    if (!matches.length && data.notice) {
+      const stats = data.sourceDiagnostics || {};
+      lastError =
+        data.notice +
+        ' (Reçus depuis Sportmonks : ' +
+        (stats.received ?? '?') +
+        ', retenus : ' +
+        (stats.selected ?? 0) +
+        ', pages : ' +
+        (stats.pages ?? '?') +
+        ').';
 
-    if (dataMode) {
-
-      dataMode.textContent =
-        'DONNÉES LIVE';
-
-      dataMode.className =
-        'pill success';
+      if (dataMode) {
+        dataMode.textContent = 'AUCUN MATCH RETOURNÉ';
+        dataMode.className = 'pill warn';
+      }
+    } else if (dataMode) {
+      dataMode.textContent = 'DONNÉES LIVE';
+      dataMode.className = 'pill success';
     }
 
 
