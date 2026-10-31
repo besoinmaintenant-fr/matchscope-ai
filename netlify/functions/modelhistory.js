@@ -450,6 +450,7 @@ function transformSupabaseRow(
 
   if (
     !kickoff ||
+    kickoff.getTime() > Date.now() ||
     homeScore === null ||
     awayScore === null
   ) {
@@ -909,6 +910,18 @@ async function fetchRange(
 function transformSportmonksFixture(
   fixture
 ) {
+  // Le tableau CURRENT des scores peut contenir 0-0
+  // avant le coup d'envoi. Un résultat d'entraînement doit
+  // être confirmé par un état terminal explicite Sportmonks.
+  const stateId = Number(fixture?.state_id);
+  if (![5, 7, 8].includes(stateId)) {
+    return null;
+  }
+
+  const startedAt = parseKickoff(fixture?.starting_at);
+  if (!startedAt || startedAt.getTime() > Date.now()) {
+    return null;
+  }
 
   const participants =
 
