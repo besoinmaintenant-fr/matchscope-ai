@@ -1372,6 +1372,12 @@ exports.handler =
       const allFixtures =
         [];
 
+      const upstreamCounts = {
+        pages: 0,
+        received: 0,
+        upstreamLeagues: []
+      };
+
 
       let page =
         1;
@@ -1398,11 +1404,11 @@ exports.handler =
         );
 
 
-        url.searchParams.set(
-          'filters',
+        // Ne pas envoyer le filtre "fixtureLeagues" à
+        // Sportmonks : certains plans renvoient un tableau
+        // vide malgré des ligues autorisées. On filtre les
+        // résultats localement, sur les cinq IDs confirmés.
 
-          `fixtureLeagues:${leagueIds.join(',')}`
-        );
 
 
         // On reste volontairement
@@ -1499,11 +1505,17 @@ exports.handler =
             payload.data
           )
         ) {
-
           allFixtures.push(
             ...payload.data
           );
+          upstreamCounts.received += payload.data.length;
+        } else {
+          console.warn(
+            'MatchScope fixtures: réponse sans tableau data',
+            { page, responseKeys: Object.keys(payload || {}) }
+          );
         }
+        upstreamCounts.pages += 1;
 
 
         hasMore =
@@ -1524,8 +1536,32 @@ exports.handler =
       // TRANSFORMATION MATCHSCOPE
       // ===================================
 
+      const subscribedLeagueIds =
+        new Set(leagueIds.map(String));
+
+      const filteredFixtures =
+        allFixtures.filter(
+          fixture =>
+            subscribedLeagueIds.has(
+              String(fixture?.league_id)
+            )
+        );
+
+      console.info('MatchScope fixtures', {
+        rangeStart: iso(start),
+        rangeEnd: iso(end),
+        pages: upstreamCounts.pages,
+        received: upstreamCounts.received,
+        selected: filteredFixtures.length,
+        upstreamLeagueIds: [
+          ...new Set(
+            allFixtures.map(fixture => fixture.league_id)
+          )
+        ].slice(0, 20)
+      });
+
       let matches =
-        allFixtures
+        filteredFixtures
 
           .sort(
             (
@@ -1939,6 +1975,18 @@ exports.handler =
           count:
             matches.length,
 
+          sourceDiagnostics: {
+            received:
+              upstreamCounts.received,
+            selected:
+              filteredFixtures.length,
+            pages:
+              upstreamCounts.pages
+          },
+
+          notice: matches.length === 0
+            ? 'Sportmonks a répondu sans rencontre correspondant aux cinq championnats sur cette période. Le filtre est désormais effectué dans MatchScope.'
+            : null,
 
           matches
         }
