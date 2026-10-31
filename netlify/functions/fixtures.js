@@ -11,9 +11,9 @@ const OPEN_METEO_API =
 
 const TARGET_LEAGUES = [
   {
-    code: 'BL',
-    label: 'Bundesliga',
-    id: 82
+    code: 'L1',
+    label: 'Ligue 1',
+    id: 301
   },
   {
     code: 'LL',
@@ -21,9 +21,9 @@ const TARGET_LEAGUES = [
     id: 564
   },
   {
-    code: 'SC',
-    label: 'Super Cup',
-    id: 1251
+    code: 'SA',
+    label: 'Serie A',
+    id: 384
   },
   {
     code: 'PL',
@@ -31,9 +31,9 @@ const TARGET_LEAGUES = [
     id: 8
   },
   {
-    code: 'CF1',
-    label: 'Club Friendlies 1',
-    id: 1101
+    code: 'BL',
+    label: 'Bundesliga 1',
+    id: 82
   }
 ];
 // =====================================================
@@ -337,7 +337,8 @@ async function resolveTargetLeagues(
     // -------------------------------
 
     if (
-      !found
+      !found &&
+      (target.id === null || target.id === undefined)
     ) {
 
       found =
@@ -370,7 +371,8 @@ async function resolveTargetLeagues(
     // -------------------------------
 
     if (
-      !found
+      !found &&
+      (target.id === null || target.id === undefined)
     ) {
 
       found =
