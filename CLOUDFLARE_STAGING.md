@@ -84,3 +84,36 @@ Pour rendre la capture buteurs réellement autonome sur Cloudflare :
 
 Le moteur 1/N/2 V0.7 est calibré seulement sur PL, BL et LL ; les fiches
 buteurs expérimentales et compositions visent les cinq championnats.
+
+
+## État au 31 octobre 2026 : migration Cron et Top 2 buteurs
+
+- L'interface Cloudflare affiche, sur chaque carte de match, les **deux
+  meilleures estimations de buteurs enregistrées avant le coup d'envoi**.
+  En leur absence, elle affiche un état d'attente — aucun classement inventé.
+- La lecture est groupée avec `fixtures`, sans multiplier les appels aux
+  endpoints Sportmonks pour chaque carte.
+- `matchscope-ai-collector` est déployé comme Worker Cloudflare, avec
+  identifiants Access stockés en secret ; aucune route HTTP publique.
+- L'application Cloudflare Access dédiée à
+  `matchscope-ai-staging.pages.dev/__cron/*` est protégée exclusivement
+  par l'authentification de service.
+- Le Worker consolide les tâches dans **un seul Cron de 5 minutes**, mais son
+  déclencheur n'est **pas installé**, faute de quota sur Workers Free :
+  les 5 déclencheurs du compte sont occupés par d'autres projets.
+- `MATCHSCOPE_CRON_ENABLED=false` : aucun risque de double collecte.
+- Les collecteurs Netlify existants ne sont PAS désactivés.
+- Les modifications du collecteur de buteurs ont été commitées sur `main`
+  (Netlify), mais leur **publication Netlify doit être vérifiée** ; un
+  commit GitHub ne prouve pas que le déploiement de production a été effectué.
+
+### Conditions de bascule complète vers Cloudflare
+
+1. Libérer une place Cron sans toucher aux projets existants sans permission,
+   ou passer au forfait Workers autorisant davantage de Cron Triggers.
+2. Vérifier la route privée Access sans effectuer de collecte, puis
+   installer un unique Cron `*/5 * * * *` sur `matchscope-ai-collector`.
+3. Désactiver les quatre programmations correspondantes dans la production
+   Netlify et **vérifier le déploiement qui les désactive**.
+4. Activer `MATCHSCOPE_CRON_ENABLED=true` sur le Worker Cloudflare et vérifier
+   les métriques de capture sur un match avant le coup d'envoi.
