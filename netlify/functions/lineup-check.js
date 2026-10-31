@@ -53,8 +53,9 @@ function formationFor(fixture, team) {
 }
 
 function playerFromEntry(entry) {
-  const name = entry?.player_name || entry?.player?.display_name ||
-    entry?.player?.name || entry?.player?.common_name;
+  // Préférer le nom complet si Sportmonks fournit le profil joueur.
+  const name = entry?.player?.display_name || entry?.player?.name ||
+    entry?.player?.common_name || entry?.player_name;
 
   // Le terrain s'appuie sur formation_field au format rang:colonne.
   // formation_position est seulement un ordre dans l'équipe.
