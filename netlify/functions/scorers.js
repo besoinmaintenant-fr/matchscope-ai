@@ -368,10 +368,11 @@ exports.handler = async event => {
         prefer: 'resolution=ignore-duplicates,return=representation'
       });
       const row = Array.isArray(written) ? written[0] : null;
-      if (!row) {
-        const existing = await frozenScorers(value);
-        if (existing) return json(200, frozenPayload(value, existing));
+      if (row?.captured_at && row?.kickoff_at) {
+        return json(200, frozenPayload(value, row));
       }
+      const existing = await frozenScorers(value);
+      if (existing) return json(200, frozenPayload(value, existing));
     } catch (_error) {
       warnings.push('Estimation buteur non archivée : vérifie avant le coup d’envoi.');
       console.warn('MatchScope scorers: échec sauvegarde des taux pré-match');
