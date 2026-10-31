@@ -1295,7 +1295,8 @@ exports.handler =
 
       const [
         confirmedIds,
-        finalSnapshotIds
+        finalSnapshotIds,
+        finalPredictionIds
       ] =
         await Promise.all([
 
@@ -1305,6 +1306,10 @@ exports.handler =
 
           getFinalSnapshotIds(
             fixtureIds
+          ),
+
+          getFinalPredictionIds(
+            fixtureIds
           )
         ]);
 
@@ -1312,24 +1317,19 @@ exports.handler =
       /*
        * Match complet seulement si :
        *
-       * - XI sauvegardés
-       * - snapshot FINAL sauvegardé
+       * - XI sauvegardés et snapshot FINAL conservé
+       * - si modèle disponible, prédiction FINAL figée également
        */
       const completed =
         new Set(
-          fixtureIds.filter(
-            fixtureId =>
-
-              confirmedIds.has(
-                fixtureId
-              )
-
-              &&
-
-              finalSnapshotIds.has(
-                fixtureId
-              )
-          )
+          candidates.filter(fixture => {
+            const fixtureId = Number(fixture?.id);
+            const leagueId = Number(fixture?.league_id);
+            return confirmedIds.has(fixtureId) &&
+              finalSnapshotIds.has(fixtureId) &&
+              (!MODEL_LEAGUE_IDS.has(leagueId) ||
+                finalPredictionIds.has(fixtureId));
+          }).map(fixture => Number(fixture.id))
         );
 
 
@@ -1453,6 +1453,16 @@ exports.handler =
             item =>
               item.status ===
               'SAVED'
+          ).length,
+
+        predictionsSaved:
+          results.filter(item =>
+            item.predictionStatus === 'PREDICTION_SAVED'
+          ).length,
+
+        predictionsAlreadySaved:
+          results.filter(item =>
+            item.predictionStatus === 'PREDICTION_ALREADY_SAVED'
           ).length,
 
         waiting:
