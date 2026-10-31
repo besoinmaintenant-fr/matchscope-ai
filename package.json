@@ -4,8 +4,14 @@
   "private": true,
   "description": "Application web d'analyse probabiliste de matchs de football",
   "scripts": {
-    "dev": "netlify dev"
+    "dev": "netlify dev",
+    "build:cloudflare": "node scripts/build-cloudflare.mjs"
   },
-  "engines": {"node": ">=18"},
-  "devDependencies": {"netlify-cli": "^23.5.0"}
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "netlify-cli": "^23.5.0",
+    "esbuild": "^0.25.12"
+  }
 }
