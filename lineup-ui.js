@@ -77,10 +77,10 @@
         })
       : '—';
     const counts = [
-      'Chelsea/Domicile : ' +
+      (teamHome?.name || 'Domicile') + ' : ' +
         (teamHome?.starters?.length ?? 0) + ' titulaires, ' +
         (teamHome?.bench?.length ?? 0) + ' remplaçants',
-      'Extérieur : ' +
+      (teamAway?.name || 'Extérieur') + ' : ' +
         (teamAway?.starters?.length ?? 0) + ' titulaires, ' +
         (teamAway?.bench?.length ?? 0) + ' remplaçants'
     ].join(' · ');
