@@ -677,6 +677,15 @@ async function savePrediction({
     );
   }
 
+  // Garde ultime : un calcul lancé avant le coup d'envoi peut
+  // finir après. Aucune prédiction ne doit alors être figée.
+  const kickoff = parseKickoff(fixture?.starting_at);
+  if (!kickoff || Date.now() >= kickoff.getTime()) {
+    throw new Error(
+      'Prédiction non enregistrée : coup d’envoi déjà passé.'
+    );
+  }
+
 
   if (
     ![
