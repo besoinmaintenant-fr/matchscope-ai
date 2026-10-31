@@ -14,15 +14,14 @@ const BASE = 'https://matchscope-ai-staging.pages.dev/__cron/';
 export function tasksDueAt(utc) {
   const minute = utc.getUTCMinutes();
   const hour = utc.getUTCHours();
-  const tasks = [];
-  if (minute % 10 === 0) tasks.push('lineups');
+  const tasks = ['lineups'];
   if (minute % 30 === 0 && hour >= 8 && hour <= 22) tasks.push('snapshots');
   if (minute % 15 === 0 && hour >= 12 && hour <= 23) tasks.push('postmatch');
   if (minute === 20 && hour % 3 === 0) tasks.push('enrichment');
   return tasks;
 }
 
-export default {
+const worker = {
   async fetch(request, env) {
     // Read-only connectivity check. Never runs a collector, returns no secrets.
     const url = new URL(request.url);
@@ -63,7 +62,11 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    if (env.MATCHSCOPE_CRON_ENABLED !== 'true') return;
+    if (env.MATCHSCOPE_CRON_ENABLED !== 'true') {
+      const response = await worker.fetch(new Request('https://internal/health'), env);
+      console.log('MatchScope readiness', await response.json());
+      return;
+    }
     if (event.cron !== '*/5 * * * *') throw new Error('Unknown schedule');
     if (!env.CF_ACCESS_CLIENT_ID || !env.CF_ACCESS_CLIENT_SECRET) {
       throw new Error('Cloudflare Access service credentials not configured');
@@ -95,7 +98,7 @@ export default {
       if (result?.success === false) {
         throw new Error('MatchScope cron ' + task + ' returned unsuccessful result');
       }
-      console.log('MatchScope scheduled job succeeded', task);
+      console.log('MatchScope scheduled job succeeded', task, JSON.stringify({checkedAt:result.checkedAt,candidates:result.candidates,saved:result.saved,errors:result.errors,predictionsSaved:result.predictionsSaved,scorerSnapshotsSaved:result.scorerSnapshotsSaved,status:result.status,requested:result.requested,results:result.results?.map(r=>({fixtureId:r.fixtureId,status:r.status,predictionStatus:r.predictionStatus?.startsWith('PREDICTION_')?r.predictionStatus:undefined}))}));
     };
 
     // Sequential calls limit Sportmonks bursts when several tasks are due
@@ -113,3 +116,5 @@ export default {
     })());
   }
 };
+
+export default worker;

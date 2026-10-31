@@ -28,8 +28,7 @@
 # que lorsqu'un snapshot est réellement dû.
 # -----------------------------------------------------
 
-[functions."collect-prematch-snapshots"]
-  schedule = "*/30 8-22 * * *"
+# Planification transférée au Worker Cloudflare matchscope-ai-collector.
 
 
 # -----------------------------------------------------
@@ -44,8 +43,7 @@
 # - calcul 1/N/2 figé avant le coup d'envoi si modèle calibré
 # -----------------------------------------------------
 
-[functions."collect-lineups"]
-  schedule = "*/10 * * * *"
+# Planification transférée au Worker Cloudflare matchscope-ai-collector.
 
 
 # -----------------------------------------------------
@@ -56,16 +54,14 @@
 # - Brier Scores
 # -----------------------------------------------------
 
-[functions."postmatch-auto"]
-  schedule = "*/15 12-23 * * *"
+# Planification transférée au Worker Cloudflare matchscope-ai-collector.
 
 
 # -----------------------------------------------------
 # ENRICHISSEMENT HISTORIQUE
 # -----------------------------------------------------
 
-[functions."trigger-enrichment"]
-  schedule = "20 */3 * * *"
+# Planification transférée au Worker Cloudflare matchscope-ai-collector.
 
 
 # =====================================================

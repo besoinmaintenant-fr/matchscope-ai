@@ -18,7 +18,7 @@ const cronRoutes = {
   lineups: 'collect-lineups',
   snapshots: 'collect-prematch-snapshots',
   postmatch: 'postmatch-auto',
-  enrichment: 'trigger-enrichment'
+  enrichment: 'enrich-history-background'
 };
 
 await Promise.all([dist, tmp, path.join(root, 'functions')].map(
@@ -31,7 +31,7 @@ await writeFile(path.join(dist,'_routes.json'),JSON.stringify({
   version:1,include:['/.netlify/functions/*','/__cron/*'],exclude:[]
 },null,2)+'\n');
 
-const entryPoints = [];
+const entryPoints = {};
 for(const name of routes){
   const file = path.join(tmp,name+'.mjs');
   const code = [
@@ -52,7 +52,7 @@ for(const name of routes){
     "  }",
     "}"
   ].join('\n')+'\n';
-  await writeFile(file,code);entryPoints.push(file);
+  await writeFile(file,code);entryPoints['.netlify/functions/' + name] = file;
 }
 // These endpoints must ONLY be reachable via a dedicated Cloudflare Access
 // app with Service Auth. Normal visitors cannot execute scheduled jobs.
@@ -66,7 +66,7 @@ for (const [route, handlerName] of Object.entries(cronRoutes)) {
     "  // Cloudflare Access verifies the Service Auth JWT before this handler.",
     "  if (!request.headers.get('cf-access-jwt-assertion')) return new Response('Access required',{status:403});",
     "  try {",
-    "    const result = await handler({}, {env});",
+    "    const result = await handler({httpMethod:'POST',body:JSON.stringify({secret:env.MATCHSCOPE_SYNC_SECRET})}, {env});",
     "    const status = Number(result?.statusCode) || 500;",
     "    const headers = new Headers({'content-type':'application/json; charset=utf-8','cache-control':'no-store'});",
     "    return new Response(result?.body ?? '{}',{status,headers});",
@@ -77,14 +77,14 @@ for (const [route, handlerName] of Object.entries(cronRoutes)) {
     "}"
   ].join('\n') + '\n';
   await writeFile(file,code);
-  entryPoints.push(file);
+  entryPoints['__cron/' + route] = file;
 }
 // The protected readiness endpoint checks the actual providers on demand.
 const health = path.join(tmp, 'health.mjs');
 await copyFile(path.join(root, 'cloudflare/health.mjs'), health);
-entryPoints.push(health);
+entryPoints['.netlify/functions/health'] = health;
 
-await build({entryPoints,outdir:functions,outbase:tmp,entryNames:'[name]',
+await build({entryPoints,outdir:path.join(root, 'functions'),
   bundle:true,platform:'neutral',format:'esm',target:['es2022'],
   splitting:false,logLevel:'info'});
 console.log('Cloudflare Pages staging:',routes.length,'API routes prepared');

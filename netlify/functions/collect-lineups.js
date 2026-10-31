@@ -1009,6 +1009,9 @@ async function saveFinalSnapshot(
   oddsResult
 ) {
 
+  const kickoff = parseKickoff(fixture?.starting_at);
+  if (!kickoff || Date.now() >= kickoff.getTime()) return {saved:false,snapshot:null};
+
   const row =
     buildFinalSnapshot(
       fixture,
@@ -1094,6 +1097,11 @@ async function processFixture(
       token
     );
 
+
+  const captureKickoff = parseKickoff(fixture?.starting_at);
+  if (!captureKickoff || Date.now() >= captureKickoff.getTime()) {
+    return { fixtureId, status: 'KICKOFF_PASSED' };
+  }
 
   const lineup =
     lineupStatus(

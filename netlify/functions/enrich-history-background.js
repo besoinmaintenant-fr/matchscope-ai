@@ -2082,7 +2082,7 @@ async function enrichBatch(
 // =====================================================
 
 exports.handler =
-  async event => {
+  async (event, context) => {
 
     if (
       event.httpMethod !==
@@ -2093,7 +2093,7 @@ exports.handler =
         'enrich-history : POST requis.'
       );
 
-      return;
+      return {statusCode:400,body:JSON.stringify({success:false,error:'Invalid enrichment request'})};
     }
 
 
@@ -2113,7 +2113,7 @@ exports.handler =
         'enrich-history : accès non autorisé.'
       );
 
-      return;
+      return {statusCode:400,body:JSON.stringify({success:false,error:'Invalid enrichment request'})};
     }
 
 
@@ -2131,7 +2131,7 @@ exports.handler =
         'enrich-history : SPORTMONKS_API_TOKEN absent.'
       );
 
-      return;
+      return {statusCode:400,body:JSON.stringify({success:false,error:'Invalid enrichment request'})};
     }
 
 
@@ -2198,15 +2198,13 @@ exports.handler =
         );
 
 
-        return;
+        return {statusCode:200,body:JSON.stringify({success:true,status:'DONE',remaining:0})};
       }
 
 
-      const work =
-        remaining.slice(
-          0,
-          RUN_SIZE
-        );
+      // Bound Cloudflare subrequests and duration; continue at the next tick.
+      const runSize = context?.env ? 2 : RUN_SIZE;
+      const work = remaining.slice(0, runSize);
 
 
       const result =
@@ -2252,7 +2250,7 @@ exports.handler =
           2
         )
       );
-
+      return {statusCode:200,body:JSON.stringify({success:true,status:'BATCH_DONE',requested:work.length,result})};
 
     } catch (
       error
@@ -2266,5 +2264,6 @@ exports.handler =
         ||
         error
       );
+      return {statusCode:500,body:JSON.stringify({success:false,error:'Enrichment failed'})};
     }
   };
