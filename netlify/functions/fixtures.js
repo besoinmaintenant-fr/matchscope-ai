@@ -271,17 +271,62 @@ async function getAvailableLeagues(
 
 
 // =====================================================
-// IDENTIFICATION DE NOS 4 CHAMPIONNATS
+// IDENTIFICATION DE NOS 5 CHAMPIONNATS
 // =====================================================
 
 async function resolveTargetLeagues(
   token
 ) {
 
-  const availableLeagues =
+  let availableLeagues =
     await getAvailableLeagues(
       token
     );
+
+  // L'endpoint "My Leagues" est la référence des ligues
+  // autorisées pour l'abonnement associé à ce jeton.
+  // On le consulte en secours si /football/leagues ne
+  // trouve aucune de nos cinq compétitions.
+  const hasSelectedLeague =
+    availableLeagues.some(
+      league =>
+        TARGET_LEAGUES.some(
+          target =>
+            Number(league.id) ===
+            Number(target.id)
+        )
+    );
+
+  if (!hasSelectedLeague) {
+    try {
+      const accountUrl = new URL(
+        'https://api.sportmonks.com/v3/my/leagues'
+      );
+      accountUrl.searchParams.set(
+        'api_token',
+        token
+      );
+      const accountResponse = await fetch(accountUrl);
+      if (accountResponse.ok) {
+        const accountPayload = await accountResponse.json();
+        if (Array.isArray(accountPayload.data)) {
+          availableLeagues = accountPayload.data.map(
+            league => league.league || league
+          );
+        }
+      } else {
+        console.warn(
+          'Sportmonks My Leagues : HTTP',
+          accountResponse.status
+        );
+      }
+    } catch (error) {
+      console.warn(
+        'Sportmonks My Leagues indisponible',
+        error?.name || 'fetch error'
+      );
+    }
+  }
 
 
   const resolved =
@@ -444,7 +489,10 @@ async function resolveTargetLeagues(
 
     resolved,
 
-    missing
+    missing,
+
+    availableLeagueCount:
+      availableLeagues.length
   };
 }
 
@@ -1252,7 +1300,9 @@ exports.handler =
 
         resolved,
 
-        missing
+        missing,
+
+        availableLeagueCount
 
       } =
         await resolveTargetLeagues(
@@ -1269,10 +1319,12 @@ exports.handler =
           {
 
             error:
-              'Aucun championnat MatchScope accessible avec cet abonnement Sportmonks.',
+              'Le jeton Sportmonks utilisé par Netlify ne donne accès à aucun des cinq championnats sélectionnés. Vérifie que cette clé est liée à un abonnement actif (et non résilié ou expiré) dans MySportmonks.',
 
             missingCompetitions:
-              missing
+              missing,
+
+            availableLeagueCount
           }
         );
       }
@@ -1413,7 +1465,9 @@ exports.handler =
             {
 
               error:
-                'Erreur Sportmonks',
+                response.status === 403
+                  ? 'Sportmonks refuse les données des matchs pour ce jeton API. Vérifie le statut et la date de fin de l’abonnement dans MySportmonks.'
+                  : 'Erreur Sportmonks',
 
               status:
                 response.status,
