@@ -1,4 +1,5 @@
 const { supabaseRequest } = require('./lib/supabase');
+const { showInLive } = require('./lib/live-fixtures');
 
 const SPORTMONKS_API =
   'https://api.sportmonks.com/v3/football';
@@ -1717,12 +1718,15 @@ exports.handler =
         fixture?.league?.id ??
         null;
 
+      const liveNow = Date.now();
       const filteredFixtures =
-        allFixtures.filter(
-          fixture =>
-            subscribedLeagueIds.has(
-              String(fixtureLeagueId(fixture))
-            )
+        allFixtures.filter(fixture =>
+          subscribedLeagueIds.has(String(fixtureLeagueId(fixture))) &&
+          showInLive(
+            fixture?.state_id,
+            parseKickoff(fixture?.starting_at)?.getTime(),
+            liveNow
+          )
         );
 
       // Donner le détail réel des ligues reçues, sans
@@ -1938,6 +1942,11 @@ exports.handler =
                   String(
                     fixture.id
                   ),
+
+                stateId: Number.isInteger(Number(fixture?.state_id))
+                  ? Number(fixture.state_id) : null,
+
+                kickoffTs: kickoff ? kickoff.getTime() : null,
 
 
                 competition:
@@ -2272,7 +2281,10 @@ exports.handler =
           },
 
           notice: matches.length === 0
-            ? 'Aucun match retourné avec le filtre Sportmonks fixtureLeagues pour tes cinq championnats. Les identifiants et le test du match de Premier League permettent de diagnostiquer le droit d’accès.'
+            ? allFixtures.some(fixture =>
+                subscribedLeagueIds.has(String(fixtureLeagueId(fixture))))
+              ? 'Aucun match à venir ou en cours : les rencontres terminées ou trop anciennes sont masquées dans Live.'
+              : 'Aucun match retourné avec le filtre Sportmonks fixtureLeagues pour tes cinq championnats. Les identifiants et le test du match de Premier League permettent de diagnostiquer le droit d’accès.'
             : null,
 
           matches
