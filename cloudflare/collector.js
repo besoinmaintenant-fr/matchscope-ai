@@ -9,12 +9,18 @@
  * MATCHSCOPE_CRON_ENABLED must be set to "true" only after explicit cutover.
  */
 const BASE = 'https://matchscope-ai-staging.pages.dev/__cron/';
-const TASKS = Object.freeze({
-  '*/10 * * * *': 'lineups',
-  '*/30 8-22 * * *': 'snapshots',
-  '*/15 12-23 * * *': 'postmatch',
-  '20 */3 * * *': 'enrichment'
-});
+// One trigger every five minutes keeps the free-plan cron footprint to
+// a single slot, while maintaining the former independent UTC schedules.
+export function tasksDueAt(utc) {
+  const minute = utc.getUTCMinutes();
+  const hour = utc.getUTCHours();
+  const tasks = [];
+  if (minute % 10 === 0) tasks.push('lineups');
+  if (minute % 30 === 0 && hour >= 8 && hour <= 22) tasks.push('snapshots');
+  if (minute % 15 === 0 && hour >= 12 && hour <= 23) tasks.push('postmatch');
+  if (minute === 20 && hour % 3 === 0) tasks.push('enrichment');
+  return tasks;
+}
 
 export default {
   async fetch(request, env) {
@@ -58,12 +64,14 @@ export default {
 
   async scheduled(event, env, ctx) {
     if (env.MATCHSCOPE_CRON_ENABLED !== 'true') return;
-    const task = TASKS[event.cron];
-    if (!task) throw new Error('Unknown schedule');
+    if (event.cron !== '*/5 * * * *') throw new Error('Unknown schedule');
     if (!env.CF_ACCESS_CLIENT_ID || !env.CF_ACCESS_CLIENT_SECRET) {
       throw new Error('Cloudflare Access service credentials not configured');
     }
-    const call = async () => {
+    const tasks = tasksDueAt(new Date(event.scheduledTime));
+    if (!tasks.length) return;
+
+    const runTask = async task => {
       const response = await fetch(BASE + task, {
         method: 'POST',
         redirect: 'manual',
@@ -75,7 +83,7 @@ export default {
         signal: AbortSignal.timeout(120000)
       });
       if (!response.ok) {
-        // Never log response bodies, which could contain provider details.
+        // Never log response bodies, which might contain provider details.
         throw new Error('MatchScope cron ' + task + ' returned HTTP ' +
           response.status);
       }
@@ -89,6 +97,19 @@ export default {
       }
       console.log('MatchScope scheduled job succeeded', task);
     };
-    ctx.waitUntil(call());
+
+    // Sequential calls limit Sportmonks bursts when several tasks are due
+    // simultaneously; one failing job does not prevent the others.
+    ctx.waitUntil((async () => {
+      let failures = 0;
+      for (const task of tasks) {
+        try { await runTask(task); }
+        catch (error) {
+          failures++;
+          console.error('MatchScope job failed', task, error?.message || 'unknown');
+        }
+      }
+      if (failures) throw new Error(failures + ' scheduled MatchScope jobs failed');
+    })());
   }
 };
