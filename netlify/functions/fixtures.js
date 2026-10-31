@@ -230,7 +230,11 @@ async function getAvailableLeagues(
       !response.ok
     ) {
 
-      break;
+      throw new Error(
+        'Sportmonks /leagues a répondu HTTP ' +
+        response.status +
+        '. Vérifiez la clé API et les droits de votre abonnement.'
+      );
     }
 
 
@@ -293,6 +297,14 @@ async function resolveTargetLeagues(
     of TARGET_LEAGUES
   ) {
 
+    // Aucun alias n'est défini dans TARGET_LEAGUES ;
+    // utiliser le libellé pour éviter une erreur TypeError.
+    const aliases =
+      Array.isArray(target.aliases) &&
+      target.aliases.length
+        ? target.aliases
+        : [target.label];
+
     let found =
       null;
 
@@ -338,7 +350,7 @@ async function resolveTargetLeagues(
               );
 
 
-            return target.aliases
+            return aliases
               .some(
                 alias =>
 
@@ -371,7 +383,7 @@ async function resolveTargetLeagues(
               );
 
 
-            return target.aliases
+            return aliases
               .some(
                 alias => {
 
