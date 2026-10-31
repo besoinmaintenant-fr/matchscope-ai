@@ -46,6 +46,23 @@ for(const name of routes){
   ].join('\n')+'\n';
   await writeFile(file,code);entryPoints.push(file);
 }
+// Status endpoint never discloses secret values. Protected by Cloudflare Access.
+const health = path.join(tmp, 'health.mjs');
+await writeFile(health, [
+  "export function onRequest({env}) {",
+  "  return new Response(JSON.stringify({",
+  "    app:'MatchScope AI Cloudflare staging',",
+  "    checkedAt:new Date().toISOString(),",
+  "    configured:{",
+  "      sportmonks:Boolean(env.SPORTMONKS_API_TOKEN),",
+  "      supabaseUrl:Boolean(env.SUPABASE_URL),",
+  "      supabaseSecret:Boolean(env.SUPABASE_SECRET_KEY)",
+  "    }",
+  "  }),{headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});",
+  "}"
+].join('\n') + '\n');
+entryPoints.push(health);
+
 await build({entryPoints,outdir:functions,outbase:tmp,entryNames:'[name]',
   bundle:true,platform:'neutral',format:'esm',target:['es2022'],
   splitting:false,logLevel:'info'});
