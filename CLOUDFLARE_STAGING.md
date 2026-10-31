@@ -46,3 +46,41 @@ Ne pas publier avant d'avoir confirmé Cloudflare Access.
 - Ne pas lancer les deux planificateurs en parallèle sur la même base.
 - Valider par comparaison des matches, des XI, des pronostics et de
   l'historique avant de décider d'une bascule de production.
+
+
+## Module buteurs et gel avant-match (31 octobre 2026)
+
+- Les fiches buteurs Cloudflare utilisent `scorers` et conservent la première
+  estimation **effectivement calculée avant le coup d'envoi** dans
+  `public.scorer_predictions` (22 titulaires vérifiés, données suffisantes).
+- La table est protégée par RLS ; seul le rôle serveur possède la lecture et
+  l'insertion. Aucun pronostic pré-match n'est calculé rétroactivement.
+- Un ancien match sans estimation buteur conservée peut montrer un **repère de
+  saison**, explicitement distinct d'un pronostic pré-match ou pari en direct.
+- Chaque fiche montre la taille de l'échantillon individuel (limité, moyen ou
+  étendu) et les buts/tirs par 90 min lorsqu'ils sont connus. Ces indicateurs
+  ne représentent pas une validation de la performance des probabilités.
+- Le collecteur `collect-lineups` de cette branche a été préparé pour
+  sauvegarder automatiquement les pronostics buteurs des cinq ligues, au plus
+  **3 matchs par passage**, lorsque les XI sont déjà officiels et que le match
+  commence dans **2 à 75 min**. Une archive existante est ignorée.
+
+**Attention — déploiement progressif** : Cloudflare Pages ne dispose pas
+d'événement Cron. Le collecteur amélioré présent dans la branche
+`cloudflare-staging` n'est **pas activé comme tâche planifiée Cloudflare**.
+Les tâches Netlify en production utilisent encore leur déploiement
+indépendant (branche principale). Aujourd'hui, côté Cloudflare, un match
+consulté avant son coup d'envoi peut sauvegarder son estimation ; cela
+ne remplace pas une collecte automatique 24 h/24.
+
+Pour rendre la capture buteurs réellement autonome sur Cloudflare :
+1. Créer un Worker planifié à part, avec secrets serveur Cloudflare, isolation
+   et verrou d'idempotence.
+2. Vérifier son quota Sportmonks, la couverture des cinq ligues et ses logs
+   sans jamais exposer les clés API.
+3. Ne basculer les collecteurs existants qu'après neutralisation explicite des
+   Cron Netlify correspondants. Ne jamais faire fonctionner deux collecteurs
+   d'un même type en parallèle.
+
+Le moteur 1/N/2 V0.7 est calibré seulement sur PL, BL et LL ; les fiches
+buteurs expérimentales et compositions visent les cinq championnats.
