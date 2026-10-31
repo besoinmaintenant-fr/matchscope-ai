@@ -8,30 +8,31 @@ const {
   lineupStatus
 } = require('./lib/memory');
 
+// Même moteur que la consultation du match, exécuté côté serveur :
+ // pas d'HTTP public et pas d'exposition du token.
+const { handler: generatePrediction } = require('./prediction');
+
 const API =
   'https://api.sportmonks.com/v3/football';
 
 
-const LEAGUE_IDS = [
-  8,
-  82,
-  564
-];
-
+const LEAGUE_IDS = [301, 564, 384, 8, 82];
 
 const LEAGUE_CODES = {
+  301: 'L1',
+  564: 'LL',
+  384: 'SA',
   8: 'PL',
-  82: 'BL',
-  564: 'LL'
+  82: 'BL'
 };
 
+// Le modèle 1/N/2 V0.7 n'a un historique validé que
+// sur ces trois ligues. Les compositions des cinq sont suivies.
+const MODEL_LEAGUE_IDS = new Set([8, 82, 564]);
 
-const LOOKAHEAD_MINUTES =
-  60;
+const LOOKAHEAD_MINUTES = 90;
 
-
-const AFTER_KICKOFF_MINUTES =
-  30;
+const AFTER_KICKOFF_MINUTES = 0;
 
 
 // =====================================================
@@ -427,6 +428,26 @@ async function getConfirmedFixtureIds(
         Number.isFinite
       )
   );
+}
+
+
+// =====================================================
+// PRÉDICTIONS 1/N/2 OFFICIELLES DÉJÀ FIGÉES
+// =====================================================
+
+async function getFinalPredictionIds(fixtureIds) {
+  const ids = fixtureIds.filter(Number.isSafeInteger);
+  if (!ids.length) return new Set();
+  const { MODEL_VERSION } = require('./lib/model-v07');
+  const rows = await supabaseRequest('predictions', {
+    method: 'GET',
+    query: '?select=sportmonks_fixture_id' +
+      '&prediction_stage=eq.FINAL' +
+      '&model_version=eq.' + encodeURIComponent(MODEL_VERSION) +
+      '&sportmonks_fixture_id=in.(' + ids.join(',') + ')'
+  });
+  return new Set(array(rows).map(row =>
+    Number(row.sportmonks_fixture_id)).filter(Number.isSafeInteger));
 }
 
 
