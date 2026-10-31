@@ -163,16 +163,44 @@ function lineupStatus(
     );
 
 
+  // Une composition probable peut déjà contenir 22 noms.
+  // On exige donc l'indicateur Sportmonks "lineup_confirmed"
+  // (metadata type_id 572), 11 titulaires par équipe et
+  // les deux équipes officiellement participantes.
+  const metadata = Array.isArray(fixture?.metadata)
+    ? fixture.metadata : [];
+  const confirmation = metadata.find(item =>
+    Number(item?.type_id) === 572 ||
+    String(item?.type?.code || '').toLowerCase().replace(/_/g, '-') ===
+      'lineup-confirmed'
+  );
+  const flag = confirmation?.values?.confirmed;
+  const confirmed = flag === true || flag === 'true' || flag === 1;
+
+  const participants = Array.isArray(fixture?.participants)
+    ? fixture.participants : [];
+  const home = participants.find(p => p?.meta?.location === 'home');
+  const away = participants.find(p => p?.meta?.location === 'away');
+  const counts = new Map();
+  for (const player of starters) {
+    const id = Number(player?.team_id);
+    if (Number.isSafeInteger(id)) {
+      counts.set(id, (counts.get(id) || 0) + 1);
+    }
+  }
+
   return {
-
-    official:
-      starters.length >= 22 &&
-      teams.size >= 2,
-
+    official: confirmed &&
+      Number.isSafeInteger(Number(home?.id)) &&
+      Number.isSafeInteger(Number(away?.id)) &&
+      Number(home.id) !== Number(away.id) &&
+      counts.size === 2 &&
+      counts.get(Number(home.id)) === 11 &&
+      counts.get(Number(away.id)) === 11 &&
+      starters.length === 22,
+    providerConfirmed: confirmed,
     starters,
-
-    all:
-      lineups
+    all: lineups
   };
 }
 
