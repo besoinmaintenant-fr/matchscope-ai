@@ -1,3 +1,5 @@
+const { supabaseRequest } = require('./lib/supabase');
+
 const SPORTMONKS_API =
   'https://api.sportmonks.com/v3/football';
 
@@ -1262,6 +1264,105 @@ async function attachWeather(
 }
 
 
+
+// Relit les pronostics figés et les confirmations XI déjà conservés dans Supabase.
+// Le calendrier Sportmonks ne contient volontairement aucune de ces données :
+// surtout ne pas les remplacer par 'en attente' à chaque actualisation.
+async function restoreSavedMatchData(matches) {
+  if (!Array.isArray(matches) || !matches.length) return;
+  const ids = [...new Set(matches.map(m => String(m.id))
+    .filter(id => /^[1-9][0-9]{0,11}$/.test(id)))];
+  if (!ids.length) return;
+
+  for (const match of matches) {
+    match.kickoffTs = match._kickoff?.getTime() || null;
+    match.started = Number.isFinite(match.kickoffTs) &&
+      match.kickoffTs <= Date.now();
+    match.prematchPredictionStored = false;
+  }
+
+  // Traitement par lots pour ne pas dépasser la taille des URL PostgREST.
+  try {
+    const matchesStored = [];
+    const predictionsStored = [];
+    for (let offset = 0; offset < ids.length; offset += 50) {
+      const set = ids.slice(offset, offset + 50).join(',');
+      const filter = '&sportmonks_fixture_id=in.(' + set + ')';
+      const [savedMatches, savedPredictions] = await Promise.all([
+        supabaseRequest('matches', {
+          query: '?select=sportmonks_fixture_id,lineups_confirmed' + filter
+        }),
+        supabaseRequest('predictions', {
+          query: '?select=sportmonks_fixture_id,prediction_stage,generated_at,locked,lineup_confirmed,probability_home,probability_draw,probability_away,data_coverage' +
+            filter + '&order=generated_at.desc'
+        })
+      ]);
+      if (Array.isArray(savedMatches)) matchesStored.push(...savedMatches);
+      if (Array.isArray(savedPredictions)) predictionsStored.push(...savedPredictions);
+    }
+    const storedById = new Map(matchesStored.map(row =>
+      [String(row.sportmonks_fixture_id), row]));
+    const predictedById = new Map();
+    for (const row of predictionsStored) {
+      const key = String(row.sportmonks_fixture_id);
+      if (!predictedById.has(key)) predictedById.set(key, []);
+      predictedById.get(key).push(row);
+    }
+
+    for (const match of matches) {
+      const saved = storedById.get(String(match.id));
+      if (saved?.lineups_confirmed === true) {
+        match.official = true;
+        match.officialSource = 'saved';
+      }
+      // Aucune estimation créée après le début du match ne peut être
+      // affichée comme une prévision pré-match.
+      const valid = (predictedById.get(String(match.id)) || [])
+        .filter(row => {
+          const timestamp = Date.parse(row.generated_at || '');
+          const probs = [row.probability_home, row.probability_draw,
+            row.probability_away].map(Number);
+          return row.locked === true &&
+            Number.isFinite(timestamp) &&
+            Number.isFinite(match.kickoffTs) &&
+            timestamp < match.kickoffTs &&
+            probs.every(n => Number.isFinite(n) && n >= 0 && n <= 1) &&
+            Math.abs(probs.reduce((a, b) => a + b, 0) - 1) < 0.02;
+        })
+        .sort((a, b) => {
+          if (a.prediction_stage !== b.prediction_stage) {
+            return a.prediction_stage === 'FINAL' ? -1 : 1;
+          }
+          return Date.parse(b.generated_at) - Date.parse(a.generated_at);
+        });
+      const row = valid[0];
+      if (!row) continue;
+
+      match.prematchPredictionStored = true;
+      match.predictionStage = row.prediction_stage;
+      match.predictionGeneratedAt = row.generated_at;
+      match.probs = {
+        home: Number(row.probability_home) * 100,
+        draw: Number(row.probability_draw) * 100,
+        away: Number(row.probability_away) * 100
+      };
+      const coverage = Number(row.data_coverage);
+      if (Number.isFinite(coverage) && coverage >= 0 && coverage <= 100) {
+        match.quality = coverage;
+      }
+      if (row.prediction_stage === 'FINAL' && row.lineup_confirmed === true) {
+        match.official = true;
+        match.officialSource = 'saved';
+      }
+    }
+  } catch (_error) {
+    // On garde les matchs accessibles sans transformer une erreur de
+    // lecture Supabase en fausse affirmation 'jamais analysé'.
+    for (const match of matches) match.savedDataUnavailable = true;
+    console.warn('MatchScope fixtures: lecture des analyses archivées indisponible');
+  }
+}
+
 // =====================================================
 // FONCTION NETLIFY
 // =====================================================
@@ -2040,6 +2141,9 @@ exports.handler =
         await attachWeather(
           matches
         );
+
+      // Réintègre les archives persistantes AVANT de répondre au navigateur.
+      await restoreSavedMatchData(matches);
 
 
       // ===================================
