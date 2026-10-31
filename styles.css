@@ -4026,3 +4026,16 @@ strong{
   .lineup-team-tabs button { font-size: 12px; padding: 9px 7px; }
   .lineup-pitch-info { font-size: 12px; }
 }
+
+
+/* État des probabilités pré-match : archivée / indisponible. */
+.prediction-status {
+  margin: 12px 2px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(103, 170, 125, .32);
+  border-radius: 10px;
+  color: #c5d9cb;
+  background: rgba(18, 45, 26, .52);
+  font-size: 12px;
+  line-height: 1.55;
+}
