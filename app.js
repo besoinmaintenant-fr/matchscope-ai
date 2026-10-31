@@ -4,24 +4,24 @@ const competitions = [
     name: 'Tous'
   },
   {
-    id: 'BL',
-    name: '🇩🇪 Bundesliga'
+    id: 'L1',
+    name: '🇫🇷 Ligue 1'
   },
   {
     id: 'LL',
     name: '🇪🇸 La Liga'
   },
   {
-    id: 'SC',
-    name: '🇪🇸 Super Cup'
+    id: 'SA',
+    name: '🇮🇹 Serie A'
   },
   {
     id: 'PL',
     name: '🏴 Premier League'
   },
   {
-    id: 'CF1',
-    name: '🌍 Club Friendlies 1'
+    id: 'BL',
+    name: '🇩🇪 Bundesliga 1'
   }
 ];
 
