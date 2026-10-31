@@ -314,7 +314,10 @@
       data.status === 'official' ? 'success' :
         data.status === 'not_provided' ? 'warn' : 'neutral');
 
-    if (data.status === 'official') badge('COMPOS OFFICIELLES SPORTMONKS', 'success');
+    if (data.status === 'official') badge(
+      data.source === 'saved' ? 'COMPOS OFFICIELLES ENREGISTRÉES' : 'COMPOS OFFICIELLES SPORTMONKS',
+      'success'
+    );
     else if (data.status === 'predicted') badge('COMPOS PROBABLES SPORTMONKS', 'neutral');
     else if (data.status === 'partial_official') badge('COMPOS OFFICIELLES PARTIELLES', 'warn');
     else if (data.status === 'unconfirmed') badge('COMPOS REÇUES NON CONFIRMÉES', 'warn');
