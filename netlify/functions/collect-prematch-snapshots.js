@@ -32,16 +32,20 @@ const API =
 
 
 const LEAGUE_IDS = [
+  301,    // Ligue 1
+  564,    // La Liga
+  384,    // Serie A
   8,      // Premier League
-  82,     // Bundesliga
-  564     // La Liga
+  82      // Bundesliga
 ];
 
 
 const LEAGUE_CODES = {
+  301: 'L1',
+  564: 'LL',
+  384: 'SA',
   8: 'PL',
-  82: 'BL',
-  564: 'LL'
+  82: 'BL'
 };
 
 
