@@ -8,11 +8,14 @@
   let serial = 0;
   let controller = null;
 
-  function publish(fixtureId, players) {
+  function publish(fixtureId, payload) {
     window.dispatchEvent(new CustomEvent('matchscope:scorers-ready', {
       detail: {
         fixtureId: String(fixtureId),
-        players: Array.isArray(players) ? players : []
+        players: Array.isArray(payload?.players) ? payload.players : [],
+        archived: payload?.archived === true,
+        referenceCount: Number(payload?.referenceCount) || 0,
+        estimatedCount: Number(payload?.estimatedCount) || 0
       }
     }));
   }
@@ -24,7 +27,7 @@
 
     const cached = cache.get(String(fixtureId));
     if (cached && Date.now() - cached.at < CACHE_MS) {
-      publish(fixtureId, cached.data.players);
+      publish(fixtureId, cached.data);
       return;
     }
 
@@ -38,13 +41,13 @@
       if (sequence !== serial) return;
       if (!response.ok) throw new Error(data.error || 'Buteurs indisponibles');
 
-      if (data.lineupsOfficial === true && data.beforeKickoff === true) {
+      if (data.archived === true) {
         cache.set(String(fixtureId), { at: Date.now(), data });
       }
-      publish(fixtureId, data.players);
+      publish(fixtureId, data);
     } catch (error) {
       if (sequence !== serial || error.name === 'AbortError') return;
-      publish(fixtureId, []);
+      publish(fixtureId, { players: [] });
     }
   }
 
