@@ -95,6 +95,17 @@ function playerRow(squadEntry, team, lineup, authorized, allowReference) {
     appearances >= 5 && goals <= appearances * 3;
   const validMinutes = Number.isFinite(minutes) && minutes > 0
     && minutes <= appearances * 130;
+  // Fiabilité DES DONNÉES, pas taux de réussite du modèle.
+  const sampleMinutes = validMinutes ? minutes : null;
+  const sampleLevel = !usable ? 'insuffisant'
+    : validMinutes && appearances >= 10 && minutes >= 900 ? 'étendu'
+    : validMinutes && appearances >= 8 && minutes >= 450 ? 'moyen'
+    : 'limité';
+  const goalsPer90 = validMinutes && goals !== null
+    ? Math.round((90 * goals / minutes) * 100) / 100 : null;
+  const shotsPer90 = validMinutes && shots !== null &&
+    shots >= 0 && shots <= minutes / 90 * 20
+    ? Math.round((90 * shots / minutes) * 100) / 100 : null;
   const averageMinutes = validMinutes
     ? Math.min(90, minutes / appearances)
     : null;
@@ -146,6 +157,11 @@ function playerRow(squadEntry, team, lineup, authorized, allowReference) {
     referenceProbability3: allowReference && !authorized ? probability3 : null,
     averageMinutes: averageMinutes === null
       ? null : Math.round(averageMinutes),
+    sampleLevel,
+    sampleMinutes,
+    goalsPer90,
+    shotsPer90,
+    xgAvailable: validXg,
     lambda: lambda === null ? null : Number(lambda.toFixed(4)),
     lineupStatus: lineupText,
     model: probability === null ? 'données insuffisantes'
