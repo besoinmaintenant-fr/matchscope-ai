@@ -62,9 +62,14 @@
         'Buts : ' + formatStat(p.goals),
         'Matchs joués : ' + formatStat(p.appearances),
         'Min. : ' + formatStat(p.minutes),
+        'Min./match : ' + formatStat(p.averageMinutes),
         'Tirs : ' + formatStat(p.shots),
         'xG : ' + formatStat(p.xg)
       ].join(' · ');
+      const extraOutcomes = Number.isFinite(p.probability)
+        ? '<small>2+ buts : ' + escape(p.probability2) +
+          ' % · 3+ buts : ' + escape(p.probability3) + ' %</small>'
+        : '';
       return '<div class="scorer-row">' +
         '<div class="scorer-identity">' +
         '<strong>' + escape(p.name) + '</strong>' +
@@ -72,11 +77,12 @@
         '<small>' + escape(measures) + '</small>' +
         '<small class="' + (disputed ? 'scorer-uncertain' : '') + '">' +
           escape(status) + '</small>' +
+        extraOutcomes +
         '</div>' +
         '<div class="scorer-rate">' +
           '<b>' + percentage + '</b>' +
           '<span>' + (percentage === '—'
-            ? 'Non calculable' : 'Est. si joue') + '</span>' +
+            ? 'Non calculable' : '1+ but si joue') + '</span>' +
         '</div>' +
       '</div>';
     }).join('');
