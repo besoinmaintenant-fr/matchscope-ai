@@ -626,7 +626,7 @@
     ) {
 
       versionText +=
-        ' • FINAL EN ATTENTE DU MODÈLE XI';
+        ' • XI CONFIRMÉS • BASE HISTORIQUE';
     }
 
 
@@ -638,8 +638,10 @@
     setText(
       '#predictionStatus',
       data.archived
-        ? 'Pronostic pré-match archivé : calcul enregistré avant le coup d’envoi. Aucune donnée du match en cours n’a été utilisée.'
-        : 'Probabilités pré-match issues du modèle MatchScope. Estimations statistiques, non garanties.'
+        ? 'Pronostic archivé : calcul enregistré avant le coup d’envoi, sans données du match en cours.'
+        : data.stage === 'FINAL'
+          ? 'Les 22 titulaires Sportmonks étaient confirmés AVANT le calcul. Modèle V0.7 historique : l’effet individuel des joueurs n’est pas encore pris en compte.'
+          : 'Ancienne estimation pré-match historique : compositions pas encore confirmées lors du calcul.'
     );
 
 
