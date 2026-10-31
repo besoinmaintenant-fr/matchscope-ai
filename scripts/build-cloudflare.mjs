@@ -75,7 +75,7 @@ for (const [route, handlerName] of Object.entries(cronRoutes)) {
     "    return new Response(JSON.stringify({error:'Scheduled job failed'}),{status:502,headers:{'content-type':'application/json','cache-control':'no-store'}});",
     "  }",
     "}"
-  ].join('\\n') + '\\n';
+  ].join('\n') + '\n';
   await writeFile(file,code);
   entryPoints.push(file);
 }
