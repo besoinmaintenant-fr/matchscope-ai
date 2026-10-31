@@ -1539,13 +1539,68 @@ exports.handler =
       const subscribedLeagueIds =
         new Set(leagueIds.map(String));
 
+      const fixtureLeagueId = fixture =>
+        fixture?.league_id ??
+        fixture?.league?.id ??
+        null;
+
       const filteredFixtures =
         allFixtures.filter(
           fixture =>
             subscribedLeagueIds.has(
-              String(fixture?.league_id)
+              String(fixtureLeagueId(fixture))
             )
         );
+
+      // Donner le détail réel des ligues reçues, sans
+      // exposer le jeton API ni de données personnelles.
+      const leagueCounts = new Map();
+      for (const fixture of allFixtures) {
+        const id = String(fixtureLeagueId(fixture));
+        const name = fixture?.league?.name || '';
+        const previous = leagueCounts.get(id) || {
+          id,
+          name,
+          count: 0
+        };
+        previous.count += 1;
+        if (!previous.name && name) previous.name = name;
+        leagueCounts.set(id, previous);
+      }
+      const upstreamLeagues = [...leagueCounts.values()]
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 20);
+
+      // Vérification supplémentaire : l'identifiant du
+      // match Tottenham-Crystal Palace vient du test
+      // Sportmonks fourni par le propriétaire du projet.
+      // Un code 403 ici peut révéler un droit différent
+      // entre ce test et le jeton utilisé sur Netlify.
+      let referenceFixture = null;
+      if (!filteredFixtures.length) {
+        try {
+          const referenceUrl = new URL(
+            `${SPORTMONKS_API}/fixtures/19722114`
+          );
+          referenceUrl.searchParams.set('api_token', token);
+          const check = await fetch(referenceUrl, {
+            signal: AbortSignal.timeout(6000)
+          });
+          referenceFixture = { httpStatus: check.status };
+          if (check.ok) {
+            const checkPayload = await check.json();
+            referenceFixture.leagueId =
+              checkPayload?.data?.league_id ??
+              checkPayload?.data?.league?.id ??
+              null;
+          }
+        } catch (error) {
+          referenceFixture = {
+            httpStatus: null,
+            error: error?.name || 'fetch failed'
+          };
+        }
+      }
 
       console.info('MatchScope fixtures', {
         rangeStart: iso(start),
@@ -1981,7 +2036,9 @@ exports.handler =
             selected:
               filteredFixtures.length,
             pages:
-              upstreamCounts.pages
+              upstreamCounts.pages,
+            upstreamLeagues,
+            referenceFixture
           },
 
           notice: matches.length === 0
