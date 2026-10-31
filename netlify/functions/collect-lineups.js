@@ -1094,9 +1094,42 @@ async function processFixture(
       fixture
     );
 
+  // ---------------------------------------------------
+  // 4. XI OFFICIELS -> CALCUL PRÉ-MATCH -> FIGEAGE SUPABASE
+  // ---------------------------------------------------
+  // Ne JAMAIS fabriquer de probabilités rétroactives.
+  // Pour L1 et SA, V0.7 n'est pas encore calibré : on
+  // conserve les compositions, sans inventer de prédiction.
+  const kickoff = parseKickoff(fixture?.starting_at);
+  let predictionStatus = MODEL_LEAGUE_IDS.has(
+    Number(fixture?.league_id)
+  ) ? 'NOT_GENERATED' : 'MODEL_NOT_CALIBRATED';
+
+  if (MODEL_LEAGUE_IDS.has(Number(fixture?.league_id)) &&
+      kickoff && Date.now() < kickoff.getTime()) {
+    try {
+      const predictionResponse = await generatePrediction({
+        httpMethod: 'POST',
+        body: JSON.stringify({ fixtureId })
+      });
+      const predictionBody = JSON.parse(predictionResponse.body || '{}');
+      predictionStatus = predictionResponse.statusCode === 200 &&
+        predictionBody.success === true
+        ? (predictionBody.alreadyExists
+          ? 'PREDICTION_ALREADY_SAVED'
+          : 'PREDICTION_SAVED')
+        : (predictionBody.error || 'PREDICTION_FAILED');
+    } catch (error) {
+      predictionStatus = 'PREDICTION_ERROR: ' +
+        String(error?.message || error).slice(0, 160);
+    }
+  } else if (MODEL_LEAGUE_IDS.has(Number(fixture?.league_id))) {
+    predictionStatus = 'KICKOFF_PASSED';
+  }
+
 
   // ---------------------------------------------------
-  // 4. COTES OPTIONNELLES
+  // 5. COTES OPTIONNELLES
   //
   // Leur échec ne peut plus bloquer les XI.
   // ---------------------------------------------------
@@ -1176,6 +1209,8 @@ async function processFixture(
 
     finalSnapshotSaved:
       finalSnapshot.saved,
+
+    predictionStatus,
 
     oddsAvailable:
       oddsResult.ok ===
