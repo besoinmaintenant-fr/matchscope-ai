@@ -1265,6 +1265,42 @@ async function attachWeather(
 
 
 
+
+// Uniquement les meilleures estimations de buteurs enregistrées AVANT match.
+// Pas de calcul de saison rétroactif pour les cartes de rencontres.
+function bestFrozenScorers(row, kickoffTs) {
+  if (!row || !Array.isArray(row.players)) return [];
+  const savedAt = Date.parse(row.captured_at || '');
+  const rowKickoff = Date.parse(row.kickoff_at || '');
+  if (!Number.isFinite(savedAt) || !Number.isFinite(rowKickoff) ||
+      !Number.isFinite(kickoffTs) ||
+      savedAt >= rowKickoff ||
+      Math.abs(rowKickoff - kickoffTs) > 10 * 60 * 1000) return [];
+  const eligible = row.players.filter(player => {
+    const probability = player?.probability;
+    return typeof player?.name === 'string' && player.name.trim() &&
+      Number.isSafeInteger(Number(player?.playerId)) &&
+      probability !== null && probability !== undefined &&
+      Number.isFinite(Number(probability)) &&
+      Number(probability) >= 0 && Number(probability) <= 100 &&
+      player.lineupStatus === 'Titulaire officiel';
+  });
+  eligible.sort((a, b) => {
+    const delta = Number(b.probability) - Number(a.probability);
+    if (delta) return delta;
+    const samples = { 'étendu': 3, 'moyen': 2, 'limité': 1 };
+    return (samples[b.sampleLevel] || 0) - (samples[a.sampleLevel] || 0);
+  });
+  return eligible.slice(0, 2).map(player => ({
+    playerId: String(player.playerId),
+    name: String(player.name).slice(0, 80),
+    team: String(player.team || '').slice(0, 80),
+    probability: Math.round(Number(player.probability)),
+    sample: ['étendu', 'moyen', 'limité'].includes(player.sampleLevel)
+      ? player.sampleLevel : null
+  }));
+}
+
 // Relit les pronostics figés et les confirmations XI déjà conservés dans Supabase.
 // Le calendrier Sportmonks ne contient volontairement aucune de ces données :
 // surtout ne pas les remplacer par 'en attente' à chaque actualisation.
@@ -1279,28 +1315,39 @@ async function restoreSavedMatchData(matches) {
     match.started = Number.isFinite(match.kickoffTs) &&
       match.kickoffTs <= Date.now();
     match.prematchPredictionStored = false;
+    match.topScorers = [];
+    match.scorerPredictionStored = false;
   }
 
   // Traitement par lots pour ne pas dépasser la taille des URL PostgREST.
   try {
     const matchesStored = [];
     const predictionsStored = [];
+    const frozenScorersStored = [];
     for (let offset = 0; offset < ids.length; offset += 50) {
       const set = ids.slice(offset, offset + 50).join(',');
       const filter = '&sportmonks_fixture_id=in.(' + set + ')';
-      const [savedMatches, savedPredictions] = await Promise.all([
+      const [savedMatches, savedPredictions, savedScorers] = await Promise.all([
         supabaseRequest('matches', {
           query: '?select=sportmonks_fixture_id,lineups_confirmed' + filter
         }),
         supabaseRequest('predictions', {
           query: '?select=sportmonks_fixture_id,prediction_stage,generated_at,locked,lineup_confirmed,probability_home,probability_draw,probability_away,data_coverage' +
             filter + '&order=generated_at.desc'
-        })
+        }),
+        // L'absence de cette table ne doit pas empêcher le chargement
+        // des pronostics 1/N/2 et des compositions officielles.
+        supabaseRequest('scorer_predictions', {
+          query: '?select=sportmonks_fixture_id,kickoff_at,captured_at,players' + filter
+        }).catch(() => [])
       ]);
       if (Array.isArray(savedMatches)) matchesStored.push(...savedMatches);
       if (Array.isArray(savedPredictions)) predictionsStored.push(...savedPredictions);
+      if (Array.isArray(savedScorers)) frozenScorersStored.push(...savedScorers);
     }
     const storedById = new Map(matchesStored.map(row =>
+      [String(row.sportmonks_fixture_id), row]));
+    const scorerById = new Map(frozenScorersStored.map(row =>
       [String(row.sportmonks_fixture_id), row]));
     const predictedById = new Map();
     for (const row of predictionsStored) {
@@ -1311,6 +1358,9 @@ async function restoreSavedMatchData(matches) {
 
     for (const match of matches) {
       const saved = storedById.get(String(match.id));
+      const scorerRow = scorerById.get(String(match.id));
+      match.topScorers = bestFrozenScorers(scorerRow, match.kickoffTs);
+      match.scorerPredictionStored = match.topScorers.length > 0;
       if (saved?.lineups_confirmed === true) {
         match.official = true;
         match.officialSource = 'saved';
