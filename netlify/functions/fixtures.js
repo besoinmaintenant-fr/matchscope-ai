@@ -1404,12 +1404,15 @@ exports.handler =
         );
 
 
-        // Ne pas envoyer le filtre "fixtureLeagues" à
-        // Sportmonks : certains plans renvoient un tableau
-        // vide malgré des ligues autorisées. On filtre les
-        // résultats localement, sur les cinq IDs confirmés.
-
-
+        // Sportmonks confirme "fixtureLeagues" sur
+        // l'endpoint fixtures/between. Sans ce filtre,
+        // l'API retourne seulement les ligues par défaut
+        // 501 et 271, même avec un token donnant accès aux
+        // cinq championnats de MatchScope.
+        url.searchParams.set(
+          'filters',
+          'fixtureLeagues:' + leagueIds.join(',')
+        );
 
         // On reste volontairement
         // sur les données de base.
@@ -2042,7 +2045,7 @@ exports.handler =
           },
 
           notice: matches.length === 0
-            ? 'Sportmonks a répondu sans rencontre correspondant aux cinq championnats sur cette période. Le filtre est désormais effectué dans MatchScope.'
+            ? 'Aucun match retourné avec le filtre Sportmonks fixtureLeagues pour tes cinq championnats. Les identifiants et le test du match de Premier League permettent de diagnostiquer le droit d’accès.'
             : null,
 
           matches
