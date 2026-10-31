@@ -346,22 +346,11 @@ function visibleMatches() {
         }
 
 
-        if (
-          selectedFilter ===
-          'high'
-        ) {
-
-          return (
-            match.confidence !==
-            null &&
-
-            match.confidence !==
-            undefined &&
-
-            Number(
-              match.confidence
-            ) >= 70
-          );
+        if (selectedFilter === 'high') {
+          // Filtre de couverture, jamais de certitude d'un pari.
+          return match.prematchPredictionStored === true &&
+            Number.isFinite(Number(match.quality)) &&
+            Number(match.quality) >= 70;
         }
 
 
@@ -619,23 +608,18 @@ function renderLiveMatches() {
         );
 
 
-      if (
-        match.official
-      ) {
-
-        lineupState.textContent =
-          '● COMPOS OFFICIELLES';
-
-        lineupState.style.color =
-          'var(--success)';
-
+      if (match.official === true) {
+        lineupState.textContent = '● COMPOS OFFICIELLES';
+        lineupState.style.color = 'var(--success)';
+      } else if (match.savedDataUnavailable === true) {
+        lineupState.textContent = '○ STATUT XI INDISPONIBLE';
+        lineupState.style.color = 'var(--warn)';
+      } else if (match.started === true) {
+        lineupState.textContent = '○ COMPOS NON CONFIRMÉES';
+        lineupState.style.color = 'var(--warn)';
       } else {
-
-        lineupState.textContent =
-          '○ COMPOS EN ATTENTE';
-
-        lineupState.style.color =
-          'var(--warn)';
+        lineupState.textContent = '○ COMPOS EN ATTENTE';
+        lineupState.style.color = 'var(--warn)';
       }
 
 
@@ -731,25 +715,13 @@ function renderLiveMatches() {
           );
 
 
-      node
-        .querySelector(
-          '.confidence-chip'
-        )
-        .textContent =
-
-          match.confidence ===
-          null ||
-
-          match.confidence ===
-          undefined
-
-            ? 'CONF. —'
-
-            : `CONF. ${Math.round(
-                Number(
-                  match.confidence
-                )
-              )}%`;
+      // La couverture des données n'est PAS une probabilité de réussite.
+      const coverage = Number(match.quality);
+      node.querySelector('.confidence-chip').textContent =
+        match.prematchPredictionStored === true &&
+        Number.isFinite(coverage)
+          ? 'COUV. ' + Math.round(coverage) + '%'
+          : 'COUV. —';
 
 
       const signal =
@@ -759,16 +731,13 @@ function renderLiveMatches() {
 
 
       signal.textContent =
-
-        match.confidence ===
-        null ||
-
-        match.confidence ===
-        undefined
-
-          ? 'Analyse statistique en attente'
-
-          : 'Analyse disponible';
+        match.prematchPredictionStored === true
+          ? (match.started ? 'Pronostic pré-match archivé' : 'Pronostic pré-match enregistré')
+          : match.savedDataUnavailable === true
+            ? 'Analyses sauvegardées indisponibles'
+            : match.started
+              ? 'Aucun pronostic pré-match enregistré'
+              : 'Analyse statistique en attente';
 
 
       node
@@ -916,25 +885,22 @@ function openAnalysis(
 
 
   officialBadge.textContent =
-
-    match.official
-
-      ? 'COMPOS OFFICIELLES'
-
-      : 'COMPOS EN ATTENTE';
+    match.official === true
+      ? (match.officialSource === 'saved'
+          ? 'COMPOS OFFICIELLES ENREGISTRÉES'
+          : 'COMPOS OFFICIELLES')
+      : match.savedDataUnavailable === true
+        ? 'STATUT XI INDISPONIBLE'
+        : match.started === true
+          ? 'COMPOS NON CONFIRMÉES'
+          : 'COMPOS EN ATTENTE';
 
 
   officialBadge.className =
 
     'pill ' +
 
-    (
-      match.official
-
-        ? 'success'
-
-        : 'warn'
-    );
+    (match.official === true ? 'success' : 'warn');
 
 
   $('#qualityBadge')
@@ -1018,7 +984,7 @@ function openAnalysis(
   $('#confidence')
     .textContent =
       pct(
-        match.confidence
+        match.prematchPredictionStored ? match.quality : null
       );
 
 
@@ -1210,9 +1176,11 @@ function openAnalysis(
     ],
     [
       'Statut XI',
-      match.official
-        ? 'Officiel'
-        : 'En attente'
+      match.official === true
+        ? 'Officiel · enregistré'
+        : match.started === true
+          ? 'Non confirmé'
+          : 'En attente'
     ]
   ];
 
