@@ -4,6 +4,7 @@
 // Ne renvoie ni le token, ni les données brutes de la réponse.
 const API = 'https://api.sportmonks.com/v3/football';
 const ALLOWED_LEAGUES = new Set([301, 564, 384, 8, 82]);
+const { supabaseRequest } = require('./lib/supabase');
 
 function reply(statusCode, body) {
   return {
@@ -106,6 +107,72 @@ function getTeamSheet(fixture, entries, team) {
   };
 }
 
+
+/*
+ * Les XI certifiés et leurs positions sont enregistrés avant le coup
+ * d'envoi. Ils restent consultables même si l'API Sportmonks n'envoie
+ * plus les includes lineups sur le match en cours ou terminé.
+ */
+async function savedOfficialLineups(fixtureId) {
+  const saved = await supabaseRequest('matches', {
+    query: '?select=sportmonks_fixture_id,league_id,starting_at,updated_at,lineups_confirmed,home_team_id,home_team_name,away_team_id,away_team_name' +
+      '&sportmonks_fixture_id=eq.' + fixtureId + '&limit=1'
+  });
+  const match = Array.isArray(saved) ? saved[0] : null;
+  if (!match || match.lineups_confirmed !== true ||
+      !ALLOWED_LEAGUES.has(Number(match.league_id))) return null;
+
+  const savedPlayers = await supabaseRequest('lineups', {
+    query: '?select=team_id,team_name,player_id,player_name,lineup_type,position,jersey_number,formation,raw_data' +
+      '&sportmonks_fixture_id=eq.' + fixtureId + '&limit=100'
+  });
+  if (!Array.isArray(savedPlayers)) return null;
+
+  const teams = [
+    { side: 'home', id: Number(match.home_team_id),
+      name: String(match.home_team_name || 'Domicile') },
+    { side: 'away', id: Number(match.away_team_id),
+      name: String(match.away_team_name || 'Extérieur') }
+  ].map(team => {
+    const rows = savedPlayers.filter(row => Number(row.team_id) === team.id);
+    const toPlayer = row => playerFromEntry({
+      ...(row.raw_data && typeof row.raw_data === 'object' ? row.raw_data : {}),
+      player_id: row.player_id,
+      player_name: row.player_name,
+      jersey_number: row.jersey_number,
+      formation_position: row.raw_data?.formation_position,
+      formation_field: row.raw_data?.formation_field
+    });
+    return {
+      ...team,
+      formation: rows.find(row => row.formation)?.formation || null,
+      starters: rows.filter(row => row.lineup_type === 'starter')
+        .map(toPlayer).sort((a,b) => (a.position ?? 999) - (b.position ?? 999)),
+      bench: rows.filter(row => row.lineup_type === 'substitute').map(toPlayer),
+      unclassified: 0,
+      total: rows.length
+    };
+  });
+  // Refuser une composition partielle même si l'ancien statut dit 'confirmé'.
+  if (!teams.every(team => team.starters.length === 11)) return null;
+  return {
+    fixtureId,
+    matchName: teams.map(team => team.name).join(' - '),
+    leagueId: Number(match.league_id),
+    kickoff: match.starting_at,
+    checkedAt: match.updated_at || null,
+    providerStatus: null,
+    lineupFieldPresent: true,
+    playerCount: teams.reduce((sum, t) => sum + t.total, 0),
+    photosAccessible: null,
+    confirmation: true,
+    status: 'official',
+    source: 'saved',
+    explanation: 'Compositions officielles récupérées dans les archives enregistrées avant le coup d’envoi.',
+    teams
+  };
+}
+
 exports.handler = async event => {
   if (event.httpMethod && event.httpMethod !== 'GET') {
     return reply(405, { error: 'Méthode non autorisée' });
@@ -114,6 +181,15 @@ exports.handler = async event => {
   const fixtureId = String(event.queryStringParameters?.fixtureId || '');
   if (!/^[1-9][0-9]{0,11}$/.test(fixtureId)) {
     return reply(400, { error: 'Identifiant de match invalide' });
+  }
+
+  // Priorité aux compositions déjà vérifiées et sauvegardées.
+  try {
+    const stored = await savedOfficialLineups(fixtureId);
+    if (stored) return reply(200, stored);
+  } catch (_error) {
+    // Un échec Supabase ne bloque pas le repli sur Sportmonks.
+    console.warn('MatchScope lineup-check: archive indisponible, repli sur Sportmonks');
   }
 
   const token = process.env.SPORTMONKS_API_TOKEN;
