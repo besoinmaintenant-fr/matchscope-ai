@@ -1834,6 +1834,54 @@ exports.handler =
 
     try {
 
+      // Une prédiction pré-match déjà figée reste accessible à tout
+      // moment, même si Sportmonks ne renvoie plus le match après kickoff.
+      // La base fait foi : aucune nouvelle prévision après le coup d'envoi.
+      try {
+        const savedMatch = await supabaseRequest('matches', {
+          query: '?select=starting_at&sportmonks_fixture_id=eq.' +
+            fixtureId + '&limit=1'
+        });
+        const storedKickoff = Date.parse(savedMatch?.[0]?.starting_at || '');
+        if (Number.isFinite(storedKickoff) && Date.now() >= storedKickoff) {
+          for (const oldStage of ['FINAL', 'PRELINEUP']) {
+            const stored = await findPrediction(
+              fixtureId, MODEL_VERSION, oldStage
+            );
+            if (!stored) continue;
+            const savedAt = Date.parse(
+              stored.generated_at || stored.created_at || ''
+            );
+            if (!Number.isFinite(savedAt) || savedAt >= storedKickoff) continue;
+            return jsonResponse(200, {
+              success: true,
+              archived: true,
+              alreadyExists: true,
+              saved: false,
+              fixtureId,
+              modelVersion: MODEL_VERSION,
+              stage: stored.prediction_stage || oldStage,
+              prediction: stored,
+              exactScore: stored?.snapshot?.exactScore ||
+                exactScoreFromFrozenPrediction(stored, -0.08)
+            });
+          }
+          return jsonResponse(409, {
+            success: false,
+            error: 'PREMATCH_PREDICTION_MISSING',
+            message: 'Le match a déjà commencé et aucune prédiction pré-match ' +
+              'n’a été enregistrée avant le coup d’envoi. ' +
+              'Aucun pronostic rétroactif ne sera calculé.',
+            fixtureId,
+            kickoff: savedMatch[0].starting_at
+          });
+        }
+      } catch (_archiveError) {
+        console.warn('MatchScope prediction: archive temporairement inaccessible');
+        // Repli sur l'ancienne vérification Sportmonks pour les matchs
+        // dont la base ne peut pas encore confirmer l'heure.
+      }
+
       // =================================================
       // 1. MATCH SPORTMONKS
       // =================================================
