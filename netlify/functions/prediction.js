@@ -1854,6 +1854,52 @@ exports.handler =
         );
 
 
+      // À partir du coup d'envoi, aucune nouvelle prédiction
+      // pré-match ne peut être calculée ni figée.
+      // En revanche une PRELINEUP réellement enregistrée avant
+      // le match reste consultable (même après sa fin).
+      if (Date.now() >= target.kickoffTs) {
+        const stages = ['PRELINEUP', 'FINAL'];
+        let archived = null;
+        for (const oldStage of stages) {
+          const stored = await findPrediction(
+            fixtureId, MODEL_VERSION, oldStage
+          );
+          if (!stored) continue;
+          const savedAt = Date.parse(
+            stored.generated_at || stored.created_at || ''
+          );
+          if (Number.isFinite(savedAt) &&
+              savedAt < target.kickoffTs) {
+            archived = stored;
+            break;
+          }
+        }
+        if (!archived) {
+          return jsonResponse(409, {
+            success: false,
+            error: 'PREMATCH_PREDICTION_MISSING',
+            message: 'Le match a déjà commencé et aucun pronostic pré-match '
+              + 'n’a été enregistré avant le coup d’envoi. '
+              + 'MatchScope ne fabrique pas de prédiction rétroactive.',
+            fixtureId,
+            kickoff: target.startingAt
+          });
+        }
+        return jsonResponse(200, {
+          success: true,
+          archived: true,
+          alreadyExists: true,
+          saved: false,
+          fixtureId,
+          modelVersion: MODEL_VERSION,
+          stage: archived.prediction_stage || 'PRELINEUP',
+          prediction: archived,
+          exactScore: archived?.snapshot?.exactScore ||
+            exactScoreFromFrozenPrediction(archived, -0.08)
+        });
+      }
+
       ensureBeforeKickoff(
         target
       );
