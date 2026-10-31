@@ -1,5 +1,6 @@
 'use strict';
 const { lineupStatus } = require('./lib/memory');
+const { supabaseRequest } = require('./lib/supabase');
 
 // MatchScope — indicateurs de buteurs basés sur les statistiques Sportmonks.
 // Un score chiffré n'est calculé que si buts ET apparitions sont disponibles.
@@ -70,7 +71,7 @@ function lineupState(fixture, official = false) {
   return known;
 }
 
-function playerRow(squadEntry, team, lineup, authorized) {
+function playerRow(squadEntry, team, lineup, authorized, allowReference) {
   const details = squadEntry?.details;
   const goals = metric(details, METRICS.goals);
   const appearances = metric(details, METRICS.appearances);
@@ -86,9 +87,10 @@ function playerRow(squadEntry, team, lineup, authorized) {
   // Poisson avec exposition au temps de jeu si les minutes sont connues.
   // C'est une probabilité CONDITIONNELLE à la participation, pas un marché
   // calibré. Sans temps de jeu attendu fiable, l'estimation est indicative.
-  // Aucun pourcentage avant les XI officiels ni pour un remplaçant.
+  // Un pourcentage PRE-MATCH exige un XI officiel et une heure antérieure
+  // au coup d'envoi. Après, seul un repère statistique distinct est possible.
   const starter = lineup.get(playerId) === 'Titulaire officiel';
-  const usable = authorized && starter &&
+  const usable = (authorized || allowReference) && starter &&
     goals !== null && appearances !== null &&
     appearances >= 5 && goals <= appearances * 3;
   const validMinutes = Number.isFinite(minutes) && minutes > 0
@@ -136,9 +138,12 @@ function playerRow(squadEntry, team, lineup, authorized) {
     minutes,
     shots,
     xg,
-    probability,
-    probability2,
-    probability3,
+    probability: authorized ? probability : null,
+    probability2: authorized ? probability2 : null,
+    probability3: authorized ? probability3 : null,
+    referenceProbability: allowReference && !authorized ? probability : null,
+    referenceProbability2: allowReference && !authorized ? probability2 : null,
+    referenceProbability3: allowReference && !authorized ? probability3 : null,
     averageMinutes: averageMinutes === null
       ? null : Math.round(averageMinutes),
     lambda: lambda === null ? null : Number(lambda.toFixed(4)),
@@ -150,7 +155,7 @@ function playerRow(squadEntry, team, lineup, authorized) {
   };
 }
 
-async function squadForTeam(seasonId, team, token, lineup, authorized) {
+async function squadForTeam(seasonId, team, token, lineup, authorized, allowReference) {
   const path = '/squads/seasons/' + seasonId + '/teams/' + team.id;
   let raw;
   let dataWarning = null;
@@ -173,9 +178,83 @@ async function squadForTeam(seasonId, team, token, lineup, authorized) {
   }
   const rows = Array.isArray(raw) ? raw : [];
   return {
-    players: rows.map(row => playerRow(row, team, lineup, authorized)).filter(Boolean),
+    players: rows.map(row => playerRow(row, team, lineup, authorized, allowReference)).filter(Boolean),
     warning: dataWarning
   };
+}
+
+
+/**
+ * Un vrai pronostic buteur est horodaté et figé AVANT le match.
+ * Ne jamais transformer un repère recalculé après coup en archive pré-match.
+ */
+async function frozenScorers(fixtureId) {
+  try {
+    const data = await supabaseRequest('scorer_predictions', {
+      query: '?select=sportmonks_fixture_id,kickoff_at,captured_at,model_version,players' +
+        '&sportmonks_fixture_id=eq.' + fixtureId + '&limit=1'
+    });
+    const row = Array.isArray(data) ? data[0] : null;
+    if (!row || !Array.isArray(row.players) ||
+        !(Date.parse(row.captured_at) < Date.parse(row.kickoff_at))) return null;
+    return row;
+  } catch (_error) {
+    // Continuer vers les indicateurs de saison si l'archive est inaccessible.
+    console.warn('MatchScope scorers: archive buteurs indisponible');
+    return null;
+  }
+}
+
+function frozenPayload(fixtureId, row) {
+  return {
+    fixtureId: String(fixtureId),
+    players: row.players,
+    lineupsOfficial: true,
+    beforeKickoff: Date.now() < Date.parse(row.kickoff_at),
+    archived: true,
+    frozenAt: row.captured_at,
+    modelVersion: row.model_version,
+    estimatedCount: row.players.filter(p => Number.isFinite(p.probability)).length,
+    referenceCount: 0,
+    warnings: [],
+    methodology: 'Estimation indicative figée avant le coup d’envoi, non calibrée pour les paris.'
+  };
+}
+
+// Si Sportmonks a cessé de renvoyer les XI, relire ceux qui furent
+// officiellement enregistrés avant le match.
+async function verifiedSavedLineups(fixtureId) {
+  try {
+    const matches = await supabaseRequest('matches', {
+      query: '?select=lineups_confirmed&sportmonks_fixture_id=eq.' +
+        fixtureId + '&limit=1'
+    });
+    if (matches?.[0]?.lineups_confirmed !== true) return null;
+    const rows = await supabaseRequest('lineups', {
+      query: '?select=player_id,team_id,lineup_type' +
+        '&sportmonks_fixture_id=eq.' + fixtureId + '&limit=100'
+    });
+    if (!Array.isArray(rows)) return null;
+    const teamCounts = new Map();
+    for (const row of rows) {
+      if (row.lineup_type !== 'starter') continue;
+      const teamId = String(row.team_id);
+      teamCounts.set(teamId, (teamCounts.get(teamId) || 0) + 1);
+    }
+    if (teamCounts.size !== 2 ||
+        ![...teamCounts.values()].every(n => n === 11)) return null;
+    const result = new Map();
+    for (const row of rows) {
+      const id = Number(row.player_id);
+      if (!Number.isSafeInteger(id)) continue;
+      if (row.lineup_type === 'starter') result.set(id, 'Titulaire officiel');
+      if (row.lineup_type === 'substitute') result.set(id, 'Remplaçant');
+    }
+    return result;
+  } catch (_error) {
+    console.warn('MatchScope scorers: lecture des XI archivés impossible');
+    return null;
+  }
 }
 
 exports.handler = async event => {
@@ -186,6 +265,11 @@ exports.handler = async event => {
   if (!/^[1-9][0-9]{0,11}$/.test(value)) {
     return json(400, { error: 'Identifiant de match invalide' });
   }
+  // L'archive passe AVANT l'API : fonctionne aussi après le coup d'envoi
+  // ou lorsque Sportmonks ne permet plus de lire le match.
+  const frozen = await frozenScorers(value);
+  if (frozen) return json(200, frozenPayload(value, frozen));
+
   const token = process.env.SPORTMONKS_API_TOKEN;
   if (!token) return json(503, { error: 'Sportmonks non configuré' });
 
@@ -216,8 +300,15 @@ exports.handler = async event => {
     });
   }
 
-  const official = lineupStatus(fixture).official;
-  const knownLineups = lineupState(fixture, official);
+  let official = lineupStatus(fixture).official;
+  let knownLineups = lineupState(fixture, official);
+  if (!official || knownLineups.size < 22) {
+    const storedLineups = await verifiedSavedLineups(value);
+    if (storedLineups) {
+      official = true;
+      knownLineups = storedLineups;
+    }
+  }
   // Pas de pronostic rétroactif : aucun nouveau taux après kickoff.
   const kickoff = String(fixture.starting_at || '');
   const parsedKickoff = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(kickoff)
@@ -226,11 +317,12 @@ exports.handler = async event => {
   const beforeKickoff = Number.isFinite(parsedKickoff) &&
     Date.now() < parsedKickoff;
   const authorized = official && beforeKickoff;
+  const allowReference = official && !beforeKickoff;
   const teams = [home, away].map(team => ({
     id: Number(team.id), name: String(team.name || 'Équipe')
   }));
   const results = await Promise.all(teams.map(team =>
-    squadForTeam(seasonId, team, token, knownLineups, authorized)
+    squadForTeam(seasonId, team, token, knownLineups, authorized, allowReference)
   ));
   const players = results.flatMap(r => r.players)
     .sort((a, b) => {
@@ -241,15 +333,58 @@ exports.handler = async event => {
       return (b.goals || 0) - (a.goals || 0);
     });
   const warnings = results.map(r => r.warning).filter(Boolean);
-  if (!official) warnings.unshift(
-    'Pronostics buteurs en attente des 22 titulaires officiellement confirmés par Sportmonks.'
-  );
-  else if (!beforeKickoff) warnings.unshift(
-    'Coup d’envoi déjà passé : aucun nouveau pourcentage buteur créé après le match.'
-  );
-  if (!players.length) {
-    warnings.push('Aucune statistique individuelle accessible pour ce match.');
+
+  // Des appels démarrés juste avant kickoff peuvent finir après.
+  // Dans ce cas : PAS de pourcentage présenté comme pré-match.
+  const endedBeforeKickoff = Number.isFinite(parsedKickoff) &&
+    Date.now() < parsedKickoff;
+  if (!endedBeforeKickoff) {
+    for (const p of players) {
+      if (p.probability === null) continue;
+      p.referenceProbability = p.probability;
+      p.referenceProbability2 = p.probability2;
+      p.referenceProbability3 = p.probability3;
+      p.probability = null;
+      p.probability2 = null;
+      p.probability3 = null;
+    }
   }
+
+  // Sauvegarde définitive dès la première consultation avec XI officiels.
+  // L'unicité en base empêche les recalculs de modifier un pronostic figé.
+  const canFreeze = official && endedBeforeKickoff &&
+    players.some(p => Number.isFinite(p.probability));
+  if (canFreeze) {
+    try {
+      const written = await supabaseRequest('scorer_predictions', {
+        method: 'POST',
+        query: '?on_conflict=sportmonks_fixture_id',
+        body: {
+          sportmonks_fixture_id: Number(value),
+          kickoff_at: new Date(parsedKickoff).toISOString(),
+          model_version: 'goal-rate-v1',
+          players
+        },
+        prefer: 'resolution=ignore-duplicates,return=representation'
+      });
+      const row = Array.isArray(written) ? written[0] : null;
+      if (!row) {
+        const existing = await frozenScorers(value);
+        if (existing) return json(200, frozenPayload(value, existing));
+      }
+    } catch (_error) {
+      warnings.push('Estimation buteur non archivée : vérifie avant le coup d’envoi.');
+      console.warn('MatchScope scorers: échec sauvegarde des taux pré-match');
+    }
+  }
+  const estimatedCount = players.filter(p => Number.isFinite(p.probability)).length;
+  const referenceCount = players.filter(p => Number.isFinite(p.referenceProbability)).length;
+  if (!official) warnings.unshift('Compositions non vérifiées : aucun taux buteur fiable calculable.');
+  if (!endedBeforeKickoff && referenceCount > 0) {
+    warnings.unshift('Après kickoff : repères de saison, PAS pronostics pré-match ni paris live.');
+  }
+  if (!players.length) warnings.push('Statistiques individuelles indisponibles.');
+
   return json(200, {
     fixtureId: value,
     leagueId: Number(fixture.league_id),
@@ -258,9 +393,11 @@ exports.handler = async event => {
     players,
     lineupsAvailable: knownLineups.size > 0,
     lineupsOfficial: official,
-    beforeKickoff,
-    estimatedCount: players.filter(p => p.probability !== null).length,
+    beforeKickoff: endedBeforeKickoff,
+    archived: false,
+    estimatedCount,
+    referenceCount,
     warnings,
-    methodology: 'Poisson lissé à partir des buts, minutes et xG de saison si disponibles. Les probabilités de 1+, 2+ et 3+ buts sont conditionnelles à la participation, calculées avec le temps de jeu moyen. Estimations expérimentales non calibrées, sans prise en compte de la défense adverse, du temps de jeu prévu, des blessures ni des cotes.'
+    methodology: 'Poisson lissé sur les statistiques de saison disponibles. Le repère calculé après le coup d’envoi n’est pas une prédiction de match ni une cote pour parier en direct.'
   });
 };
