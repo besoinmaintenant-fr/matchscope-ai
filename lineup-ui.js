@@ -147,40 +147,48 @@
   function renderSelectedPlayer() {
     const target = $('lineupSelectedPlayer');
     if (!target) return;
-    if (!selectedPlayerId) {
-      target.textContent = 'Sélectionne un joueur sur le terrain pour voir ses statistiques buteur.';
-      return;
-    }
     const team = teamOf(selectedSide);
     const player = team?.starters?.find(p => String(p.id) === selectedPlayerId);
-    if (!player) {
-      target.textContent = 'Sélectionne un joueur sur le terrain pour voir ses statistiques buteur.';
+    if (!selectedPlayerId || !player) {
+      target.innerHTML = '';
       return;
     }
     const stat = scorerFor(player);
     const rate = p => {
-      const val = percent(p);
-      return val === null ? '—' : val + ' %';
+      const n = percent(p);
+      return n === null ? '—' : n + ' %';
     };
     const value = v => v === null || v === undefined ? '—' : escape(v);
     target.innerHTML =
-      '<div class="lineup-detail-head">' +
-        '<strong>' + escape(player.name) + '</strong>' +
-        '<span>' + escape(team.name || '') + '</span>' +
-      '</div>' +
+      '<div class="lineup-detail-head"><strong>' + escape(player.name) +
+        '</strong><span>' + escape(team.name || '') + '</span></div>' +
+      '<p class="lineup-detail-role">' +
+        escape(statusLabel[currentData?.status] || 'Participation à confirmer') + '</p>' +
       '<div class="lineup-detail-stats">' +
         '<div><b>' + rate(stat?.probability) + '</b><small>1+ but</small></div>' +
         '<div><b>' + rate(stat?.probability2) + '</b><small>2+ buts</small></div>' +
         '<div><b>' + rate(stat?.probability3) + '</b><small>3+ buts</small></div>' +
       '</div>' +
-      '<p>' +
-        'Buts : ' + value(stat?.goals) +
-        ' · Matchs : ' + value(stat?.appearances) +
-        ' · Minutes : ' + value(stat?.minutes) +
-        ' · xG : ' + value(stat?.xg) +
-      '</p>' +
-      '<small>Pourcentages indicatifs conditionnels à la participation. ' +
-        'Données de saison, non calibrées pour le pari.</small>';
+      '<div class="lineup-detail-facts">' +
+        '<span>Buts <b>' + value(stat?.goals) + '</b></span>' +
+        '<span>Matchs <b>' + value(stat?.appearances) + '</b></span>' +
+        '<span>Minutes <b>' + value(stat?.minutes) + '</b></span>' +
+        '<span>Tirs <b>' + value(stat?.shots) + '</b></span>' +
+        '<span>xG <b>' + value(stat?.xg) + '</b></span>' +
+      '</div>' +
+      '<small class="lineup-detail-footnote">Probabilités indicatives si le joueur participe, non calibrées pour le pari.</small>';
+  }
+
+  function closePlayerDialog() {
+    const dialog = $('lineupPlayerDialog');
+    if (dialog?.open) dialog.close();
+  }
+
+  function openPlayerDialog() {
+    const dialog = $('lineupPlayerDialog');
+    if (!dialog) return;
+    renderSelectedPlayer();
+    if (!dialog.open) dialog.showModal();
   }
 
   function renderPitch() {
@@ -210,24 +218,19 @@
         ? (team.name + ' · Aucun titulaire reçu depuis Sportmonks')
         : 'Compositions en cours de chargement…';
       area.innerHTML = '';
-      if (note) note.textContent =
-        'Les noms et pourcentages apparaîtront dès que Sportmonks aura transmis les joueurs.';
+      if (note) note.textContent = 'Compositions en attente.';
       renderSelectedPlayer();
       return;
     }
 
     const coordinates = placePlayers(team);
     const count = team.starters.length;
-    info.textContent = team.name + ' · ' +
-      (team.formation || 'Formation non renseignée') +
-      ' · ' + count + '/11 titulaires · ' +
-      (statusLabel[currentData?.status] || 'Statut à vérifier');
-
-    if (note) note.textContent =
-      (coordinates.approximate
-        ? 'Placement approximatif : coordonnées tactiques Sportmonks absentes ou incomplètes. '
-        : 'Placement fourni par Sportmonks. ') +
-      'Les pourcentages affichés sont indicatifs, si le joueur participe au match ; « — » signifie données insuffisantes.';
+    info.textContent =
+      (team.formation || 'Formation inconnue') + ' · ' +
+      (statusLabel[currentData?.status] || 'À confirmer');
+    if (note) note.textContent = coordinates.approximate
+      ? 'Placement indicatif · Touchez un joueur pour ses stats.'
+      : 'Touchez un joueur pour voir ses statistiques.';
 
     area.innerHTML = coordinates.rows.map(({player, x, y}) => {
       const photo = imageUrl(player.photo);
@@ -310,16 +313,7 @@
 
     const home = teamOf('home');
     const away = teamOf('away');
-    const checked = data.checkedAt
-      ? new Date(data.checkedAt).toLocaleTimeString('fr-FR', {
-          hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris'
-        }) : '—';
-    const counts = [home, away].map(t => (t?.name || 'Équipe') +
-      ' : ' + (t?.starters?.length ?? 0) + ' titulaires, ' +
-      (t?.bench?.length ?? 0) + ' remplaçants').join(' · ');
-    diagnostics('Sportmonks HTTP ' + (data.providerStatus || '?') +
-      ' · ' + data.playerCount + ' joueurs reçus · contrôle ' +
-      checked + ' · ' + counts + '. ' + String(data.explanation || ''),
+    diagnostics(statusLabel[data.status] || 'Compositions à vérifier',
       data.status === 'official' ? 'success' :
         data.status === 'not_provided' ? 'warn' : 'neutral');
 
@@ -339,7 +333,7 @@
       button.disabled = true;
       button.textContent = 'Vérification…';
     }
-    diagnostics('Interrogation directe de Sportmonks pour ce match…');
+    diagnostics('Vérification des compositions…');
 
     try {
       const response = await fetch(
@@ -357,8 +351,7 @@
     } catch (error) {
       if (requestId !== serial || error.name === 'AbortError') return;
       badge('COMPOS NON VÉRIFIÉES', 'warn');
-      diagnostics('Impossible de vérifier les compositions auprès de Sportmonks : ' +
-        (error?.message || String(error)) + '. Cela ne prouve pas qu’elles sont absentes.', 'warn');
+      diagnostics('Compositions non vérifiées', 'warn');
       if (!currentData) {
         const info = $('lineupPitchInfo');
         if (info) info.textContent = 'Vérification des compositions indisponible.';
@@ -366,7 +359,7 @@
     } finally {
       if (requestId === serial && button) {
         button.disabled = false;
-        button.textContent = 'Vérifier à nouveau';
+        button.textContent = 'Actualiser';
       }
     }
   }
@@ -383,6 +376,7 @@
   for (const side of ['home', 'away']) {
     const tab = $(side === 'home' ? 'lineupHomeTab' : 'lineupAwayTab');
     if (tab) tab.addEventListener('click', () => {
+      closePlayerDialog();
       selectedSide = side;
       selectedPlayerId = null;
       renderPitch();
@@ -394,7 +388,21 @@
     if (!button || !pitchPlayers.contains(button)) return;
     selectedPlayerId = button.dataset.playerId || null;
     renderPitch();
+    if (selectedPlayerId) openPlayerDialog();
   });
+
+  const playerDialog = $('lineupPlayerDialog');
+  const dialogClose = $('lineupDialogClose');
+  if (dialogClose) dialogClose.addEventListener('click', closePlayerDialog);
+  if (playerDialog) {
+    playerDialog.addEventListener('click', event => {
+      if (event.target === playerDialog) closePlayerDialog();
+    });
+    playerDialog.addEventListener('close', () => {
+      selectedPlayerId = null;
+      renderPitch();
+    });
+  }
 
   // La requête statistique est indépendante : mise à jour sans rafraîchir
   // la composition et sans confondre les données de matchs successifs.
@@ -409,6 +417,7 @@
   });
 
   openAnalysis = function (id) {
+    closePlayerDialog();
     previousOpenAnalysis(id);
     if (typeof currentMode !== 'undefined' && currentMode !== 'live') {
       activeFixtureId = null;
@@ -428,8 +437,8 @@
     const info = $('lineupPitchInfo');
     if (info) info.textContent = 'Chargement des joueurs Sportmonks…';
     const detail = $('lineupSelectedPlayer');
-    if (detail) detail.textContent = 'Sélectionne un joueur pour voir ses statistiques buteur.';
-    setView(view);
+    if (detail) detail.innerHTML = '';
+    setView('pitch');
     load(activeFixtureId);
   };
 })();
