@@ -88,3 +88,12 @@ Cloudflare Worker (cron unique) → Cloudflare Access (token de service) → Pag
 - Le GET 405 de contrôle, un build réussi ou l'existence d'archives Supabase **ne démontrent pas** le traitement réel Worker → Pages → Supabase.
 
 **Sources :** API GitHub (branches, commits, fichiers), Cloudflare Pages/Workers/Access/Observability, Netlify Get Project/Get Deploy, requêtes SQL SELECT sur Supabase. Aucun secret ni jeton n'a été reproduit.
+
+## Vérification du 1er novembre 2026 — écritures Cloudflare et calendrier
+
+- **Collecte authentifiée réelle à 10:15:49 UTC** : un Worker de diagnostic ponctuel a appelé `__cron/snapshots` et `__cron/lineups`, avec les bindings Access existants. Les deux routes ont répondu HTTP 200, `success:true`, sans erreurs déclarées. Résultats : `snapshots` : 21 fiches légères reçues, 5 candidats, **5 SAVED** (`H3` sur 19732637 ; `H6` sur 19715559, 19715562, 19722117, 19735132). `lineups` : 21 fiches reçues, 1 candidat (19713525), statut `WAITING`, aucune XI officielle enregistrée.
+- **Supabase vérifié** : les cinq snapshots se trouvent dans `prematch_snapshots`, total passé de 61 à 66 ; aucun doublon `(sportmonks_fixture_id, snapshot_stage)`. Les cinq fiches `matches` initialement manquantes ont été insérées **à partir des snapshots enregistrés seulement**, par `ON CONFLICT DO NOTHING`, total `matches` passé de 1080 à 1085. Aucune modification des prédictions historiques.
+- **Correctif permanent déployé** : PR #5, commit Cloudflare Pages `d5f7444f9ca3b5bbff7be60163952f311fff9ed0`, déploiement `00b7ad73-c765-4e77-9aea-5e0d197e57fa`, ajoute une insertion idempotente de la fiche `matches` après chaque nouveau snapshot, sans écraser les compositions officielles déjà archivées ; 7 tests Node du helper réussis. Ce déploiement ne lance pas de cron.
+- **Rollback du diagnostic confirmé** : la version Worker originale `451b95e5-e44d-44a5-8a31-9e6a4c4aae98` a été restaurée, `MATCHSCOPE_CRON_ENABLED=false`, planificateur `*/5 * * * *` en mode readiness ; les applications Access restent intactes.
+- **Toujours à faire avant activation générale** : déployer la gestion stricte des erreurs partielles du Worker ; vérifier les deux autres routes planifiées `postmatch` et `enrichment` (ou les garder désactivées) ; constater l'enregistrement d'une XI officielle uniquement lorsqu'elle devient réellement disponible. Ne pas reconstruire de prédictions rétrospectives.
+
