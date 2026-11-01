@@ -16,13 +16,13 @@ const EXTENSION_CODES = Object.freeze(['L1', 'SA']);
 function selectedHistoryLeagues(body) {
   if (body?.leagueCodes === undefined) return [...DEFAULT_CODES];
 
-  if (body?.mode !== 'seed' ||
+  if (!['seed','incremental'].includes(body?.mode) ||
       !Array.isArray(body.leagueCodes) ||
       body.leagueCodes.length < 1 ||
       body.leagueCodes.length > EXTENSION_CODES.length ||
       new Set(body.leagueCodes).size !== body.leagueCodes.length ||
       !body.leagueCodes.every(code => EXTENSION_CODES.includes(code))) {
-    throw new Error('Only explicit seed requests for L1 and/or SA are permitted.');
+    throw new Error('Only explicit seed or incremental requests for L1 and/or SA are permitted.');
   }
   return [...body.leagueCodes];
 }
