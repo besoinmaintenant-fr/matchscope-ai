@@ -79,6 +79,10 @@ for (const [route, handlerName] of Object.entries(cronRoutes)) {
   await writeFile(file,code);
   entryPoints['__cron/' + route] = file;
 }
+// Read-only one-time provider probe under existing Access Service Auth.
+entryPoints['__cron/history-probe'] =
+  path.join(root,'cloudflare','history-probe.mjs');
+
 // The protected readiness endpoint checks the actual providers on demand.
 const health = path.join(tmp, 'health.mjs');
 await copyFile(path.join(root, 'cloudflare/health.mjs'), health);
