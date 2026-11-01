@@ -103,7 +103,7 @@ const seedCode = [
   "    return new Response(JSON.stringify({success:false,error:'MODEL_HISTORY_SEED_FAILED'}),{status:502,headers:{'content-type':'application/json','cache-control':'no-store'}});",
   "  }",
   "}"
-].join('\\n')+'\\n';
+].join('\n')+'\n';
 await writeFile(seedRoute, seedCode);
 entryPoints['__cron/model-history-seed'] = seedRoute;
 
