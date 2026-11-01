@@ -15,6 +15,16 @@
 3. Le fichier `sql/model-history-five-leagues-shadow.sql` prépare une **nouvelle vue serveur uniquement** `model_history_five_leagues`. Elle ne remplace pas la vue `model_history` lue par V0.7 ; elle exclut les résultats invalides et les rencontres futures. Ne pas appliquer la migration avant revue des privilèges.
 4. `scripts/test-model-history-leagues.cjs` vérifie le choix des ligues et le refus de déclenchements non ciblés.
 
+## Preuve Sportmonks vérifiée le 1er novembre 2026 — appel réel et lecture seule
+
+- À **12:20:50 UTC**, Cloudflare Worker a appelé **une seule fois** la route Pages privée `/__cron/history-probe`, avec les identifiants Access préexistants ; cette route a effectué une requête GET Sportmonks `fixtures/between/2026-10-08/2026-10-12` filtrée sur les IDs de ligues **301 (L1)** et **384 (SA)**.
+- Réponse **Sportmonks HTTP 200**, `success:true`, **19 rencontres**, `pagination.has_more=false`.
+- Serie A : **10 rencontres**, **10 terminées avec score**. Exemple renvoyé : Genoa 2–1 Fiorentina, 10/10/2026, fixture ID 19713564.
+- Ligue 1 : **9 rencontres**, **9 terminées avec score**. Exemple renvoyé : Lens 2–1 Olympique Lyonnais, 09/10/2026, fixture ID 19715591.
+- **Aucune écriture Supabase** : les résultats historiques SA/L1 ne sont toujours pas présents dans la jointure `matches` + `results` après cet appel de diagnostic.
+- Worker normal renforcé restauré (version `7edd8f93-2c64-4c3c-ad17-7e2c379667c3`), `MATCHSCOPE_CRON_ENABLED=false`. Route de diagnostic supprimée de GitHub par PR #8, remise en production après test. Secrets non révélés.
+- La preuve concerne **l'accès à ces cinq journées**, pas encore une année complète d'historique ni les éventuelles limites Sportmonks sur de grands volumes.
+
 ## Étapes de validation restant nécessaires
 
 - Vérifier d'abord l'autorisation du forfait Sportmonks, les coûts/quota et l'intégrité des résultats. Aucun import n'est déclenché par cette PR et aucune recherche de calendrier externe n'a été effectuée.
