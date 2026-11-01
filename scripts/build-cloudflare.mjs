@@ -129,6 +129,10 @@ const baseHistoryCode = [
 await writeFile(baseHistoryRoute,baseHistoryCode);
 entryPoints['__cron/model-history-base']=baseHistoryRoute;
 
+// Temporary service-only Sportmonks calendar diagnostic, no DB writes.
+entryPoints['__cron/live-provider-probe'] =
+  path.join(root, 'cloudflare', 'live-provider-probe.mjs');
+
 // The protected readiness endpoint checks the actual providers on demand.
 const health = path.join(tmp, 'health.mjs');
 await copyFile(path.join(root, 'cloudflare/health.mjs'), health);
