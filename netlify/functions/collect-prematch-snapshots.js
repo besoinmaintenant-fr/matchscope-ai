@@ -1,6 +1,7 @@
 const {
   supabaseRequest
 } = require('./lib/supabase');
+const { recordMissingMatch } = require('./lib/snapshot-match');
 
 
 const {
@@ -1306,6 +1307,9 @@ async function processSnapshot(
       row
     );
 
+  // Real snapshots also persist any missing calendar row; do not overwrite
+  // existing official XI, predictions or historical match metadata.
+  const matchCreated = await recordMissingMatch(row);
 
   return {
 
@@ -1330,6 +1334,8 @@ async function processSnapshot(
 
     minutesToKickoff:
       row.minutes_to_kickoff,
+
+    matchCreated,
 
     lineupsOfficial:
       row.lineups_official,
@@ -1658,6 +1664,9 @@ exports.handler =
               result.status ===
               'SAVED'
           ).length,
+
+        matchesCreated:
+          results.filter(result => result.matchCreated === true).length,
 
         errors:
           results.filter(
