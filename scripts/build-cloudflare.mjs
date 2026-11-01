@@ -129,6 +129,9 @@ const baseHistoryCode = [
 await writeFile(baseHistoryRoute,baseHistoryCode);
 entryPoints['__cron/model-history-base']=baseHistoryRoute;
 
+// Temporary authenticated comparison, no writes or scheduler changes.
+entryPoints['__cron/past-future-probe'] = path.join(root,'cloudflare','past-future-probe.mjs');
+
 // The protected readiness endpoint checks the actual providers on demand.
 const health = path.join(tmp, 'health.mjs');
 await copyFile(path.join(root, 'cloudflare/health.mjs'), health);
