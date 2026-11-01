@@ -9,6 +9,7 @@
  * MATCHSCOPE_CRON_ENABLED must be set to "true" only after explicit cutover.
  */
 import { collectorFailureCounts } from './collector-status.mjs';
+import { historySyncIsDue } from './history-schedule.mjs';
 const BASE = 'https://matchscope-ai-staging.pages.dev/__cron/';
 // One trigger every five minutes keeps the free-plan cron footprint to
 // a single slot, while maintaining the former independent UTC schedules.
@@ -20,15 +21,6 @@ export function tasksDueAt(utc) {
   if (minute % 15 === 0 && hour >= 12 && hour <= 23) tasks.push('postmatch');
   if (minute === 20 && hour % 3 === 0) tasks.push('enrichment');
   return tasks;
-}
-
-const HISTORY_SYNC_HOUR_UTC = 3;
-const HISTORY_SYNC_MINUTE_UTC = 10;
-
-export function historySyncIsDue(date) {
-  return date instanceof Date && Number.isFinite(date.getTime()) &&
-    date.getUTCHours() === HISTORY_SYNC_HOUR_UTC &&
-    date.getUTCMinutes() === HISTORY_SYNC_MINUTE_UTC;
 }
 
 async function runHistorySync(env) {
