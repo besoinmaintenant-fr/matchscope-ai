@@ -22,6 +22,49 @@ export function tasksDueAt(utc) {
   return tasks;
 }
 
+const HISTORY_SYNC_HOUR_UTC = 3;
+const HISTORY_SYNC_MINUTE_UTC = 10;
+
+export function historySyncIsDue(date) {
+  return date instanceof Date && Number.isFinite(date.getTime()) &&
+    date.getUTCHours() === HISTORY_SYNC_HOUR_UTC &&
+    date.getUTCMinutes() === HISTORY_SYNC_MINUTE_UTC;
+}
+
+async function runHistorySync(env) {
+  if (!env.CF_ACCESS_CLIENT_ID || !env.CF_ACCESS_CLIENT_SECRET) {
+    throw new Error('MatchScope history sync: service credentials absent');
+  }
+  const response = await fetch(BASE + 'model-history-seed', {
+    method:'POST',
+    redirect:'manual',
+    headers:{
+      'CF-Access-Client-Id':env.CF_ACCESS_CLIENT_ID,
+      'CF-Access-Client-Secret':env.CF_ACCESS_CLIENT_SECRET,
+      'content-type':'application/json'
+    },
+    body:JSON.stringify({mode:'incremental',leagueCodes:['SA','L1']}),
+    signal:AbortSignal.timeout(120000)
+  });
+  if(!response.ok) throw new Error('History sync HTTP '+response.status);
+  if(!(response.headers.get('content-type')||'').includes('application/json'))
+    throw new Error('History sync returned non-JSON response');
+  const result=await response.json();
+  const count=Number(result?.storedMatches);
+  if(result?.success!==true || !Number.isSafeInteger(count) || count<0 ||
+     Number(result.storedResults)!==count ||
+     !Array.isArray(result.selectedLeagues) ||
+     !['SA','L1'].every(x=>result.selectedLeagues.includes(x))) {
+    throw new Error('History sync returned inconsistent result');
+  }
+  console.log('MatchScope HISTORY_DAILY',JSON.stringify({
+    from:result.from,to:result.to,storedMatches:count,
+    selectedLeagues:result.selectedLeagues,
+    leagueCounts:result.leagues
+  }));
+  return count;
+}
+
 const worker = {
   async fetch(request, env) {
     // Read-only connectivity check. Never runs a collector, returns no secrets.
@@ -63,6 +106,12 @@ const worker = {
   },
 
   async scheduled(event, env, ctx) {
+    if (event.cron !== '*/5 * * * *') throw new Error('Unknown schedule');
+    if(env.MATCHSCOPE_HISTORY_SYNC_ENABLED === 'true' &&
+       historySyncIsDue(new Date(event.scheduledTime))) {
+      // Independent of the older four collectors, which remain disabled.
+      await runHistorySync(env);
+    }
     if (env.MATCHSCOPE_CRON_ENABLED !== 'true') {
       const response = await worker.fetch(new Request('https://internal/health'), env);
       console.log('MatchScope readiness', await response.json());
