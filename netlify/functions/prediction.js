@@ -1755,28 +1755,6 @@ exports.handler =
     }
 
 
-    const token =
-      process
-        .env
-        .SPORTMONKS_API_TOKEN;
-
-
-    if (!token) {
-
-      return jsonResponse(
-        500,
-        {
-
-          success:
-            false,
-
-          error:
-            'SPORTMONKS_API_TOKEN absent.'
-        }
-      );
-    }
-
-
     let body =
       {};
 
@@ -1880,6 +1858,16 @@ exports.handler =
         console.warn('MatchScope prediction: archive temporairement inaccessible');
         // Repli sur l'ancienne vérification Sportmonks pour les matchs
         // dont la base ne peut pas encore confirmer l'heure.
+      }
+
+      // Aucune requête Sportmonks tant que la consultation des
+      // prédictions figées dans Supabase n'a pas été tentée.
+      const token = process.env.SPORTMONKS_API_TOKEN;
+      if (!token) {
+        return jsonResponse(503,{
+          success:false,error:'SPORTMONKS_UNAVAILABLE',
+          message:'La consultation des pronostics archivés reste possible depuis Supabase. Aucun nouveau pronostic sans données Sportmonks.'
+        });
       }
 
       // =================================================
