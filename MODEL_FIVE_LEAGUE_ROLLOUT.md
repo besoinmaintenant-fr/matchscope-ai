@@ -10,8 +10,8 @@
 
 ## Préparation isolée dans cette branche (non activée)
 
-1. `sync-history` accepte désormais les codes `SA` (league ID 384) et `L1` (301) **uniquement** avec `mode:seed` et `leagueCodes:['SA','L1']` (un ou deux codes). La sync `incremental` et les appels `seed` historiques sans champ explicite conservent **PL/BL/LL uniquement**. Authentification `MATCHSCOPE_SYNC_SECRET` inchangée.
-2. La route `/__cron/model-history-seed` reste derrière l'application Access **service token only** couvrant `/__cron/*`, et exige en plus `MATCHSCOPE_HISTORY_SEED_ENABLED='true'` sur Pages. **Sans cette variable ou si elle vaut false, elle répond 403 ; aucun accès Sportmonks ou Supabase**. Le Worker planifié ne connaît pas cette route et **ne la déclenche jamais**.
+1. `sync-history` accepte désormais les codes `SA` (league ID 384) et `L1` (301) **uniquement** avec `mode:seed` ou `mode:incremental` et `leagueCodes:['SA','L1']` (un ou deux codes). Les appels `incremental` et `seed` historiques sans champ explicite conservent **PL/BL/LL uniquement**. Authentification `MATCHSCOPE_SYNC_SECRET` inchangée.
+2. La route `/__cron/model-history-seed` reste derrière l'application Access **service token only** couvrant `/__cron/*`, et exige une authentification serveur `MATCHSCOPE_SYNC_SECRET`, ainsi qu'un mode d'import et un choix de ligue explicites. Aucun nouveau secret ni changement de configuration Pages. Le Worker planifié ne connaît pas cette route et **ne la déclenche jamais**.
 3. Le fichier `sql/model-history-five-leagues-shadow.sql` prépare une **nouvelle vue serveur uniquement** `model_history_five_leagues`. Elle ne remplace pas la vue `model_history` lue par V0.7 ; elle exclut les résultats invalides et les rencontres futures. Ne pas appliquer la migration avant revue des privilèges.
 4. `scripts/test-model-history-leagues.cjs` vérifie le choix des ligues et le refus de déclenchements non ciblés.
 
