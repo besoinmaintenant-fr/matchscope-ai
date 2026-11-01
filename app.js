@@ -556,6 +556,53 @@ function renderHistoryMatches() {
       `;
 
 
+
+
+      // Une prédiction figée est consultable sans accès à Sportmonks.
+      const details=document.createElement('details');
+      details.className='archived-prediction';
+      details.style.marginTop='12px';
+      const summary=document.createElement('summary');
+      summary.textContent='Voir le pronostic archivé (si disponible)';
+      details.appendChild(summary);
+      const content=document.createElement('div');
+      content.style.padding='10px 0';
+      content.textContent='Ouvre pour consulter les données figées dans Supabase.';
+      details.appendChild(content);
+      let loaded=false;
+      details.addEventListener('toggle',async()=>{
+        if(!details.open||loaded)return;
+        loaded=true;
+        content.textContent='Chargement de l’archive…';
+        try {
+          const response=await fetch('/.netlify/functions/archived-prediction?fixtureId='+encodeURIComponent(String(match.id)),{cache:'no-store'});
+          if(!response.ok)throw new Error('HTTP '+response.status);
+          const data=await response.json();
+          const scorers=Array.isArray(data.scorers)?data.scorers:[];
+          const scorerText=scorers.length?
+            '\nButeurs archivés : '+scorers.map(player=>
+              player.name+' ('+Number(player.probability).toFixed(0)+' %)'
+            ).join(' ; '):'';
+          if(!data.found){
+            content.textContent=(data.message||'Aucun pronostic 1/N/2 archivé.')+scorerText;
+            content.style.whiteSpace='pre-wrap';
+            return;
+          }
+          const p=data.probabilities;
+          const toPercent=n=> (Number(n)*100).toFixed(1).replace('.',',')+' %';
+          content.textContent='1 : '+toPercent(p.home)+'  •  N : '+toPercent(p.draw)+
+            '  •  2 : '+toPercent(p.away)+
+            (data.exactScore?'  •  Score envisagé : '+data.exactScore:'')+
+            '  •  '+data.stage+' — enregistré avant le coup d’envoi ('+
+            new Date(data.capturedAt).toLocaleString('fr-FR')+')'+scorerText;
+          content.style.whiteSpace='pre-wrap';
+        }catch(_){
+          loaded=false;
+          content.textContent='Archive temporairement inaccessible. Réessaye.';
+        }
+      });
+      article.appendChild(details);
+
       grid.appendChild(
         article
       );

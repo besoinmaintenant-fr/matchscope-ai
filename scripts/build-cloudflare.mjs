@@ -10,7 +10,7 @@ const tmp = path.join(root, '.cloudflare-generated');
 const functions = path.join(root, 'functions', '.netlify', 'functions');
 const assets = ['index.html', 'styles.css', 'app.js', 'preanalysis.js',
   'prediction-ui.js', 'scorers-ui.js', 'lineup-ui.js'];
-const routes = ['fixtures', 'history', 'modelhistory', 'prediction',
+const routes = ['fixtures', 'history', 'archived-prediction', 'modelhistory', 'prediction',
   'scorers', 'lineup-check'];
 // Internal server-only endpoints: secured separately with a Cloudflare
 // Access Service Auth application for /__cron/* before enabling any Cron.
