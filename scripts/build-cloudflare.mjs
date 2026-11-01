@@ -80,8 +80,8 @@ for (const [route, handlerName] of Object.entries(cronRoutes)) {
   entryPoints['__cron/' + route] = file;
 }
 // Historical seed + incremental endpoint, access controlled and opt-in only.
-// Requires existing Cloudflare Access Service Auth AND a separate
-// opt-in flag (absent/false by default) before calling Sportmonks or Supabase.
+// Requires existing Cloudflare Access Service Auth and strict SA/L1-only request validation.
+// Never called by the original recurring collection tasks.
 const seedRoute = path.join(tmp, '__cron', 'model-history-seed.mjs');
 await mkdir(path.dirname(seedRoute), {recursive:true});
 const seedCode = [
@@ -89,7 +89,6 @@ const seedCode = [
   "export async function onRequest({request,env}) {",
   "  if(request.method !== 'POST') return new Response('Method not allowed',{status:405});",
   "  if(!request.headers.get('cf-access-jwt-assertion')) return new Response('Access required',{status:403});",
-  "  if(env.MATCHSCOPE_HISTORY_SEED_ENABLED !== 'true') return new Response(JSON.stringify({success:false,error:'HISTORY_SEED_DISABLED'}),{status:403,headers:{'content-type':'application/json','cache-control':'no-store'}});",
   "  if(!env.MATCHSCOPE_SYNC_SECRET) return new Response(JSON.stringify({success:false,error:'SYNC_SECRET_NOT_CONFIGURED'}),{status:503,headers:{'content-type':'application/json','cache-control':'no-store'}});",
   "  try {",
   "    const body = await request.json().catch(()=>null);",
