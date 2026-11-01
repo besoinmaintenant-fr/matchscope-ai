@@ -108,6 +108,27 @@ const seedCode = [
 await writeFile(seedRoute, seedCode);
 entryPoints['__cron/model-history-seed'] = seedRoute;
 
+// The existing three model leagues need the same incremental result refresh.
+// This private route always uses the legacy, unscoped incremental handler.
+const baseHistoryRoute = path.join(tmp,'__cron','model-history-base.mjs');
+const baseHistoryCode = [
+  "import { handler } from '../../netlify/functions/sync-history.js';",
+  "export async function onRequest({request,env}) {",
+  "  if(request.method!=='POST') return new Response('Method not allowed',{status:405});",
+  "  if(!request.headers.get('cf-access-jwt-assertion')) return new Response('Access required',{status:403});",
+  "  if(!env.MATCHSCOPE_SYNC_SECRET) return new Response(JSON.stringify({success:false,error:'SYNC_SECRET_NOT_CONFIGURED'}),{status:503,headers:{'content-type':'application/json','cache-control':'no-store'}});",
+  "  try {",
+  "    const result=await handler({httpMethod:'POST',body:JSON.stringify({secret:env.MATCHSCOPE_SYNC_SECRET,mode:'incremental'})},{env});",
+  "    return new Response(result?.body??'{}',{status:Number(result?.statusCode)||500,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});",
+  "  } catch(error) {",
+  "    console.error('MatchScope base history sync failed',error?.name||'unknown');",
+  "    return new Response(JSON.stringify({success:false,error:'BASE_HISTORY_FAILED'}),{status:502,headers:{'content-type':'application/json','cache-control':'no-store'}});",
+  "  }",
+  "}"
+].join('\n')+'\n';
+await writeFile(baseHistoryRoute,baseHistoryCode);
+entryPoints['__cron/model-history-base']=baseHistoryRoute;
+
 // The protected readiness endpoint checks the actual providers on demand.
 const health = path.join(tmp, 'health.mjs');
 await copyFile(path.join(root, 'cloudflare/health.mjs'), health);

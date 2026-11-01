@@ -24,37 +24,54 @@ export function tasksDueAt(utc) {
 }
 
 async function runHistorySync(env) {
-  if (!env.CF_ACCESS_CLIENT_ID || !env.CF_ACCESS_CLIENT_SECRET) {
+  if (!env.CF_ACCESS_CLIENT_ID || !env.CF_ACCESS_CLIENT_SECRET)
     throw new Error('MatchScope history sync: service credentials absent');
+
+  const scopes = [
+    {name:'legacy-PL-BL-LL',route:'model-history-base',
+     expected:['PL','BL','LL'],body:null},
+    {name:'SA-L1',route:'model-history-seed',
+     expected:['SA','L1'],body:{mode:'incremental',leagueCodes:['SA','L1']}}
+  ];
+  let total=0;
+  let failures=0;
+  for(const scope of scopes) {
+    try {
+      const response=await fetch(BASE+scope.route,{
+        method:'POST',redirect:'manual',
+        headers:{
+          'CF-Access-Client-Id':env.CF_ACCESS_CLIENT_ID,
+          'CF-Access-Client-Secret':env.CF_ACCESS_CLIENT_SECRET,
+          'content-type':'application/json'
+        },
+        body:JSON.stringify(scope.body||{}),
+        signal:AbortSignal.timeout(120000)
+      });
+      if(!response.ok) throw new Error('HTTP '+response.status);
+      if(!(response.headers.get('content-type')||'').includes('application/json'))
+        throw new Error('Non-JSON response');
+      const result=await response.json();
+      const count=Number(result?.storedMatches);
+      if(result?.success!==true || !Number.isSafeInteger(count) || count<0 ||
+         Number(result.storedResults)!==count ||
+         !Array.isArray(result.selectedLeagues) ||
+         result.selectedLeagues.length!==scope.expected.length ||
+         !scope.expected.every(x=>result.selectedLeagues.includes(x))) {
+        throw new Error('Inconsistent sync summary');
+      }
+      total+=count;
+      console.log('MatchScope HISTORY_DAILY',JSON.stringify({
+        scope:scope.name,from:result.from,to:result.to,
+        storedMatches:count,leagueCounts:result.leagues
+      }));
+    }catch(e){
+      failures++;
+      console.error('MatchScope HISTORY_DAILY FAILED',scope.name,
+        String(e?.message||'unknown').slice(0,100));
+    }
   }
-  const response = await fetch(BASE + 'model-history-seed', {
-    method:'POST',
-    redirect:'manual',
-    headers:{
-      'CF-Access-Client-Id':env.CF_ACCESS_CLIENT_ID,
-      'CF-Access-Client-Secret':env.CF_ACCESS_CLIENT_SECRET,
-      'content-type':'application/json'
-    },
-    body:JSON.stringify({mode:'incremental',leagueCodes:['SA','L1']}),
-    signal:AbortSignal.timeout(120000)
-  });
-  if(!response.ok) throw new Error('History sync HTTP '+response.status);
-  if(!(response.headers.get('content-type')||'').includes('application/json'))
-    throw new Error('History sync returned non-JSON response');
-  const result=await response.json();
-  const count=Number(result?.storedMatches);
-  if(result?.success!==true || !Number.isSafeInteger(count) || count<0 ||
-     Number(result.storedResults)!==count ||
-     !Array.isArray(result.selectedLeagues) ||
-     !['SA','L1'].every(x=>result.selectedLeagues.includes(x))) {
-    throw new Error('History sync returned inconsistent result');
-  }
-  console.log('MatchScope HISTORY_DAILY',JSON.stringify({
-    from:result.from,to:result.to,storedMatches:count,
-    selectedLeagues:result.selectedLeagues,
-    leagueCounts:result.leagues
-  }));
-  return count;
+  if(failures)throw new Error('History sync failed '+failures+' scope(s)');
+  return total;
 }
 
 const worker = {
