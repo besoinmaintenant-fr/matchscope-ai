@@ -30,7 +30,7 @@ exports.handler=async(event)=>{
  if((event.httpMethod||'GET')!=='GET')return response(405,{error:'Méthode non autorisée'});
  let days=Number(event.queryStringParameters?.days||30);
  if(!Number.isFinite(days))days=30;
- days=Math.max(1,Math.min(90,Math.round(days)));
+ days=Math.max(1,Math.min(365,Math.round(days)));
  const now=Date.now(),from=new Date(now-days*86400000).toISOString(),to=new Date(now).toISOString();
  try {
   const select='sportmonks_fixture_id,league_code,league_name,home_team_id,home_team_name,away_team_id,away_team_name,starting_at,venue_name,results!inner(home_score,away_score,result_1x2)';
