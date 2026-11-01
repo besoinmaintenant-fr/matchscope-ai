@@ -97,7 +97,7 @@ const seedCode = [
   "    const seedOk = body?.mode==='seed' && Number.isInteger(body.part) && body.part>=1 && body.part<=7;",
   "    const incrementalOk = body?.mode==='incremental' && body.part===undefined;",
   "    if(!allowed || !(seedOk || incrementalOk)) return new Response(JSON.stringify({success:false,error:'INVALID_HISTORY_SYNC_REQUEST'}),{status:400,headers:{'content-type':'application/json','cache-control':'no-store'}});",
-  "    const result = await handler({httpMethod:'POST',body:JSON.stringify({secret:env.MATCHSCOPE_SYNC_SECRET,mode:'seed',part:body.part,leagueCodes:codes})},{env});",
+  "    const result = await handler({httpMethod:'POST',body:JSON.stringify({secret:env.MATCHSCOPE_SYNC_SECRET,mode:body.mode,part:body.part,leagueCodes:codes})},{env});",
   "    return new Response(result?.body??'{}',{status:Number(result?.statusCode)||500,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});",
   "  } catch (error) {",
   "    console.error('MatchScope model history seed failed:',error?.name||'unknown');",
