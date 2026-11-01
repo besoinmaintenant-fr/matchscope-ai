@@ -14,17 +14,17 @@ test('explicit extension seed targets only the requested new leagues',()=>{
   assert.deepEqual(selectedHistoryLeagues({mode:'seed',part:1,leagueCodes:['SA','L1']}),['SA','L1']);
   assert.deepEqual(leagueIdsForCodes(['SA','L1']),['384','301']);
 });
-test('refuses extension on incremental sync',()=>{
-  assert.throws(()=>selectedHistoryLeagues({mode:'incremental',leagueCodes:['SA']}),/Only explicit seed/);
+test('permits explicitly scoped incremental SA/L1 only',()=>{
+  assert.deepEqual(selectedHistoryLeagues({mode:'incremental',leagueCodes:['SA','L1']}),['SA','L1']);
 });
 test('refuses widening existing production league scope',()=>{
-  assert.throws(()=>selectedHistoryLeagues({mode:'seed',leagueCodes:['PL','SA']}),/Only explicit seed/);
+  assert.throws(()=>selectedHistoryLeagues({mode:'seed',leagueCodes:['PL','SA']}),/Only explicit seed or incremental/);
 });
 test('refuses unknown and duplicate leagues',()=>{
-  assert.throws(()=>selectedHistoryLeagues({mode:'seed',leagueCodes:['XXX']}),/Only explicit seed/);
-  assert.throws(()=>selectedHistoryLeagues({mode:'seed',leagueCodes:['SA','SA']}),/Only explicit seed/);
+  assert.throws(()=>selectedHistoryLeagues({mode:'seed',leagueCodes:['XXX']}),/Only explicit seed or incremental/);
+  assert.throws(()=>selectedHistoryLeagues({mode:'seed',leagueCodes:['SA','SA']}),/Only explicit seed or incremental/);
 });
 test('refuses empty or malformed league requests',()=>{
-  assert.throws(()=>selectedHistoryLeagues({mode:'seed',leagueCodes:[]}),/Only explicit seed/);
-  assert.throws(()=>selectedHistoryLeagues({mode:'seed',leagueCodes:'SA'}),/Only explicit seed/);
+  assert.throws(()=>selectedHistoryLeagues({mode:'seed',leagueCodes:[]}),/Only explicit seed or incremental/);
+  assert.throws(()=>selectedHistoryLeagues({mode:'seed',leagueCodes:'SA'}),/Only explicit seed or incremental/);
 });
