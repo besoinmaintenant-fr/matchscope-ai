@@ -578,8 +578,14 @@ function renderHistoryMatches() {
           const response=await fetch('/.netlify/functions/archived-prediction?fixtureId='+encodeURIComponent(String(match.id)),{cache:'no-store'});
           if(!response.ok)throw new Error('HTTP '+response.status);
           const data=await response.json();
+          const scorers=Array.isArray(data.scorers)?data.scorers:[];
+          const scorerText=scorers.length?
+            '\nButeurs archivés : '+scorers.map(player=>
+              player.name+' ('+Number(player.probability).toFixed(0)+' %)'
+            ).join(' ; '):'';
           if(!data.found){
-            content.textContent=data.message||'Aucun pronostic archivé pour ce match.';
+            content.textContent=(data.message||'Aucun pronostic 1/N/2 archivé.')+scorerText;
+            content.style.whiteSpace='pre-wrap';
             return;
           }
           const p=data.probabilities;
@@ -588,7 +594,8 @@ function renderHistoryMatches() {
             '  •  2 : '+toPercent(p.away)+
             (data.exactScore?'  •  Score envisagé : '+data.exactScore:'')+
             '  •  '+data.stage+' — enregistré avant le coup d’envoi ('+
-            new Date(data.capturedAt).toLocaleString('fr-FR')+')';
+            new Date(data.capturedAt).toLocaleString('fr-FR')+')'+scorerText;
+          content.style.whiteSpace='pre-wrap';
         }catch(_){
           loaded=false;
           content.textContent='Archive temporairement inaccessible. Réessaye.';
