@@ -79,6 +79,34 @@ for (const [route, handlerName] of Object.entries(cronRoutes)) {
   await writeFile(file,code);
   entryPoints['__cron/' + route] = file;
 }
+// Manual historical seed: never run from the recurring Worker schedule.
+// Requires existing Cloudflare Access Service Auth AND a separate
+// opt-in flag (absent/false by default) before calling Sportmonks or Supabase.
+const seedRoute = path.join(tmp, '__cron', 'model-history-seed.mjs');
+await mkdir(path.dirname(seedRoute), {recursive:true});
+const seedCode = [
+  "import { handler } from '../../netlify/functions/sync-history.js';",
+  "export async function onRequest({request,env}) {",
+  "  if(request.method !== 'POST') return new Response('Method not allowed',{status:405});",
+  "  if(!request.headers.get('cf-access-jwt-assertion')) return new Response('Access required',{status:403});",
+  "  if(env.MATCHSCOPE_HISTORY_SEED_ENABLED !== 'true') return new Response(JSON.stringify({success:false,error:'HISTORY_SEED_DISABLED'}),{status:403,headers:{'content-type':'application/json','cache-control':'no-store'}});",
+  "  if(!env.MATCHSCOPE_SYNC_SECRET) return new Response(JSON.stringify({success:false,error:'SYNC_SECRET_NOT_CONFIGURED'}),{status:503,headers:{'content-type':'application/json','cache-control':'no-store'}});",
+  "  try {",
+  "    const body = await request.json().catch(()=>null);",
+  "    const codes = body?.leagueCodes;",
+  "    const allowed = Array.isArray(codes) && codes.length>=1 && codes.length<=2 && new Set(codes).size===codes.length && codes.every(c=>['SA','L1'].includes(c));",
+  "    if(!allowed || body?.mode!=='seed' || !Number.isInteger(body?.part) || body.part<1 || body.part>7) return new Response(JSON.stringify({success:false,error:'INVALID_HISTORY_SEED_REQUEST'}),{status:400,headers:{'content-type':'application/json','cache-control':'no-store'}});",
+  "    const result = await handler({httpMethod:'POST',body:JSON.stringify({secret:env.MATCHSCOPE_SYNC_SECRET,mode:'seed',part:body.part,leagueCodes:codes})},{env});",
+  "    return new Response(result?.body??'{}',{status:Number(result?.statusCode)||500,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});",
+  "  } catch (error) {",
+  "    console.error('MatchScope model history seed failed:',error?.name||'unknown');",
+  "    return new Response(JSON.stringify({success:false,error:'MODEL_HISTORY_SEED_FAILED'}),{status:502,headers:{'content-type':'application/json','cache-control':'no-store'}});",
+  "  }",
+  "}"
+].join('\\n')+'\\n';
+await writeFile(seedRoute, seedCode);
+entryPoints['__cron/model-history-seed'] = seedRoute;
+
 // The protected readiness endpoint checks the actual providers on demand.
 const health = path.join(tmp, 'health.mjs');
 await copyFile(path.join(root, 'cloudflare/health.mjs'), health);
