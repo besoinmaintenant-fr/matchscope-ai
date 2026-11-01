@@ -1,119 +1,99 @@
-# MatchScope AI — Cloudflare staging
+# MatchScope AI — migration Cloudflare : état vérifié
 
-## Sécurité et bascule
+> Relevé des **31 octobre–1er novembre 2026** à partir des API GitHub, Cloudflare, Netlify et Supabase. Ce document remplace les annonces historiques non prouvées. Toutes les heures indiquées sont en UTC. Ne jamais publier la valeur d'un secret.
 
-- **La production reste sur Netlify** : aucune bascule, aucun changement DNS.
-- La branche GitHub de test est `cloudflare-staging`, et le projet Pages est
-  `matchscope-ai-staging`.
-- Cloudflare Access protège **le domaine principal et les previews** par un
-  e-mail autorisé (One-time PIN). La protection doit rester active avant
-  d'autoriser un déploiement.
-- Le build Cloudflare regroupe six fonctions de lecture/écriture HTTP existantes
-  sans les exposer dans les ressources statiques du site.
-- Ne JAMAIS placer les clés Sportmonks ou Supabase dans GitHub, la page
-  HTML, les assets statiques ou une variable JavaScript du navigateur.
+## Décision immédiate
 
-## Paramètres de build
+**Phase Netlify validée ; migration Cloudflare NON terminée : garder `MATCHSCOPE_CRON_ENABLED=false`.** Le déploiement Netlify publié utilise désormais `main/netlify.toml` sans tâches planifiées. Un déclencheur Cloudflare installé et son contrôle GET ne prouvent ni POST de collecte ni écriture Supabase ; ne pas l'activer avant le test contrôlé.
 
-- Branche de production Cloudflare (staging) : `cloudflare-staging`
-- Build command : `npm run build:cloudflare`
-- Build output : `dist`
-- Pages Functions : `functions/.netlify/functions/*.js` générées au build
-- Compatibility date : `2026-10-31`
-- Compatibility flag : `nodejs_compat`
+## Ressources et commits vérifiés
 
-Les anciennes routes `/.netlify/functions/*` restent identiques côté
-navigateur et sont adaptées à l'interface Cloudflare Pages `onRequest`.
+| Élément | État constaté |
+| --- | --- |
+| Dépôt | `besoinmaintenant-fr/matchscope-ai` |
+| Branche Cloudflare | `cloudflare-staging`, commit `7394a765aaa564d7fa4dbcd4a4eee4550d89e9dd` avant la branche de travail |
+| Projet Pages | `matchscope-ai-staging`, URL `https://matchscope-ai-staging.pages.dev` |
+| Pages déploiement | `fbfc4c24-bcc7-4eaf-aa75-5cb1c332f359`, réussi le 31/10 à 17:48 |
+| Worker | `matchscope-ai-collector`, cron `*/5 * * * *` présent |
+| Netlify | site `matchscope-ai-2`, **nouveau déploiement publié `6ae674ba8454c2a27b109a12`**, commit `ecb580ef650f7c45b6b52bc8fbc9a2766c7bad9c`, `main`, `ready`, publié le 31/10/2026 à 23:08:05 UTC |
+| GitHub main | le commit `c124311480f1a81a0ac330ee963725c90e63e1ec` retire les quatre schedules ; la PR #1 a publié le commit `ecb580ef650f7c45b6b52bc8fbc9a2766c7bad9c` sur Netlify |
+| Base | Supabase `mlqrfowveayyxcuasfkh` (reste en place) |
 
-## Secrets à fournir exclusivement via Cloudflare Dashboard
+**Netlify :** l'API Get Project et Get Deploy confirment le déploiement `6ae674...`, commit `ecb580ef...`, publié en production. Le `netlify.toml` à ce commit n'a **plus aucun bloc schedule** et les quatre fonctions ne portent pas de métadonnée `schedule` dans `available_functions` : la programmation automatique par ce déploiement est neutralisée. Les fonctions existent encore en HTTP et d'autres déclencheurs externes ne peuvent pas être exclus par cette seule preuve. Aucune écriture/mise à jour n'a été constatée dans `matches` (`updated_at`), `lineups`, `prematch_snapshots`, `predictions` et `scorer_predictions` après 23:08:05 UTC lors de la vérification, faite peu après la publication ; fenêtre d'observation courte.
 
-Pour les environnements **Production** de ce site de test :
+## Cloudflare : configuration vérifiée, limites
 
-- `SPORTMONKS_API_TOKEN` : même forfait Starter Sportmonks que MatchScope.
-- `SUPABASE_URL` : URL du projet Supabase MatchScope.
-- `SUPABASE_SECRET_KEY` : clé serveur Supabase, **jamais publique**.
+- Pages utilise la branche `cloudflare-staging`, `nodejs_compat` et la compatibility date `2026-10-31` ; le nom de ces quatre variables serveur a été vérifié : `SPORTMONKS_API_TOKEN`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `MATCHSCOPE_SYNC_SECRET`. Ne jamais imprimer leurs valeurs.
+- Worker : secrets nommés `CF_ACCESS_CLIENT_ID` et `CF_ACCESS_CLIENT_SECRET` ; `MATCHSCOPE_CRON_ENABLED=false` ; sous-domaine `workers.dev` désactivé.
+- Cloudflare Access : application dédiée à `matchscope-ai-staging.pages.dev/__cron/*` dont la politique `non_identity` inclut uniquement `service_token` ; application séparée avec politique d'accès par e-mail au domaine principal. Lecture API confirmée. Ne modifier ni domaines, ni politiques.
+- **Previews Pages** : `preview_deployment_setting=none`, cependant des objets de déploiement `environment=preview`, `latest_stage.status=idle`, ont été observés après des commits sur des branches secondaires. Ils ne sont pas des déploiements de production ; leur protection réseau spécifique n'a pas été validée. Ne pas les publier ni assouplir Access.
+- Logs Workers Observability : 60 événements de contrôle de 17:50:50 à 22:45:49 UTC, avec `ready:true`, `pagesRouteStatus:405`, `cronEnabled:false`. Cela étaye l'authentification de service pour le GET de contrôle, **pas** un POST de collecte ni une écriture Supabase.
+- Le refus d'un appel sans token, l'accès authentifié aux trois autres routes et le traitement complet d'un POST de collecte ne sont pas encore prouvés indépendamment.
+- Le script `scripts/build-cloudflare.mjs` génère les routes privées `functions/__cron/{lineups,snapshots,postmatch,enrichment}`. Les anciennes fonctions sous `netlify/functions` sont regroupées pour Pages ; vérifier la compatibilité effective de chacune avant bascule.
 
-Ne pas remplir ces valeurs dans les paramètres de build publics ni dans GitHub.
-Ne pas publier avant d'avoir confirmé Cloudflare Access.
+## Supabase : lecture SQL constatée
 
-## Migration non terminée
+| Table | Lignes | Dernier horodatage vérifié |
+| --- | ---: | --- |
+| `lineups` | 13 944 | `created_at` : 31/10 à 16:30:22 |
+| `prematch_snapshots` | 61 | `captured_at` : 31/10 à 16:30:41 |
+| `predictions` | 28 | `generated_at` : 31/10 à 16:30:25 |
+| `scorer_predictions` | **0** | aucun |
+| `matches` | 1 080 | `created_at` : 31/10 à 16:30:21 |
 
-- Les tâches programmées `collect-lineups`, `collect-prematch-snapshots`,
-  `postmatch-auto` et `trigger-enrichment` **restent sur Netlify**.
-- Cloudflare Pages ne remplace pas automatiquement les Netlify Scheduled
-  Functions. Prévoir un Worker `scheduled()` distinct avec Cron Triggers,
-  une politique d'idempotence et des secrets serveur avant la bascule.
-- Ne pas lancer les deux planificateurs en parallèle sur la même base.
-- Valider par comparaison des matches, des XI, des pronostics et de
-  l'historique avant de décider d'une bascule de production.
+- Les 61 snapshots comprennent D1 12, H6 4, H3 14, H90 15, FINAL 16 ; tous sont datés avant coup d'envoi et aucun couple (fixture, étape) n'est dupliqué dans les lignes présentes. L'idempotence concurrente n'est pas prouvée.
+- Les 28 prédictions V0.7 enregistrées sont antérieures au coup d'envoi d'après les horodatages stockés : 16 PRELINEUP et 12 FINAL. La calibration n'est pas pour autant statistiquement démontrée.
+- 16 matchs du 30 au 31 octobre ont `lineups_confirmed=true` et aucune archive buteur (PL 7, BL 5, LL 2, SA 2). Cela ne garantit pas qu'ils étaient tous éligibles pendant la fenêtre du collecteur.
+- `starters_found=22` peut coexister avec `lineups_official=false`. Ne jamais confondre compositions probables et titulaires officiels.
 
+## Risques techniques et correctifs préparés
 
-## Module buteurs et gel avant-match (31 octobre 2026)
+- `collect-lineups.js` limite les estimations buteurs à **3 matchs par tick**, seulement de H−75 à H−2, avec une recherche jusqu'à H−90 : couverture des matchs simultanés et composition tardive non garantie.
+- Un HTTP 200 et `success:true` peuvent contenir des échecs individuels (`errors > 0`, `status: ERROR`, ou `scorerResults: SOURCE_UNAVAILABLE`).
+- Une branche de travail `ops/cloudflare-collector-guards-20261031` prépare un contrôle des erreurs partielles dans le Worker avec tests unitaires. **Cette correction n'est pas déployée** tant qu'elle n'est pas fusionnée et que le Worker n'a pas été redéployé. Six tests Node ont passé localement ; test d'intégration réel non effectué.
+- Les verrous atomiques, reprises après 429, reports et corrections de composition exigent un audit supplémentaire. Aucune réécriture de pronostics déjà enregistrés.
 
-- Les fiches buteurs Cloudflare utilisent `scorers` et conservent la première
-  estimation **effectivement calculée avant le coup d'envoi** dans
-  `public.scorer_predictions` (22 titulaires vérifiés, données suffisantes).
-- La table est protégée par RLS ; seul le rôle serveur possède la lecture et
-  l'insertion. Aucun pronostic pré-match n'est calculé rétroactivement.
-- Un ancien match sans estimation buteur conservée peut montrer un **repère de
-  saison**, explicitement distinct d'un pronostic pré-match ou pari en direct.
-- Chaque fiche montre la taille de l'échantillon individuel (limité, moyen ou
-  étendu) et les buts/tirs par 90 min lorsqu'ils sont connus. Ces indicateurs
-  ne représentent pas une validation de la performance des probabilités.
-- Le collecteur `collect-lineups` de cette branche a été préparé pour
-  sauvegarder automatiquement les pronostics buteurs des cinq ligues, au plus
-  **3 matchs par passage**, lorsque les XI sont déjà officiels et que le match
-  commence dans **2 à 75 min**. Une archive existante est ignorée.
+## Test d'intégration réel du 31/10/2026 à 23:30 UTC
 
-**Attention — déploiement progressif** : Cloudflare Pages ne dispose pas
-d'événement Cron. Le collecteur amélioré présent dans la branche
-`cloudflare-staging` n'est **pas activé comme tâche planifiée Cloudflare**.
-Les tâches Netlify en production utilisent encore leur déploiement
-indépendant (branche principale). Aujourd'hui, côté Cloudflare, un match
-consulté avant son coup d'envoi peut sauvegarder son estimation ; cela
-ne remplace pas une collecte automatique 24 h/24.
+- **FAIT — Worker → Cloudflare Access → Pages Function privée `__cron/lineups`** : un seul POST déclenché par un Worker temporaire à 23:30:49 UTC ; HTTP **200**, réponse JSON avec `success:true`, `errors:0`, zéro échec partiel et `checkedAt:2026-10-31T23:30:51.213Z`. Le Worker a utilisé les bindings de service secrets existants hérités ; aucun token n'a été lu ou publié.
+- **Aucune donnée candidate pendant ce test** : `candidates:0`, `saved:0`, `predictionsSaved:0`, `scorerSnapshotsSaved:0`. Les vérifications SQL juste après le test confirment **0 écriture** dans `matches`, `lineups`, `prematch_snapshots`, `predictions` et `scorer_predictions`. Cela **ne démontre pas** la capacité à enregistrer une nouvelle ligne dans Supabase lors d'une collecte effective.
+- **Le premier créneau à 23:25 UTC n'a déclenché que le contrôle GET 405** : une comparaison trop stricte de l'heure de planification a empêché son POST. Le test corrigé a tenu compte du décalage réel de livraison de Cloudflare ; un seul POST a eu lieu.
+- **Rollback confirmé** : Worker original `451b95e5-e44d-44a5-8a31-9e6a4c4aae98` redéployé à 100 %, déploiement `79cbd44a-12e8-494b-885e-00fb84e7c1b2` ; `MATCHSCOPE_CRON_ENABLED=false` et cron `*/5 * * * *` (readiness seulement) inchangés, les deux bindings secrets toujours présents.
+- Netlify garde le déploiement publié `6ae674ba8454c2a27b109a12`, commit sans schedules. Aucune tâche automatique Netlify réactivée.
+- **Portée probante** : authentification et POST réussis pour `lineups` ; ni les trois autres routes, ni la persistance sur une collecte non vide, ni la robustesse de l'archivage buteurs ne sont encore validées. Ne pas activer la collecte automatique sur la seule base de ce POST vide.
 
-Pour rendre la capture buteurs réellement autonome sur Cloudflare :
-1. Créer un Worker planifié à part, avec secrets serveur Cloudflare, isolation
-   et verrou d'idempotence.
-2. Vérifier son quota Sportmonks, la couverture des cinq ligues et ses logs
-   sans jamais exposer les clés API.
-3. Ne basculer les collecteurs existants qu'après neutralisation explicite des
-   Cron Netlify correspondants. Ne jamais faire fonctionner deux collecteurs
-   d'un même type en parallèle.
+## Procédure de bascule : ordre impératif
 
-Le moteur 1/N/2 V0.7 est calibré seulement sur PL, BL et LL ; les fiches
-buteurs expérimentales et compositions visent les cinq championnats.
+1. **FAIT** — Neutralisation des quatre schedules Netlify par publication effective du commit `ecb580ef...`, déploiement `6ae674...` en production le 31/10 à 23:08:05 UTC ; les fonctions restent présentes mais non planifiées par `netlify.toml`.
+2. **PARTIEL** — Contrôler les autres déclencheurs (GitHub Actions, autres Workers, services externes). Les deux branches inspectées ne contiennent pas `.github/workflows`; Supabase ne montre pas de table `cron.job` ; cela n'exclut pas les services externes. Aucun nouveau changement dans les cinq tables contrôlées juste après la publication.
+3. **PARTIEL** — La politique Access `service_token` est confirmée et le GET `405` authentifié a été observé historiquement pour `lineups`. Vérifier le refus sans token, l'accès avec jeton aux quatre routes et une requête POST contrôlée ; le connecteur présent n'expose pas les secrets ni un moyen d'envoyer une requête HTTP authentifiée arbitraire.
+4. Tester **un seul POST contrôlé** après l'arrêt Netlify, observer un JSON structuré avec les erreurs individuelles, puis vérifier une écriture Supabase avant coup d'envoi et l'absence de doublon.
+5. Seulement si 1–4 sont établis, activer `MATCHSCOPE_CRON_ENABLED=true` puis observer une exécution **planifiée** et ses données en base. Dans les logs, séparer `échec`, `source indisponible`, `compositions non confirmées`, `traité`.
+6. En cas de problème, repasser d'abord `MATCHSCOPE_CRON_ENABLED=false`, confirmer l'arrêt, puis seulement envisager de réactiver Netlify. Jamais deux collecteurs.
 
+## Fonctionnalités métier et mathématiques
 
-## État au 31 octobre 2026 : migration Cron et Top 2 buteurs
+- Collecte des XI des cinq championnats : L1 `301`, Liga `564`, SA `384`, PL `8`, BL `82`. Le 1/N/2 V0.7 ne couvre dans son code que PL, BL et LL ; sa calibration réelle reste à démontrer chronologiquement.
+- Le Top 2 buteurs n'est affichable que depuis des estimations réelles enregistrées avant coup d'envoi. À défaut : `en attente`/`indisponible` ; aucune reconstruction a posteriori.
+- Conserver le modèle en production. Hors production : évaluer minutes probables, petits échantillons et régularisation, calibration et comparaison Poisson/Dixon–Coles sur validation chronologique. Mesurer Brier/log-loss, calibration, effectifs et incertitude avant toute promotion.
 
-- L'interface Cloudflare affiche, sur chaque carte de match, les **deux
-  meilleures estimations de buteurs enregistrées avant le coup d'envoi**.
-  En leur absence, elle affiche un état d'attente — aucun classement inventé.
-- La lecture est groupée avec `fixtures`, sans multiplier les appels aux
-  endpoints Sportmonks pour chaque carte.
-- `matchscope-ai-collector` est déployé comme Worker Cloudflare, avec
-  identifiants Access stockés en secret ; aucune route HTTP publique.
-- L'application Cloudflare Access dédiée à
-  `matchscope-ai-staging.pages.dev/__cron/*` est protégée exclusivement
-  par l'authentification de service.
-- Le Worker consolide les tâches dans **un seul Cron de 5 minutes**, mais son
-  déclencheur n'est **pas installé**, faute de quota sur Workers Free :
-  les 5 déclencheurs du compte sont occupés par d'autres projets.
-- `MATCHSCOPE_CRON_ENABLED=false` : aucun risque de double collecte.
-- Les collecteurs Netlify existants ne sont PAS désactivés.
-- Les modifications du collecteur de buteurs ont été commitées sur `main`
-  (Netlify), mais leur **publication Netlify doit être vérifiée** ; un
-  commit GitHub ne prouve pas que le déploiement de production a été effectué.
+## Architecture cible
 
-### Conditions de bascule complète vers Cloudflare
+Cloudflare Worker (cron unique) → Cloudflare Access (token de service) → Pages Functions privées → Sportmonks et Supabase ; le frontend Pages lit les archives. Netlify ne joue plus aucun rôle d'exécution **seulement après** la désactivation confirmée.
 
-1. Libérer une place Cron sans toucher aux projets existants sans permission,
-   ou passer au forfait Workers autorisant davantage de Cron Triggers.
-2. Vérifier la route privée Access sans effectuer de collecte, puis
-   installer un unique Cron `*/5 * * * *` sur `matchscope-ai-collector`.
-3. Désactiver les quatre programmations correspondantes dans la production
-   Netlify et **vérifier le déploiement qui les désactive**.
-4. Activer `MATCHSCOPE_CRON_ENABLED=true` sur le Worker Cloudflare et vérifier
-   les métriques de capture sur un match avant le coup d'envoi.
+## Historique remplacé
+
+- La phrase « cron Cloudflare non installé / quota saturé » est obsolète : le cron existe.
+- Le déploiement Netlify ancien peut comporter quatre planifications même si `main/netlify.toml` n'en comporte plus.
+- Le GET 405 de contrôle, un build réussi ou l'existence d'archives Supabase **ne démontrent pas** le traitement réel Worker → Pages → Supabase.
+
+**Sources :** API GitHub (branches, commits, fichiers), Cloudflare Pages/Workers/Access/Observability, Netlify Get Project/Get Deploy, requêtes SQL SELECT sur Supabase. Aucun secret ni jeton n'a été reproduit.
+
+## Vérification du 1er novembre 2026 — écritures Cloudflare et calendrier
+
+- **Collecte authentifiée réelle à 10:15:49 UTC** : un Worker de diagnostic ponctuel a appelé `__cron/snapshots` et `__cron/lineups`, avec les bindings Access existants. Les deux routes ont répondu HTTP 200, `success:true`, sans erreurs déclarées. Résultats : `snapshots` : 21 fiches légères reçues, 5 candidats, **5 SAVED** (`H3` sur 19732637 ; `H6` sur 19715559, 19715562, 19722117, 19735132). `lineups` : 21 fiches reçues, 1 candidat (19713525), statut `WAITING`, aucune XI officielle enregistrée.
+- **Supabase vérifié** : les cinq snapshots se trouvent dans `prematch_snapshots`, total passé de 61 à 66 ; aucun doublon `(sportmonks_fixture_id, snapshot_stage)`. Les cinq fiches `matches` initialement manquantes ont été insérées **à partir des snapshots enregistrés seulement**, par `ON CONFLICT DO NOTHING`, total `matches` passé de 1080 à 1085. Aucune modification des prédictions historiques.
+- **Correctif permanent déployé** : PR #5, commit Cloudflare Pages `d5f7444f9ca3b5bbff7be60163952f311fff9ed0`, déploiement `00b7ad73-c765-4e77-9aea-5e0d197e57fa`, ajoute une insertion idempotente de la fiche `matches` après chaque nouveau snapshot, sans écraser les compositions officielles déjà archivées ; 7 tests Node du helper réussis. Ce déploiement ne lance pas de cron.
+- **Rollback du diagnostic confirmé** : la version Worker originale `451b95e5-e44d-44a5-8a31-9e6a4c4aae98` a été restaurée, `MATCHSCOPE_CRON_ENABLED=false`, planificateur `*/5 * * * *` en mode readiness ; les applications Access restent intactes.
+- **Toujours à faire avant activation générale** : déployer la gestion stricte des erreurs partielles du Worker ; vérifier les deux autres routes planifiées `postmatch` et `enrichment` (ou les garder désactivées) ; constater l'enregistrement d'une XI officielle uniquement lorsqu'elle devient réellement disponible. Ne pas reconstruire de prédictions rétrospectives.
+

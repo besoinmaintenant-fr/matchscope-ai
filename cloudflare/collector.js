@@ -8,6 +8,7 @@
  * IMPORTANT: never schedule while Netlify cron remains enabled.
  * MATCHSCOPE_CRON_ENABLED must be set to "true" only after explicit cutover.
  */
+import { collectorFailureCounts } from './collector-status.mjs';
 const BASE = 'https://matchscope-ai-staging.pages.dev/__cron/';
 // One trigger every five minutes keeps the free-plan cron footprint to
 // a single slot, while maintaining the former independent UTC schedules.
@@ -95,8 +96,14 @@ const worker = {
         throw new Error('MatchScope cron ' + task + ' returned non-JSON response');
       }
       const result = await response.json();
-      if (result?.success === false) {
+      if (result?.success !== true) {
         throw new Error('MatchScope cron ' + task + ' returned unsuccessful result');
+      }
+      const failureCounts = collectorFailureCounts(result);
+      if (failureCounts.fixtureErrors || failureCounts.scorerErrors) {
+        throw new Error('MatchScope cron ' + task + ' reported partial failures: ' +
+          failureCounts.fixtureErrors + ' fixtures, ' +
+          failureCounts.scorerErrors + ' scorers');
       }
       console.log('MatchScope scheduled job succeeded', task, JSON.stringify({checkedAt:result.checkedAt,candidates:result.candidates,saved:result.saved,errors:result.errors,predictionsSaved:result.predictionsSaved,scorerSnapshotsSaved:result.scorerSnapshotsSaved,status:result.status,requested:result.requested,results:result.results?.map(r=>({fixtureId:r.fixtureId,status:r.status,predictionStatus:r.predictionStatus?.startsWith('PREDICTION_')?r.predictionStatus:undefined}))}));
     };
