@@ -1,6 +1,8 @@
 const {
   supabaseRequest
 } = require('./lib/supabase');
+const { selectedHistoryLeagues, leagueIdsForCodes } =
+  require('./lib/model-history-leagues');
 
 
 const API =
@@ -21,12 +23,22 @@ const LEAGUES = {
   '564': {
     code: 'LL',
     name: 'La Liga'
+  },
+
+  '301': {
+    code: 'L1',
+    name: 'Ligue 1'
+  },
+
+  '384': {
+    code: 'SA',
+    name: 'Serie A'
   }
 };
 
 
-const LEAGUE_IDS =
-  Object.keys(LEAGUES);
+// League IDs are selected per request: old three by default,
+// L1 and SA only for explicitly scoped seed operations.
 
 
 const SEED_DAYS = 365;
@@ -487,7 +499,8 @@ function result1x2(
 async function fetchRange(
   token,
   start,
-  end
+  end,
+  leagueIds
 ) {
 
   const fixtures = [];
@@ -522,7 +535,7 @@ async function fetchRange(
 
     url.searchParams.set(
       'filters',
-      `fixtureLeagues:${LEAGUE_IDS.join(',')}`
+      `fixtureLeagues:${leagueIds.join(',')}`
     );
 
 
@@ -609,8 +622,13 @@ async function fetchRange(
 // =====================================================
 
 function transformFixture(
-  fixture
+  fixture,
+  allowedLeagueIds
 ) {
+
+  if (!allowedLeagueIds.includes(String(fixture?.league_id))) {
+    return null;
+  }
 
   const league =
     LEAGUES[
@@ -955,6 +973,15 @@ exports.handler =
         : 'incremental';
 
 
+    let selectedCodes;
+    try {
+      selectedCodes = selectedHistoryLeagues(body);
+    } catch (error) {
+      return jsonResponse(400, {success:false, error:'INVALID_LEAGUE_SELECTION',
+        message:error.message});
+    }
+    const selectedLeagueIds = leagueIdsForCodes(selectedCodes);
+
     let part = null;
     let range;
 
@@ -1039,7 +1066,8 @@ exports.handler =
         await fetchRange(
           token,
           range.start,
-          range.end
+          range.end,
+          selectedLeagueIds
         );
 
 
@@ -1076,7 +1104,7 @@ exports.handler =
             unique.values()
           )
           .map(
-            transformFixture
+            fixture => transformFixture(fixture, selectedLeagueIds)
           )
           .filter(Boolean);
 
@@ -1135,6 +1163,8 @@ exports.handler =
             true,
 
           mode,
+
+          selectedLeagues: selectedCodes,
 
           part,
 
